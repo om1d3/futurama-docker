@@ -1,0 +1,865 @@
+# ============================================
+# bender (TrueNAS Scale) - Media & Downloads
+# Version: 86 - Fixed HedgeDoc healthcheck, added Diun ntfy notifications
+# ============================================
+# Host: TrueNAS Scale
+# IP: 192.168.21.121
+# Data path: /mnt/BIG/filme/
+# Config path: /mnt/BIG/filme/configs/
+# ============================================
+# CRITICAL: postgres volume uses /mnt/BIG/filme/immich/postgresql
+#           which contains your actual Immich database
+# ============================================
+# MIGRATED TO VECTORCHORD on 2026-01-09
+# Old image: tensorchord/pgvecto-rs:pg14-v0.2.0
+# New image: ghcr.io/immich-app/postgres:14-vectorchord0.4.3-pgvectors0.2.0
+# ============================================
+# SILVERBULLET: Commented out for future exploration
+#               Keeping in file for reference - do NOT remove
+#               When re-enabled, use tsdproxy.name: "notes" (not "pad")
+# ============================================
+# v83 CHANGE: Syncthing reverted to official image (syncthing/syncthing)
+#             with single /var/syncthing volume (config + data together)
+#             and network_mode: host for proper peer discovery
+# ============================================
+# v84 CHANGES:
+#   - Fixed nebula-sync: Wrapped PRIMARY/REPLICAS in quotes for pipe character
+#   - Restored dockerproxy: Docker socket proxy for Homepage on amy
+#   - Restored postgres-backup: Daily PostgreSQL backups
+# ============================================
+# v85 CHANGES:
+#   - Added Diun: Docker Image Update Notifier
+#   - Added Trivy: Vulnerability scanner for container images
+#   - Commented out Watchtower: EOL, replaced by Diun+Trivy+custom script
+#     !! DO NOT REMOVE WATCHTOWER - Keep as fallback !!
+#   - Removed valkey: Not used on bender (orphan container)
+# ============================================
+# v86 CHANGES:
+#   - Fixed HedgeDoc healthcheck: Changed curl to Node.js (curl not in container)
+#   - Added Diun ntfy notifications: Using NTFY_ADDRESS variable
+# ============================================
+# !! IMPORTANT - DO NOT MODIFY TSDPROXY NAMES !!
+# These names are used by external services and clients.
+# Changing them will break bookmarks, integrations, and access.
+# ============================================
+
+services:
+
+  # ============================================
+  # INFRASTRUCTURE
+  # ============================================
+
+  # LOCKED tsdproxy.name: "bender-proxy" - DO NOT CHANGE
+  tsdproxy:
+    image: almeidapaulopt/tsdproxy:latest
+    container_name: tsdproxy
+    restart: unless-stopped
+    labels:
+      tsdproxy.enable: "true"
+      tsdproxy.name: "bender-proxy"
+      tsdproxy.container_port: "8080"
+      tsdproxy.dash.icon: "sh/tailscale"
+    environment:
+      - TSDPROXY_AUTHKEY=${TSDPROXY_AUTHKEY}
+      - TSDPROXY_HOSTNAME=${BENDER_HOST_IP}
+      - TSDPROXY_DATADIR=/data
+      - DOCKER_HOST=unix:///var/run/docker.sock
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /mnt/BIG/filme/configs/tsdproxy/data/tailscale:/data
+      - /mnt/BIG/filme/configs/tsdproxy/config:/config
+    ports:
+      - "8085:8080"
+    networks:
+      - media-network
+
+  # LOCKED tsdproxy.name: "bender-dockwatch" - DO NOT CHANGE
+  dockwatch:
+    image: ghcr.io/notifiarr/dockwatch:main
+    container_name: dockwatch
+    restart: unless-stopped
+    labels:
+      tsdproxy.enable: "true"
+      tsdproxy.name: "bender-dockwatch"
+      tsdproxy.container_port: "80"
+      tsdproxy.dash.icon: "sh/dockge"
+    environment:
+      - PUID=${PUID}
+      - PGID=${PGID}
+      - TZ=${TIMEZONE}
+    volumes:
+      - /mnt/BIG/filme/configs/dockwatch:/config
+      - /var/run/docker.sock:/var/run/docker.sock
+    ports:
+      - "9999:80"
+    networks:
+      - media-network
+
+  # Docker socket proxy for Homepage on amy
+  dockerproxy:
+    image: ghcr.io/tecnativa/docker-socket-proxy:latest
+    container_name: dockerproxy
+    restart: unless-stopped
+    labels:
+      tsdproxy.enable: "false"
+    environment:
+      - CONTAINERS=1
+      - IMAGES=1
+      - INFO=1
+      - NETWORKS=1
+      - SERVICES=1
+      - TASKS=1
+      - VOLUMES=1
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    ports:
+      - "2375:2375"
+    networks:
+      - media-network
+
+  # ============================================
+  # SECURITY & UPDATES
+  # ============================================
+
+  # Diun - Docker Image Update Notifier
+  # Monitors for new container images and sends notifications
+  diun:
+    image: crazymax/diun:latest
+    container_name: diun
+    restart: unless-stopped
+    labels:
+      tsdproxy.enable: "false"
+    environment:
+      - TZ=${TIMEZONE}
+      - LOG_LEVEL=info
+      - LOG_JSON=false
+      - DIUN_WATCH_WORKERS=20
+      - DIUN_WATCH_SCHEDULE=0 30 4 * * 6
+      - DIUN_WATCH_JITTER=30s
+      - DIUN_WATCH_FIRSTCHECKNOTIF=false
+      - DIUN_PROVIDERS_DOCKER=true
+      - DIUN_PROVIDERS_DOCKER_WATCHBYDEFAULT=true
+      - DIUN_PROVIDERS_DOCKER_WATCHSTOPPED=false
+      # ntfy notifications
+      - DIUN_NOTIF_NTFY_ENDPOINT=http://${NTFY_ADDRESS}
+      - DIUN_NOTIF_NTFY_TOPIC=${DIUN_NTFY_TOPIC}
+      - DIUN_NOTIF_NTFY_PRIORITY=3
+      - DIUN_NOTIF_NTFY_TIMEOUT=10s
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /mnt/BIG/filme/docker-compose/configs/diun/data:/data
+      - /mnt/BIG/filme/docker-compose/configs/diun/config:/config
+    networks:
+      - media-network
+
+  # Trivy - Vulnerability Scanner
+  # Scans container images for CVEs before deployment
+  trivy:
+    image: aquasec/trivy:latest
+    container_name: trivy
+    restart: unless-stopped
+    labels:
+      tsdproxy.enable: "false"
+    command: ["server", "--listen", "0.0.0.0:8082"]
+    environment:
+      - TRIVY_CACHE_DIR=/cache
+    volumes:
+      - /mnt/BIG/filme/docker-compose/configs/trivy/cache:/cache
+    ports:
+      - "8082:8082"
+    networks:
+      - media-network
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8082/healthz"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # !! DO NOT REMOVE - Kept as fallback for emergencies !!
+  # Watchtower - COMMENTED OUT, replaced by Diun+Trivy+custom script
+  # watchtower:
+  #   image: containrrr/watchtower:latest
+  #   container_name: watchtower
+  #   restart: unless-stopped
+  #   labels:
+  #     tsdproxy.enable: "false"
+  #   environment:
+  #     - TZ=${TIMEZONE}
+  #     - WATCHTOWER_CLEANUP=true
+  #     - WATCHTOWER_INCLUDE_STOPPED=true
+  #     - WATCHTOWER_REVIVE_STOPPED=false
+  #     - WATCHTOWER_SCHEDULE=0 30 8 * * 1
+  #     - WATCHTOWER_NOTIFICATIONS=shoutrrr
+  #     - WATCHTOWER_NOTIFICATION_URL=${WATCHTOWER_NOTIFICATION_URL}
+  #   volumes:
+  #     - /var/run/docker.sock:/var/run/docker.sock
+  #   networks:
+  #     - media-network
+
+  # ============================================
+  # DNS & NETWORK
+  # ============================================
+
+  # LOCKED tsdproxy.name: "pihole-bender" - DO NOT CHANGE
+  # LOCKED port: 8053 - DO NOT CHANGE
+  pihole:
+    image: pihole/pihole:latest
+    container_name: pihole
+    restart: unless-stopped
+    labels:
+      tsdproxy.enable: "true"
+      tsdproxy.name: "pihole-bender"
+      tsdproxy.container_port: "80"
+      tsdproxy.dash.icon: "sh/pi-hole"
+    environment:
+      - TZ=${TIMEZONE}
+      - WEBPASSWORD=${PIHOLE_PASSWORD}
+      - FTLCONF_LOCAL_IPV4=${BENDER_HOST_IP}
+      - PIHOLE_DNS_=1.1.1.1;8.8.8.8
+      - DNSSEC=false
+      - DNSMASQ_LISTENING=all
+    volumes:
+      - /mnt/BIG/filme/configs/pihole/etc-pihole:/etc/pihole
+      - /mnt/BIG/filme/configs/pihole/etc-dnsmasq.d:/etc/dnsmasq.d
+    ports:
+      - "53:53/tcp"
+      - "53:53/udp"
+      - "8053:80/tcp"
+    networks:
+      pihole-network:
+        ipv4_address: 172.20.0.2
+    healthcheck:
+      test: ["CMD", "dig", "+norecurse", "+retry=0", "@127.0.0.1", "pi.hole"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Keepalived for Pi-hole failover (MASTER)
+  keepalived:
+    image: osixia/keepalived:latest
+    container_name: keepalived
+    restart: unless-stopped
+    labels:
+      tsdproxy.enable: "false"
+    cap_add:
+      - NET_ADMIN
+      - NET_BROADCAST
+    network_mode: host
+    volumes:
+      - /mnt/BIG/filme/configs/keepalived/keepalived.conf:/container/service/keepalived/assets/keepalived.conf:ro
+    healthcheck:
+      test: ["CMD", "pgrep", "keepalived"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  # Nebula-sync for Pi-hole replication
+  nebula-sync:
+    image: ghcr.io/lovelaze/nebula-sync:latest
+    container_name: nebula-sync
+    restart: unless-stopped
+    labels:
+      tsdproxy.enable: "false"
+    environment:
+      - "PRIMARY=http://192.168.21.121:8053|${PIHOLE_PASSWORD}"
+      - "REPLICAS=http://192.168.21.130:8053|${PIHOLE_PASSWORD}"
+      - CRON=0 * * * *
+      - FULL_SYNC=true
+      - RUN_GRAVITY=true
+    networks:
+      - media-network
+
+  # ============================================
+  # DATABASE
+  # ============================================
+
+  # PostgreSQL with VectorChord for Immich and HedgeDoc
+  # CRITICAL: Do not change image without migration plan
+  postgres:
+    image: ghcr.io/immich-app/postgres:14-vectorchord0.4.3-pgvectors0.2.0
+    container_name: postgres
+    restart: unless-stopped
+    labels:
+      tsdproxy.enable: "false"
+    environment:
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_USER=postgres
+      - POSTGRES_DB=immich
+      - POSTGRES_INITDB_ARGS=--data-checksums
+    volumes:
+      - /mnt/BIG/filme/immich/postgresql:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    networks:
+      - media-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d immich"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Daily PostgreSQL backups
+  postgres-backup:
+    image: prodrigestivill/postgres-backup-local:17-alpine
+    container_name: postgres-backup
+    restart: unless-stopped
+    labels:
+      tsdproxy.enable: "false"
+    environment:
+      - POSTGRES_HOST=postgres
+      - POSTGRES_DB=immich,hedgedoc
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_EXTRA_OPTS=-Z1 --schema=public --blobs
+      - SCHEDULE=@daily
+      - BACKUP_KEEP_DAYS=7
+      - BACKUP_KEEP_WEEKS=4
+      - BACKUP_KEEP_MONTHS=6
+      - HEALTHCHECK_PORT=8080
+    volumes:
+      - /mnt/BIG/filme/docker-compose/backups/postgres/daily:/backups
+    networks:
+      - media-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # Redis for Immich
+  immich_redis:
+    image: redis:6.2-alpine
+    container_name: immich_redis
+    restart: unless-stopped
+    labels:
+      tsdproxy.enable: "false"
+    networks:
+      - media-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ============================================
+  # MEDIA SERVERS
+  # ============================================
+
+  # LOCKED tsdproxy.name: "media" - DO NOT CHANGE
+  # LOCKED port: 8096 - DO NOT CHANGE
+  jellyfin:
+    image: jellyfin/jellyfin:latest
+    container_name: jellyfin
+    restart: unless-stopped
+    labels:
+      tsdproxy.enable: "true"
+      tsdproxy.name: "media"
+      tsdproxy.container_port: "8096"
+      tsdproxy.dash.icon: "sh/jellyfin"
+    environment:
+      - PUID=${PUID}
+      - PGID=${PGID}
+      - TZ=${TIMEZONE}
+    volumes:
+      - /mnt/BIG/filme/configs/jellyfin:/config
+      - /mnt/BIG/filme:/media
+      - /mnt/BIG/seriale:/seriale
+      - /mnt/BIG/filme/audiobookshelf/audiobooks:/audiobooks
+    ports:
+      - "8096:8096"
+    networks:
+      - media-network
+
+  # LOCKED tsdproxy.name: "audiobooks" - DO NOT CHANGE
+  # LOCKED port: 8081 - DO NOT CHANGE
+  audiobookshelf:
+    image: ghcr.io/advplyr/audiobookshelf:latest
+    container_name: audiobookshelf
+    restart: unless-stopped
+    labels:
+      tsdproxy.enable: "true"
+      tsdproxy.name: "audiobooks"
+      tsdproxy.container_port: "80"
+      tsdproxy.dash.icon: "sh/audiobookshelf"
+    environment:
+      - PUID=${PUID}
+      - PGID=${PGID}
+      - TZ=${TIMEZONE}
+    volumes:
+      - /mnt/BIG/filme/audiobookshelf/config:/config
+      - /mnt/BIG/filme/audiobookshelf/metadata:/metadata
+      - /mnt/BIG/filme/audiobookshelf/audiobooks:/audiobooks
+      - /mnt/BIG/filme/audiobookshelf/audiobooks-metube:/audiobooks-metube
+      - /mnt/BIG/filme/audiobookshelf/podcasts:/podcasts
+    ports:
+      - "8081:80"
+    networks:
+      - media-network
+
+  # LOCKED tsdproxy.name: "photo" - DO NOT CHANGE
+  # LOCKED port: 2283 - DO NOT CHANGE
+  immich_server:
+    image: ghcr.io/immich-app/immich-server:release
+    container_name: immich_server
+    restart: unless-stopped
+    labels:
+      tsdproxy.enable: "true"
+      tsdproxy.name: "photo"
+      tsdproxy.container_port: "2283"
+      tsdproxy.dash.icon: "sh/immich"
+    environment:
+      - DB_HOSTNAME=postgres
+      - DB_USERNAME=postgres
+      - DB_PASSWORD=${POSTGRES_PASSWORD}
+      - DB_DATABASE_NAME=immich
+      - REDIS_HOSTNAME=immich_redis
+      - IMMICH_MACHINE_LEARNING_URL=http://immich_machine_learning:3003
+    volumes:
+      - /mnt/BIG/filme/immich/upload:/usr/src/app/upload
+      - /mnt/BIG/filme/immich/thumbs:/usr/src/app/upload/thumbs
+      - /mnt/BIG/filme/immich/encoded-video:/usr/src/app/upload/encoded-video
+      - /mnt/BIG/filme/immich/profile:/usr/src/app/upload/profile
+      - /etc/localtime:/etc/localtime:ro
+    ports:
+      - "2283:2283"
+    networks:
+      - media-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+      immich_redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:2283/api/server/ping || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  immich_machine_learning:
+    image: ghcr.io/immich-app/immich-machine-learning:release
+    container_name: immich_machine_learning
+    restart: unless-stopped
+    labels:
+      tsdproxy.enable: "false"
+    environment:
+      - DB_HOSTNAME=postgres
+      - DB_USERNAME=postgres
+      - DB_PASSWORD=${POSTGRES_PASSWORD}
+      - DB_DATABASE_NAME=immich
+      - REDIS_HOSTNAME=immich_redis
+    volumes:
+      - /mnt/BIG/filme/immich/upload:/usr/src/app/upload
+      - /mnt/BIG/filme/immich/model-cache:/cache
+    networks:
+      - media-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+      immich_redis:
+        condition: service_healthy
+
+  # ============================================
+  # COLLABORATION
+  # ============================================
+
+  # LOCKED tsdproxy.name: "pad" - DO NOT CHANGE
+  # LOCKED port: 3000 - DO NOT CHANGE
+  hedgedoc:
+    image: quay.io/hedgedoc/hedgedoc:latest
+    container_name: hedgedoc
+    restart: unless-stopped
+    labels:
+      tsdproxy.enable: "true"
+      tsdproxy.name: "pad"
+      tsdproxy.container_port: "3000"
+      tsdproxy.dash.icon: "sh/hedgedoc"
+    environment:
+      - CMD_DB_URL=postgres://postgres:${POSTGRES_PASSWORD}@postgres:5432/hedgedoc
+      - CMD_DOMAIN=${HEDGEDOC_DOMAIN}
+      - CMD_PROTOCOL_USESSL=true
+      - CMD_URL_ADDPORT=false
+      - CMD_SESSION_SECRET=${HEDGEDOC_SESSION_SECRET}
+      - CMD_ALLOW_ANONYMOUS=false
+      - CMD_ALLOW_ANONYMOUS_EDITS=false
+      - CMD_EMAIL=true
+      - CMD_ALLOW_EMAIL_REGISTER=true
+    volumes:
+      - /mnt/BIG/filme/configs/hedgedoc/uploads:/hedgedoc/public/uploads
+    ports:
+      - "3000:3000"
+    networks:
+      - media-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+    # v86 FIX: Use Node.js for healthcheck (curl/wget not available in container)
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"require('http').get('http://localhost:3000', (r) => process.exit(r.statusCode === 200 || r.statusCode === 302 ? 0 : 1)).on('error', () => process.exit(1))\""]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  # ============================================
+  # SILVERBULLET - COMMENTED OUT FOR FUTURE EXPLORATION
+  # ============================================
+  # When re-enabling, use tsdproxy.name: "notes" (NOT "pad" - that's HedgeDoc)
+  # silverbullet:
+  #   image: zefhemel/silverbullet:latest
+  #   container_name: silverbullet
+  #   restart: unless-stopped
+  #   labels:
+  #     tsdproxy.enable: "true"
+  #     tsdproxy.name: "notes"
+  #     tsdproxy.container_port: "3000"
+  #     tsdproxy.dash.icon: "sh/silverbullet"
+  #   environment:
+  #     - SB_USER=${SILVERBULLET_USER}
+  #   volumes:
+  #     - /mnt/BIG/filme/configs/silverbullet/space:/space
+  #   ports:
+  #     - "3001:3000"
+  #   networks:
+  #     - media-network
+
+  # ============================================
+  # DOWNLOADS
+  # ============================================
+
+  # LOCKED tsdproxy.name: "transmission" - DO NOT CHANGE
+  # LOCKED port: 9091 - DO NOT CHANGE
+  transmission:
+    image: haugene/transmission-openvpn:latest
+    container_name: transmission
+    restart: unless-stopped
+    labels:
+      tsdproxy.enable: "true"
+      tsdproxy.name: "transmission"
+      tsdproxy.container_port: "9091"
+      tsdproxy.dash.icon: "sh/transmission"
+    cap_add:
+      - NET_ADMIN
+    environment:
+      - PUID=${PUID}
+      - PGID=${PGID}
+      - TZ=${TIMEZONE}
+      - OPENVPN_PROVIDER=${TRANSMISSION_VPN_PROVIDER}
+      - OPENVPN_CONFIG=${TRANSMISSION_VPN_OPENVPN_CONFIG}
+      - OPENVPN_USERNAME=${TRANSMISSION_VPN_USERNAME}
+      - OPENVPN_PASSWORD=${TRANSMISSION_VPN_PASSWORD}
+      - LOCAL_NETWORK=${LOCAL_NETWORK}
+      - TRANSMISSION_WEB_UI=flood-for-transmission
+      - TRANSMISSION_DOWNLOAD_DIR=/downloads/completed
+      - TRANSMISSION_INCOMPLETE_DIR=/downloads/incomplete
+      - TRANSMISSION_WATCH_DIR=/downloads/watch
+    volumes:
+      - /mnt/BIG/filme/configs/transmission:/config
+      - /mnt/BIG/filme/transmission:/downloads
+    ports:
+      - "9091:9091"
+    networks:
+      - media-network
+    sysctls:
+      - net.ipv6.conf.all.disable_ipv6=1
+
+  # LOCKED tsdproxy.name: "metube" - DO NOT CHANGE
+  # LOCKED port: 8083 - DO NOT CHANGE
+  metube:
+    image: ghcr.io/alexta69/metube:latest
+    container_name: metube
+    restart: unless-stopped
+    labels:
+      tsdproxy.enable: "true"
+      tsdproxy.name: "metube"
+      tsdproxy.container_port: "8081"
+      tsdproxy.dash.icon: "sh/metube"
+    environment:
+      - UID=${PUID}
+      - GID=${PGID}
+    volumes:
+      - /mnt/BIG/filme/metube/downloads:/downloads
+      - /mnt/BIG/filme/audiobookshelf/audiobooks-metube:/audiobooks
+    ports:
+      - "8083:8081"
+    networks:
+      - media-network
+
+  # LOCKED tsdproxy.name: "jdownloader" - DO NOT CHANGE
+  # LOCKED port: 5800 - DO NOT CHANGE
+  jdownloader:
+    image: jlesage/jdownloader-2:latest
+    container_name: jdownloader
+    restart: unless-stopped
+    labels:
+      tsdproxy.enable: "true"
+      tsdproxy.name: "jdownloader"
+      tsdproxy.container_port: "5800"
+      tsdproxy.dash.icon: "sh/jdownloader"
+    environment:
+      - USER_ID=${PUID}
+      - GROUP_ID=${PGID}
+      - TZ=${TIMEZONE}
+    volumes:
+      - /mnt/BIG/filme/jdownloader/config:/config
+      - /mnt/BIG/filme/jdownloader/downloads:/output
+    ports:
+      - "5800:5800"
+    networks:
+      - media-network
+
+  # LOCKED tsdproxy.name: "spotdl" - DO NOT CHANGE
+  # LOCKED port: 8084 - DO NOT CHANGE
+  spotdl:
+    image: ghcr.io/spotdl/spotify-downloader:latest
+    container_name: spotdl
+    restart: unless-stopped
+    labels:
+      tsdproxy.enable: "true"
+      tsdproxy.name: "spotdl"
+      tsdproxy.container_port: "5000"
+      tsdproxy.dash.icon: "sh/spotify"
+    entrypoint: ["spotdl", "web"]
+    volumes:
+      - /mnt/BIG/filme/spotdl/downloads:/downloads
+    ports:
+      - "8084:5000"
+    networks:
+      - media-network
+
+  # ============================================
+  # ARR STACK
+  # ============================================
+
+  # LOCKED tsdproxy.name: "prowlarr" - DO NOT CHANGE
+  # LOCKED port: 9696 - DO NOT CHANGE
+  prowlarr:
+    image: lscr.io/linuxserver/prowlarr:latest
+    container_name: prowlarr
+    restart: unless-stopped
+    labels:
+      tsdproxy.enable: "true"
+      tsdproxy.name: "prowlarr"
+      tsdproxy.container_port: "9696"
+      tsdproxy.dash.icon: "sh/prowlarr"
+    environment:
+      - PUID=${PUID}
+      - PGID=${PGID}
+      - TZ=${TIMEZONE}
+    volumes:
+      - /mnt/BIG/filme/configs/prowlarr:/config
+    ports:
+      - "9696:9696"
+    networks:
+      - media-network
+
+  # LOCKED tsdproxy.name: "sonarr" - DO NOT CHANGE
+  # LOCKED port: 8989 - DO NOT CHANGE
+  sonarr:
+    image: lscr.io/linuxserver/sonarr:latest
+    container_name: sonarr
+    restart: unless-stopped
+    labels:
+      tsdproxy.enable: "true"
+      tsdproxy.name: "sonarr"
+      tsdproxy.container_port: "8989"
+      tsdproxy.dash.icon: "sh/sonarr"
+    environment:
+      - PUID=${PUID}
+      - PGID=${PGID}
+      - TZ=${TIMEZONE}
+    volumes:
+      - /mnt/BIG/filme/configs/sonarr:/config
+      - /mnt/BIG/seriale:/tv
+      - /mnt/BIG/filme/transmission/completed:/downloads
+    ports:
+      - "8989:8989"
+    networks:
+      - media-network
+
+  # LOCKED tsdproxy.name: "radarr" - DO NOT CHANGE
+  # LOCKED port: 7878 - DO NOT CHANGE
+  radarr:
+    image: lscr.io/linuxserver/radarr:latest
+    container_name: radarr
+    restart: unless-stopped
+    labels:
+      tsdproxy.enable: "true"
+      tsdproxy.name: "radarr"
+      tsdproxy.container_port: "7878"
+      tsdproxy.dash.icon: "sh/radarr"
+    environment:
+      - PUID=${PUID}
+      - PGID=${PGID}
+      - TZ=${TIMEZONE}
+    volumes:
+      - /mnt/BIG/filme/configs/radarr:/config
+      - /mnt/BIG/filme:/movies
+      - /mnt/BIG/filme/transmission/completed:/downloads
+    ports:
+      - "7878:7878"
+    networks:
+      - media-network
+
+  # LOCKED tsdproxy.name: "lidarr" - DO NOT CHANGE
+  # LOCKED port: 8686 - DO NOT CHANGE
+  lidarr:
+    image: lscr.io/linuxserver/lidarr:latest
+    container_name: lidarr
+    restart: unless-stopped
+    labels:
+      tsdproxy.enable: "true"
+      tsdproxy.name: "lidarr"
+      tsdproxy.container_port: "8686"
+      tsdproxy.dash.icon: "sh/lidarr"
+    environment:
+      - PUID=${PUID}
+      - PGID=${PGID}
+      - TZ=${TIMEZONE}
+    volumes:
+      - /mnt/BIG/filme/configs/lidarr:/config
+      - /mnt/BIG/music:/music
+      - /mnt/BIG/filme/transmission/completed:/downloads
+    ports:
+      - "8686:8686"
+    networks:
+      - media-network
+
+  # LOCKED tsdproxy.name: "readarr" - DO NOT CHANGE
+  # LOCKED port: 8787 - DO NOT CHANGE
+  readarr:
+    image: lscr.io/linuxserver/readarr:develop
+    container_name: readarr
+    restart: unless-stopped
+    labels:
+      tsdproxy.enable: "true"
+      tsdproxy.name: "readarr"
+      tsdproxy.container_port: "8787"
+      tsdproxy.dash.icon: "sh/readarr"
+    environment:
+      - PUID=${PUID}
+      - PGID=${PGID}
+      - TZ=${TIMEZONE}
+    volumes:
+      - /mnt/BIG/filme/configs/readarr:/config
+      - /mnt/BIG/books:/books
+      - /mnt/BIG/filme/audiobookshelf/audiobooks:/audiobooks
+      - /mnt/BIG/filme/transmission/completed:/downloads
+    ports:
+      - "8787:8787"
+    networks:
+      - media-network
+
+  # LOCKED tsdproxy.name: "bazarr" - DO NOT CHANGE
+  # LOCKED port: 6767 - DO NOT CHANGE
+  bazarr:
+    image: lscr.io/linuxserver/bazarr:latest
+    container_name: bazarr
+    restart: unless-stopped
+    labels:
+      tsdproxy.enable: "true"
+      tsdproxy.name: "bazarr"
+      tsdproxy.container_port: "6767"
+      tsdproxy.dash.icon: "sh/bazarr"
+    environment:
+      - PUID=${PUID}
+      - PGID=${PGID}
+      - TZ=${TIMEZONE}
+    volumes:
+      - /mnt/BIG/filme/configs/bazarr:/config
+      - /mnt/BIG/filme:/movies
+      - /mnt/BIG/seriale:/tv
+    ports:
+      - "6767:6767"
+    networks:
+      - media-network
+
+  # Unpackerr - Extract downloaded archives
+  unpackerr:
+    image: golift/unpackerr:latest
+    container_name: unpackerr
+    restart: unless-stopped
+    labels:
+      tsdproxy.enable: "false"
+    environment:
+      - TZ=${TIMEZONE}
+      - UN_SONARR_0_URL=http://sonarr:8989
+      - UN_SONARR_0_API_KEY=${SONARR_API_KEY}
+      - UN_RADARR_0_URL=http://radarr:7878
+      - UN_RADARR_0_API_KEY=${RADARR_API_KEY}
+      - UN_LIDARR_0_URL=http://lidarr:8686
+      - UN_LIDARR_0_API_KEY=${LIDARR_API_KEY}
+      - UN_READARR_0_URL=http://readarr:8787
+      - UN_READARR_0_API_KEY=${READARR_API_KEY}
+    volumes:
+      - /mnt/BIG/filme/transmission/completed:/downloads
+    networks:
+      - media-network
+
+  # ============================================
+  # UTILITIES
+  # ============================================
+
+  # LOCKED tsdproxy.name: "sync" - DO NOT CHANGE
+  # v83 FIX: Reverted to official syncthing image with correct volume structure
+  syncthing:
+    image: syncthing/syncthing:latest
+    container_name: syncthing
+    hostname: ${SYNCTHING_HOSTNAME}
+    restart: unless-stopped
+    labels:
+      tsdproxy.enable: "true"
+      tsdproxy.name: "sync"
+      tsdproxy.container_port: "8384"
+      tsdproxy.dash.icon: "sh/syncthing"
+    environment:
+      - PUID=${PUID}
+      - PGID=${PGID}
+    volumes:
+      - /mnt/BIG/filme/syncthing:/var/syncthing
+    network_mode: host
+    healthcheck:
+      test: curl -fkLsS -m 2 127.0.0.1:8384/rest/noauth/health | grep -o --color=never OK || exit 1
+      interval: 1m
+      timeout: 10s
+      retries: 3
+
+  # Playwright Chrome for Prowlarr FlareSolverr alternative
+  playwright-chrome:
+    image: browserless/chrome:latest
+    container_name: playwright-chrome
+    restart: unless-stopped
+    labels:
+      tsdproxy.enable: "false"
+    environment:
+      - CONNECTION_TIMEOUT=300000
+    ports:
+      - "3100:3000"
+    networks:
+      - media-network
+
+  # ============================================
+  # MONITORING
+  # ============================================
+
+  beszel-agent:
+    image: henrygd/beszel-agent:latest
+    container_name: beszel-agent
+    restart: unless-stopped
+    labels:
+      tsdproxy.enable: "false"
+    environment:
+      - KEY=${BESZEL_KEY}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    network_mode: host
+
+# ============================================
+# NETWORKS
+# ============================================
+
+networks:
+  media-network:
+    driver: bridge
+  pihole-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/24
