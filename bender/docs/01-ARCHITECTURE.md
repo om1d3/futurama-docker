@@ -53,7 +53,7 @@ bender serves as the **primary storage and media services host** in the two-host
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                              bender (TrueNAS Scale)                         │
-│                              192.168.21.121                                │
+│                              192.168.21.121                                 │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │  role: primary storage and media services host                              │
 │  hardware: TrueNAS Scale appliance                                          │
