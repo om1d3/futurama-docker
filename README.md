@@ -16,7 +16,7 @@ two-host docker infrastructure for media services, utilities, and home automatio
                    |                        |                        |
                    v                        v                        v
           +------------------+    +------------------+    +------------------+
-          |     bender       |    |   pihole vip     |    |       amy        |
+          |     bender       |    |   pihole VIP     |    |       amy        |
           |  192.168.21.121  |    |  192.168.21.100  |    |  192.168.21.130  |
           |  TrueNAS Scale   |    |   (keepalived)   |    |  Intel i3-2310M  |
           +--------+---------+    +--------+---------+    +--------+---------+
@@ -25,7 +25,7 @@ two-host docker infrastructure for media services, utilities, and home automatio
                    |          |                         |          |
                    |          v                         v          |
                    |   +------------+           +------------+     |
-                   |   |   pihole   |<--vrrp--->|   pihole   |     |
+                   |   |   pihole   |<---VRRP-->|   pihole   |     |
                    |   |  (master)  |  failover |  (backup)  |     |
                    |   | priority150|           | priority100|     |
                    |   |  port 8053 |           |  port 8053 |     |
@@ -38,18 +38,18 @@ two-host docker infrastructure for media services, utilities, and home automatio
 
 ```
           +-----------------------------------------------------------------------+
-          |                         keepalived vrrp                               |
+          |                         keepalived VRRP                               |
           +-----------------------------------------------------------------------+
           |                                                                       |
           |  normal operation:                                                    |
           |  +----------+       +------------+       +------------------+         |
-          |  |  client  |------>|  vip .100  |------>| bender pihole    |         |
+          |  |  client  |------>|  VIP .100  |------>| bender pihole    |         |
           |  | dns query|       |  (master)  |       | (serves request) |         |
           |  +----------+       +------------+       +------------------+         |
           |                                                                       |
           |  failover (bender pihole down):                                       |
           |  +----------+       +------------+       +------------------+         |
-          |  |  client  |------>|  vip .100  |------>| amy pihole       |         |
+          |  |  client  |------>|  VIP .100  |------>| amy pihole       |         |
           |  | dns query|       |  (backup)  |       | (serves request) |         |
           |  +----------+       +------------+       +------------------+         |
           |                                                                       |
@@ -99,7 +99,7 @@ two-host docker infrastructure for media services, utilities, and home automatio
                                              | nfs + tailscale
                                              v
           +-----------------------------------------------------------------------+
-          |                      amy (ubuntu) 192.168.21.130                      |
+          |                      amy (Debian) 192.168.21.130                      |
           +-----------------------------------------------------------------------+
           |                                                                       |
           |  +-------------------------------+  +-----------------------------+   |
