@@ -28,7 +28,7 @@ amy serves as the **utilities and monitoring host** in the two-host infrastructu
 
 - **notification services** (ntfy) for the entire infrastructure
 - **monitoring and observability** (beszel, cadvisor, netalertx)
-- **dns high availability** (secondary pihole with keepalived)
+- **DNS high availability** (secondary pihole with keepalived)
 - **productivity tools** (vaultwarden, mealie, lubelogger, etc.)
 - **lightweight databases** (postgresql for atuin, miniflux, spendspentspent)
 
@@ -50,32 +50,32 @@ amy serves as the **utilities and monitoring host** in the two-host infrastructu
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                              infrastructure overview                         │
+│                              infrastructure overview                        │
 ├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                              │
+│                                                                             │
 │  ┌─────────────────────────┐              ┌─────────────────────────┐       │
 │  │   bender (TrueNAS)      │              │      amy (intel i3)     │       │
 │  │   192.168.21.121        │              │      192.168.21.130     │       │
 │  │   ─────────────────     │              │      ─────────────────  │       │
 │  │   • media services      │              │      • notifications    │       │
 │  │   • downloads (arr)     │◄────────────►│      • monitoring       │       │
-│  │   • photo management    │     nfs      │      • dns backup       │       │
+│  │   • photo management    │     nfs      │      • DNS dns backup   │       │
 │  │   • primary storage     │              │      • productivity     │       │
-│  │   • dns primary         │              │      • password mgmt    │       │
+│  │   • DNS primary         │              │      • password mgmt    │       │
 │  └─────────────────────────┘              └─────────────────────────┘       │
-│              │                                        │                      │
-│              └────────────────┬───────────────────────┘                      │
-│                               │                                              │
-│                        ┌──────▼──────┐                                      │
-│                        │   vip dns   │                                      │
-│                        │192.168.21.100│                                      │
-│                        └─────────────┘                                      │
+│              │                                        │                     │
+│              └────────────────┬───────────────────────┘                     │
+│                               │                                             │
+│                        ┌──────▼───────┐                                     │
+│                        │    vipDNSs   │                                     │
+│                        │192.168.21.100│                                     │
+│                        └──────────────┘                                     │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ### why amy exists
 
-1. **failure isolation**: if bender goes down for maintenance, critical services (dns, notifications, monitoring) continue on amy
+1. **failure isolation**: if bender goes down for maintenance, critical services (DNS, notifications, monitoring) continue on amy
 
 2. **external monitoring**: amy can monitor bender's health from outside - if bender's monitoring fails, amy can still alert
 
@@ -92,8 +92,8 @@ amy hosts 8 critical services that receive special handling during updates:
 | **postgres** | database for 3 applications (atuin, miniflux, sss) |
 | **ntfy** | notification hub for entire infrastructure |
 | **beszel** | monitoring hub - if down, no visibility |
-| **pihole** | dns - network-wide impact if fails |
-| **keepalived** | dns failover - ha depends on it |
+| **pihole** | DNS - network-wide impact if fails |
+| **keepalived** | DNS failover - ha depends on it |
 | **vaultwarden** | password manager - security critical |
 | **spendspentspent** | financial data - data integrity critical |
 | **diun** | update notifications - security visibility |
@@ -136,12 +136,12 @@ amy hosts 8 critical services that receive special handling during updates:
 | interface | ip address | purpose |
 |-----------|------------|---------|
 | **enp4s0** | 192.168.21.130 | primary lan |
-| **vip** | 192.168.21.100 | shared dns (keepalived) |
+| **vip** | 192.168.21.100 | shared DNS (keepalived) |
 | **tailscale** | 100.x.x.x | remote access |
 
-### dns configuration
+### DNS configuration
 
-amy runs as dns backup:
+amy runs as DNS backup:
 - **primary**: bender (192.168.21.121)
 - **backup**: amy (192.168.21.130)
 - **vip**: 192.168.21.100 (clients point here)
@@ -150,7 +150,7 @@ amy runs as dns backup:
 
 | service | port | protocol |
 |---------|------|----------|
-| pihole dns | 53 | tcp/udp |
+| pihole DNS | 53 | tcp/udp |
 | pihole web | 8053 | http |
 | ntfy | 8888 | http |
 | postgresql | 5432 | tcp |
@@ -228,7 +228,7 @@ services are placed on amy if they:
 |----------------|-------------|---------|
 | **diun** | ntfy (amy) | send update notifications |
 | **watchtower** | ntfy (amy) | send update notifications |
-| **all services** | pihole vip | dns resolution |
+| **all services** | pihole vip | DNS resolution |
 | **homepage** | dockerproxy (bender) | container status |
 
 ### services that connect to bender
@@ -272,7 +272,7 @@ both hosts use synchronized configurations for:
 /docker/                            # container data (persistent)
 ├── postgresql/                     # postgresql data
 ├── ntfy/                           # notification server
-├── pihole/                         # dns server
+├── pihole/                        DNSdns server
 ├── vaultwarden/                    # password manager
 ├── beszel/                         # monitoring
 ├── backups/                        # backup storage
