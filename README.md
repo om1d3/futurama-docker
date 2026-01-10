@@ -9,55 +9,54 @@ two-host docker infrastructure for media services, utilities, and home automatio
 ## network architecture
 
 ```
-                            ┌─────────────────────────────────────┐
-                            │           lan network               │
-                            │         192.168.21.0/24             │
-                            └──────────────┬──────────────────────┘
-                                           │
-            ┌──────────────────────────────┼──────────────────────────────┐
-            │                              │                              │
-            ▼                              ▼                              ▼
-   ┌─────────────────┐          ┌─────────────────┐           ┌─────────────────┐
-   │     bender      │          │   pihole vip    │           │      amy        │
-   │  192.168.21.121 │          │ 192.168.21.100  │           │ 192.168.21.130  │
-   │   TrueNAS Scale │          │   (keepalived)  │           │  Intel i3-2310M │
-   └────────┬────────┘          └────────┬────────┘           └────────┬────────┘
-            │                            │                             │
-            │         ┌──────────────────┴──────────────────┐          │
-            │         │                                     │          │
-            │         ▼                                     ▼          │
-            │  ┌─────────────┐                       ┌─────────────┐   │
-            │  │   pihole    │◄─── vrrp failover ───►│   pihole    │   │
-            │  │  (master)   │      priority 150     │  (backup)   │   │
-            │  │  port 8053  │      priority 100     │  port 8053  │   │
-            │  └─────────────┘                       └─────────────┘   │
-            │         │                                     │          │
-            └─────────┴─────────────────────────────────────┴──────────┘
+                              lan network
+                            192.168.21.0/24
+                                  |
+         +------------------------+------------------------+
+         |                        |                        |
+         v                        v                        v
++------------------+    +------------------+    +------------------+
+|     bender       |    |   pihole vip     |    |       amy        |
+|  192.168.21.121  |    |  192.168.21.100  |    |  192.168.21.130  |
+|  TrueNAS Scale   |    |   (keepalived)   |    |  Intel i3-2310M  |
++--------+---------+    +--------+---------+    +--------+---------+
+         |                       |                       |
+         |          +------------+------------+          |
+         |          |                         |          |
+         |          v                         v          |
+         |   +------------+           +------------+     |
+         |   |   pihole   |<--vrrp--->|   pihole   |     |
+         |   |  (master)  |  failover |  (backup)  |     |
+         |   | priority150|           | priority100|     |
+         |   |  port 8053 |           |  port 8053 |     |
+         |   +------------+           +------------+     |
+         |          |                         |          |
+         +----------+-------------------------+----------+
 ```
 
 ### keepalived dns failover
 
 ```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                           keepalived vrrp                                   │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                             │
-│   normal operation:                                                         │
-│   ┌─────────────┐         ┌─────────────┐         ┌─────────────┐          │
-│   │   client    │────────►│  vip .100   │────────►│   bender    │          │
-│   │  dns query  │         │  (master)   │         │   pihole    │          │
-│   └─────────────┘         └─────────────┘         └─────────────┘          │
-│                                                                             │
-│   failover (bender pihole down):                                            │
-│   ┌─────────────┐         ┌─────────────┐         ┌─────────────┐          │
-│   │   client    │────────►│  vip .100   │────────►│     amy     │          │
-│   │  dns query  │         │  (backup)   │         │   pihole    │          │
-│   └─────────────┘         └─────────────┘         └─────────────┘          │
-│                                                                             │
-│   health check: wget to pihole admin (port 8053)                            │
-│   failover time: ~5 seconds                                                 │
-│                                                                             │
-└─────────────────────────────────────────────────────────────────────────────┘
++-----------------------------------------------------------------------+
+|                         keepalived vrrp                               |
++-----------------------------------------------------------------------+
+|                                                                       |
+|  normal operation:                                                    |
+|  +----------+       +------------+       +------------------+         |
+|  |  client  |------>|  vip .100  |------>| bender pihole    |         |
+|  | dns query|       |  (master)  |       | (serves request) |         |
+|  +----------+       +------------+       +------------------+         |
+|                                                                       |
+|  failover (bender pihole down):                                       |
+|  +----------+       +------------+       +------------------+         |
+|  |  client  |------>|  vip .100  |------>| amy pihole       |         |
+|  | dns query|       |  (backup)  |       | (serves request) |         |
+|  +----------+       +------------+       +------------------+         |
+|                                                                       |
+|  health check: wget to pihole admin (port 8053)                       |
+|  failover time: ~5 seconds                                            |
+|                                                                       |
++-----------------------------------------------------------------------+
 ```
 
 ---
@@ -65,94 +64,71 @@ two-host docker infrastructure for media services, utilities, and home automatio
 ## services architecture
 
 ```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                              bender (TrueNAS Scale)                         │
-│                                192.168.21.121                               │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                             │
-│  ┌─────────────────────────────────────────────────────────────────────┐   │
-│  │ media services                                                       │   │
-│  │  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐            │   │
-│  │  │  immich  │  │ jellyfin │  │  metube  │  │ hedgedoc │            │   │
-│  │  │  :2283   │  │  :8080   │  │  :8383   │  │  :8000   │            │   │
-│  │  └────┬─────┘  └──────────┘  └──────────┘  └────┬─────┘            │   │
-│  │       │                                         │                   │   │
-│  │       └──────────────┬──────────────────────────┘                   │   │
-│  │                      ▼                                              │   │
-│  │               ┌─────────────┐                                       │   │
-│  │               │  postgresql │ (vectorchord)                         │   │
-│  │               │    :5432    │                                       │   │
-│  │               └─────────────┘                                       │   │
-│  └─────────────────────────────────────────────────────────────────────┘   │
-│                                                                             │
-│  ┌─────────────────────────────────────────────────────────────────────┐   │
-│  │ download services (arr stack)                                        │   │
-│  │  ┌────────────┐  ┌────────┐  ┌────────┐  ┌──────────┐  ┌─────────┐ │   │
-│  │  │transmission│  │ sonarr │  │ radarr │  │ prowlarr │  │  bazarr │ │   │
-│  │  │   :9091    │  │ :8989  │  │ :7878  │  │  :9696   │  │  :6767  │ │   │
-│  │  │  (vpn)     │  └───┬────┘  └───┬────┘  └────┬─────┘  └─────────┘ │   │
-│  │  └──────┬─────┘      │           │            │                     │   │
-│  │         │            └───────────┴────────────┘                     │   │
-│  │         │                        │                                  │   │
-│  │         └────────────────────────┘                                  │   │
-│  │                      ▼                                              │   │
-│  │         ┌────────────────────────┐                                  │   │
-│  │         │  /mnt/BIG/filme/       │                                  │   │
-│  │         │  (ZFS storage)         │                                  │   │
-│  │         └────────────────────────┘                                  │   │
-│  └─────────────────────────────────────────────────────────────────────┘   │
-│                                                                             │
-│  ┌─────────────────────────────────────────────────────────────────────┐   │
-│  │ infrastructure                                                       │   │
-│  │  ┌──────────┐  ┌──────────┐  ┌───────────┐  ┌──────────┐           │   │
-│  │  │ tsdproxy │  │  pihole  │  │keepalived │  │   diun   │           │   │
-│  │  │  :8085   │  │  :8053   │  │  (master) │  │ (weekly) │           │   │
-│  │  └──────────┘  └──────────┘  └───────────┘  └──────────┘           │   │
-│  └─────────────────────────────────────────────────────────────────────┘   │
-│                                                                             │
-└─────────────────────────────────────────────────────────────────────────────┘
-                                      │
-                                      │ nfs + tailscale
-                                      ▼
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                                amy (ubuntu)                                 │
-│                               192.168.21.130                                │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                             │
-│  ┌─────────────────────────────────────────────────────────────────────┐   │
-│  │ monitoring & notifications                                           │   │
-│  │  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌───────────┐           │   │
-│  │  │   ntfy   │  │  beszel  │  │ cadvisor │  │ netalertx │           │   │
-│  │  │   :8080  │  │  :8090   │  │  :8081   │  │   :20211  │           │   │
-│  │  └────┬─────┘  └──────────┘  └──────────┘  └───────────┘           │   │
-│  │       │                                                             │   │
-│  │       │◄──────── notifications from bender (diun, updates)          │   │
-│  └───────┴─────────────────────────────────────────────────────────────┘   │
-│                                                                             │
-│  ┌─────────────────────────────────────────────────────────────────────┐   │
-│  │ productivity                                                         │   │
-│  │  ┌───────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐           │   │
-│  │  │vaultwarden│  │ miniflux │  │  mealie  │  │ homepage │           │   │
-│  │  │   :8081   │  │  :8082   │  │  :9925   │  │  :3000   │           │   │
-│  │  └───────────┘  └────┬─────┘  └──────────┘  └────┬─────┘           │   │
-│  │                      │                           │                  │   │
-│  │                      │    ┌──────────────────────┘                  │   │
-│  │                      ▼    ▼                                         │   │
-│  │               ┌─────────────┐                                       │   │
-│  │               │  postgresql │ (atuin, miniflux, sss)                │   │
-│  │               │    :5432    │                                       │   │
-│  │               └─────────────┘                                       │   │
-│  └─────────────────────────────────────────────────────────────────────┘   │
-│                                                                             │
-│  ┌─────────────────────────────────────────────────────────────────────┐   │
-│  │ infrastructure                                                       │   │
-│  │  ┌──────────┐  ┌──────────┐  ┌───────────┐  ┌──────────┐           │   │
-│  │  │ tsdproxy │  │  pihole  │  │keepalived │  │   diun   │           │   │
-│  │  │  :8085   │  │  :8053   │  │  (backup) │  │ (weekly) │           │   │
-│  │  └──────────┘  └──────────┘  └───────────┘  └──────────┘           │   │
-│  └─────────────────────────────────────────────────────────────────────┘   │
-│                                                                             │
-└─────────────────────────────────────────────────────────────────────────────┘
++-----------------------------------------------------------------------+
+|                    bender (TrueNAS Scale) 192.168.21.121              |
++-----------------------------------------------------------------------+
+|                                                                       |
+|  +-----------------------------+  +-----------------------------+     |
+|  | media services              |  | download services           |     |
+|  | +---------+ +---------+     |  | +-------------+ +---------+ |     |
+|  | | immich  | |jellyfin |     |  | |transmission | | sonarr  | |     |
+|  | | :2283   | | :8080   |     |  | |    :9091    | | :8989   | |     |
+|  | +---------+ +---------+     |  | |    (vpn)    | +---------+ |     |
+|  | +---------+ +---------+     |  | +-------------+ +---------+ |     |
+|  | | metube  | |hedgedoc |     |  | | prowlarr    | | radarr  | |     |
+|  | | :8383   | | :8000   |     |  | |    :9696    | | :7878   | |     |
+|  | +---------+ +---------+     |  | +-------------+ +---------+ |     |
+|  +-------------+---------------+  +-----------------------------+     |
+|                |                                                      |
+|                v                                                      |
+|  +---------------------------+                                        |
+|  | postgresql (vectorchord)  |                                        |
+|  | :5432 [immich, hedgedoc]  |                                        |
+|  +---------------------------+                                        |
+|                                                                       |
+|  +---------------------------------------------------------------+   |
+|  | infrastructure                                                 |   |
+|  | +---------+ +---------+ +-----------+ +------+ +------------+ |   |
+|  | |tsdproxy | | pihole  | |keepalived | | diun | |   trivy    | |   |
+|  | | :8085   | | :8053   | | (master)  | |weekly| |   :8082    | |   |
+|  | +---------+ +---------+ +-----------+ +------+ +------------+ |   |
+|  +---------------------------------------------------------------+   |
+|                                                                       |
++-----------------------------------------------------------------------+
+                                   |
+                                   | nfs + tailscale
+                                   v
++-----------------------------------------------------------------------+
+|                      amy (ubuntu) 192.168.21.130                      |
++-----------------------------------------------------------------------+
+|                                                                       |
+|  +-------------------------------+  +-----------------------------+   |
+|  | monitoring & notifications    |  | productivity                |   |
+|  | +---------+ +---------+       |  | +-----------+ +-----------+ |   |
+|  | |  ntfy   | | beszel  |       |  | |vaultwarden| | miniflux  | |   |
+|  | | :8080   | | :8090   |       |  | |   :8081   | |   :8082   | |   |
+|  | +---------+ +---------+       |  | +-----------+ +-----------+ |   |
+|  | +---------+ +-----------+     |  | +-----------+ +-----------+ |   |
+|  | |cadvisor | | netalertx |     |  | |  mealie   | | homepage  | |   |
+|  | | :8081   | |  :20211   |     |  | |   :9925   | |   :3000   | |   |
+|  | +---------+ +-----------+     |  | +-----------+ +-----------+ |   |
+|  +-------------------------------+  +-------------+---------------+   |
+|                                                   |                   |
+|                                                   v                   |
+|                                     +---------------------------+     |
+|                                     | postgresql                |     |
+|                                     | :5432 [atuin,miniflux,sss]|     |
+|                                     +---------------------------+     |
+|                                                                       |
+|  +---------------------------------------------------------------+   |
+|  | infrastructure                                                 |   |
+|  | +---------+ +---------+ +-----------+ +------+ +------------+ |   |
+|  | |tsdproxy | | pihole  | |keepalived | | diun | |   trivy    | |   |
+|  | | :8085   | | :8053   | | (backup)  | |weekly| |   :8082    | |   |
+|  | +---------+ +---------+ +-----------+ +------+ +------------+ |   |
+|  +---------------------------------------------------------------+   |
+|                                                                       |
++-----------------------------------------------------------------------+
 ```
 
 ---
@@ -187,24 +163,20 @@ two-host docker infrastructure for media services, utilities, and home automatio
 
 ```
 .
-├── README.md                    # this file
-├── bender/                      # TrueNAS Scale host
-│   ├── .env.template            # environment variables template
-│   ├── .env.gpg                 # encrypted production secrets
-│   ├── docker-compose.yaml      # main compose file (v86)
-│   ├── configs/
-│   │   └── keepalived/
-│   │       └── keepalived.conf  # pihole ha (master)
-│   ├── docs/                    # 8 documentation files
-│   └── scripts/                 # operational scripts
-└── amy/                         # ubuntu utilities host
-    ├── .env.template            # environment variables template
-    ├── docker-compose.yaml      # main compose file (v85)
-    ├── configs/
-    │   └── keepalived/
-    │       └── keepalived.conf  # pihole ha (backup)
-    ├── docs/                    # 8 documentation files
-    └── scripts/                 # operational scripts
+├── README.md
+├── bender/
+│   ├── .env.template
+│   ├── .env.gpg
+│   ├── docker-compose.yaml
+│   ├── configs/keepalived/keepalived.conf
+│   ├── docs/
+│   └── scripts/
+└── amy/
+    ├── .env.template
+    ├── docker-compose.yaml
+    ├── configs/keepalived/keepalived.conf
+    ├── docs/
+    └── scripts/
 ```
 
 ---
@@ -236,72 +208,40 @@ two-host docker infrastructure for media services, utilities, and home automatio
 
 ## quick start
 
-### new deployment
+```bash
+# clone
+git clone git@github.com:om1d3/futurama-docker.git
+cd futurama-docker
 
-1. **clone repository**
-   ```bash
-   git clone git@github.com:om1d3/futurama-docker.git
-   cd futurama-docker
-   ```
+# configure
+cp bender/.env.template bender/.env && nano bender/.env
+cp amy/.env.template amy/.env && nano amy/.env
 
-2. **create environment files**
-   ```bash
-   # for bender
-   cp bender/.env.template bender/.env
-   nano bender/.env  # fill in secrets
+# deploy to bender
+scp bender/docker-compose.yaml bender/.env root@192.168.21.121:/mnt/BIG/filme/docker-compose/
 
-   # for amy
-   cp amy/.env.template amy/.env
-   nano amy/.env  # fill in secrets
-   ```
+# deploy to amy
+scp amy/docker-compose.yaml amy/.env root@192.168.21.130:/docker-compose/
 
-3. **deploy to hosts**
-   ```bash
-   # copy to bender
-   scp bender/docker-compose.yaml bender/.env root@192.168.21.121:/mnt/BIG/filme/docker-compose/
-
-   # copy to amy
-   scp amy/docker-compose.yaml amy/.env root@192.168.21.130:/docker-compose/
-   ```
-
-4. **start services**
-   ```bash
-   # on bender
-   cd /mnt/BIG/filme/docker-compose && docker compose up -d
-
-   # on amy
-   cd /docker-compose && docker compose up -d
-   ```
+# start services
+ssh root@192.168.21.121 'cd /mnt/BIG/filme/docker-compose && docker compose up -d'
+ssh root@192.168.21.130 'cd /docker-compose && docker compose up -d'
+```
 
 ---
 
 ## documentation
 
-### bender docs
-
-| document | description |
-|----------|-------------|
-| [01-ARCHITECTURE.md](bender/docs/01-ARCHITECTURE.md) | system design overview |
-| [02-SERVICES-CATALOG.md](bender/docs/02-SERVICES-CATALOG.md) | service reference with ports |
-| [03-DIRECTORY-STRUCTURE.md](bender/docs/03-DIRECTORY-STRUCTURE.md) | file system layout |
-| [04-SECURE-UPDATES.md](bender/docs/04-SECURE-UPDATES.md) | container update system |
-| [05-ENV-REFERENCE.md](bender/docs/05-ENV-REFERENCE.md) | environment variables |
-| [06-BENEFITS-TRADEOFFS.md](bender/docs/06-BENEFITS-TRADEOFFS.md) | design decisions |
-| [07-MAINTENANCE.md](bender/docs/07-MAINTENANCE.md) | operational procedures |
-| [08-TROUBLESHOOTING.md](bender/docs/08-TROUBLESHOOTING.md) | problem resolution |
-
-### amy docs
-
-| document | description |
-|----------|-------------|
-| [01-ARCHITECTURE.md](amy/docs/01-ARCHITECTURE.md) | system design overview |
-| [02-SERVICES-CATALOG.md](amy/docs/02-SERVICES-CATALOG.md) | service reference with ports |
-| [03-DIRECTORY-STRUCTURE.md](amy/docs/03-DIRECTORY-STRUCTURE.md) | file system layout |
-| [04-SECURE-UPDATES.md](amy/docs/04-SECURE-UPDATES.md) | container update system |
-| [05-ENV-REFERENCE.md](amy/docs/05-ENV-REFERENCE.md) | environment variables |
-| [06-BENEFITS-TRADEOFFS.md](amy/docs/06-BENEFITS-TRADEOFFS.md) | design decisions |
-| [07-MAINTENANCE.md](amy/docs/07-MAINTENANCE.md) | operational procedures |
-| [08-TROUBLESHOOTING.md](amy/docs/08-TROUBLESHOOTING.md) | problem resolution |
+| bender | amy |
+|--------|-----|
+| [01-ARCHITECTURE.md](bender/docs/01-ARCHITECTURE.md) | [01-ARCHITECTURE.md](amy/docs/01-ARCHITECTURE.md) |
+| [02-SERVICES-CATALOG.md](bender/docs/02-SERVICES-CATALOG.md) | [02-SERVICES-CATALOG.md](amy/docs/02-SERVICES-CATALOG.md) |
+| [03-DIRECTORY-STRUCTURE.md](bender/docs/03-DIRECTORY-STRUCTURE.md) | [03-DIRECTORY-STRUCTURE.md](amy/docs/03-DIRECTORY-STRUCTURE.md) |
+| [04-SECURE-UPDATES.md](bender/docs/04-SECURE-UPDATES.md) | [04-SECURE-UPDATES.md](amy/docs/04-SECURE-UPDATES.md) |
+| [05-ENV-REFERENCE.md](bender/docs/05-ENV-REFERENCE.md) | [05-ENV-REFERENCE.md](amy/docs/05-ENV-REFERENCE.md) |
+| [06-BENEFITS-TRADEOFFS.md](bender/docs/06-BENEFITS-TRADEOFFS.md) | [06-BENEFITS-TRADEOFFS.md](amy/docs/06-BENEFITS-TRADEOFFS.md) |
+| [07-MAINTENANCE.md](bender/docs/07-MAINTENANCE.md) | [07-MAINTENANCE.md](amy/docs/07-MAINTENANCE.md) |
+| [08-TROUBLESHOOTING.md](bender/docs/08-TROUBLESHOOTING.md) | [08-TROUBLESHOOTING.md](amy/docs/08-TROUBLESHOOTING.md) |
 
 ---
 
@@ -319,8 +259,6 @@ two-host docker infrastructure for media services, utilities, and home automatio
 
 ## tailscale urls
 
-access via tailnet (bunny-enigmatic.ts.net):
-
 | service | url |
 |---------|-----|
 | immich | https://immich.bunny-enigmatic.ts.net |
@@ -330,8 +268,6 @@ access via tailnet (bunny-enigmatic.ts.net):
 | vaultwarden | https://vaultwarden.bunny-enigmatic.ts.net |
 | miniflux | https://miniflux.bunny-enigmatic.ts.net |
 | beszel | https://beszel.bunny-enigmatic.ts.net |
-
-see service catalogs for complete url list.
 
 ---
 

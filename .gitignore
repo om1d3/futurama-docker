@@ -1,5 +1,5 @@
 # secrets - never commit
-!.env
+.env
 !.env.template
 !.env.gpg
 !.env.gpg.README
