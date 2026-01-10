@@ -53,7 +53,7 @@ bender serves as the **primary storage and media services host** in the two-host
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                              bender (TrueNAS Scale)                         │
-│                              192.168.21.121                                  │
+│                              192.168.21.121                                │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │  role: primary storage and media services host                              │
 │  hardware: TrueNAS Scale appliance                                          │
@@ -61,29 +61,29 @@ bender serves as the **primary storage and media services host** in the two-host
 │  docker path: /mnt/BIG/filme/docker-compose/                                │
 │                                                                             │
 │  services:                                                                  │
-│  ├── media: immich, jellyfin, metube                                       │
-│  ├── downloads: transmission, sonarr, radarr, prowlarr, bazarr             │
-│  ├── sync: syncthing, nebula-sync                                          │
-│  ├── productivity: hedgedoc                                                │
-│  ├── infrastructure: tsdproxy, pihole, keepalived, postgresql              │
-│  └── updates: diun, trivy                                                  │
+│  ├── media: immich, jellyfin, metube                                        │
+│  ├── downloads: transmission, sonarr, radarr, prowlarr, bazarr              │
+│  ├── sync: syncthing, nebula-sync                                           │
+│  ├── productivity: hedgedoc                                                 │
+│  ├── infrastructure: tsdproxy, pihole, keepalived, postgresql               │
+│  └── updates: diun, trivy                                                   │
 └─────────────────────────────────────────────────────────────────────────────┘
                              │
                              │ nfs export + tailscale
                              ▼
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                              amy (intel i3-2310m)                           │
-│                              192.168.21.130                                  │
+│                              192.168.21.130                                 │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │  role: utilities and monitoring host                                        │
-│  services: ntfy, beszel, homepage, vaultwarden, miniflux, mealie           │
+│  services: ntfy, beszel, homepage, vaultwarden, miniflux, mealie            │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ### service distribution rationale
 
 | category | bender (this host) | amy |
-|----------|-------------------|-----|
+|----------|--------------------|-----|
 | **storage-intensive** | ✅ immich, jellyfin | ❌ |
 | **download services** | ✅ transmission, arr stack | ❌ |
 | **cpu-intensive** | ✅ immich ml, transcoding | ❌ |
