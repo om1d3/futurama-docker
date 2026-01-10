@@ -9,7 +9,7 @@ two-host docker infrastructure for media services, utilities, and home automatio
 ## network architecture
 
 ```
-                                        lan network
+                                        LAN network
                                       192.168.21.0/24
                                             |
                    +------------------------+------------------------+
@@ -34,7 +34,7 @@ two-host docker infrastructure for media services, utilities, and home automatio
                    +----------+-------------------------+----------+
 ```
 
-### keepalived dns failover
+### keepalived DNS failover
 
 ```
           +-----------------------------------------------------------------------+
@@ -44,13 +44,13 @@ two-host docker infrastructure for media services, utilities, and home automatio
           |  normal operation:                                                    |
           |  +----------+       +------------+       +------------------+         |
           |  |  client  |------>|  VIP .100  |------>| bender pihole    |         |
-          |  | dns query|       |  (master)  |       | (serves request) |         |
+          |  | DNS query|       |  (master)  |       | (serves request) |         |
           |  +----------+       +------------+       +------------------+         |
           |                                                                       |
           |  failover (bender pihole down):                                       |
           |  +----------+       +------------+       +------------------+         |
           |  |  client  |------>|  VIP .100  |------>| amy pihole       |         |
-          |  | dns query|       |  (backup)  |       | (serves request) |         |
+          |  | DNS query|       |  (backup)  |       | (serves request) |         |
           |  +----------+       +------------+       +------------------+         |
           |                                                                       |
           |  health check: wget to pihole admin (port 8053)                       |
@@ -155,7 +155,7 @@ two-host docker infrastructure for media services, utilities, and home automatio
 
 | service | vip | primary | backup |
 |---------|-----|---------|--------|
-| **pihole dns** | 192.168.21.100 | bender (priority 150) | amy (priority 100) |
+| **pihole DNS** | 192.168.21.100 | bender (priority 150) | amy (priority 100) |
 
 ---
 
@@ -250,7 +250,7 @@ ssh root@192.168.21.130 'cd /docker-compose && docker compose up -d'
 | decision | rationale |
 |----------|-----------|
 | **two-host split** | failure isolation, TrueNAS upgrade immunity |
-| **pihole ha** | zero-downtime dns with keepalived vrrp |
+| **pihole ha** | zero-downtime DNS with keepalived vrrp |
 | **local ntfy** | notifications work without internet |
 | **security-first updates** | trivy scanning before deployment |
 | **shared postgresql per host** | ram efficiency, centralized backup |
