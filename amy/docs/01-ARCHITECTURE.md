@@ -49,28 +49,28 @@ amy serves as the **utilities and monitoring host** in the two-host infrastructu
 ## role in infrastructure
 
 ```
-                                ┌─────────────────────────────────────────────────────────────────────────────┐
-                                │                              infrastructure overview                        │
-                                ├─────────────────────────────────────────────────────────────────────────────┤
-                                │                                                                             │
-                                │  ┌─────────────────────────┐              ┌─────────────────────────┐       │
-                                │  │   bender (TrueNAS)      │              │      amy (intel i3)     │       │
-                                │  │   192.168.21.121        │              │      192.168.21.130     │       │
-                                │  │   ─────────────────     │              │      ─────────────────  │       │
-                                │  │   • media services      │              │      • notifications    │       │
-                                │  │   • downloads (arr)     │◄────────────►│      • monitoring       │       │
-                                │  │   • photo management    │     nfs      │      • DNS dns backup   │       │
-                                │  │   • primary storage     │              │      • productivity     │       │
-                                │  │   • DNS primary         │              │      • password mgmt    │       │
-                                │  └─────────────────────────┘              └─────────────────────────┘       │
-                                │              │                                        │                     │
-                                │              └────────────────┬───────────────────────┘                     │
-                                │                               │                                             │
-                                │                        ┌──────▼───────┐                                     │
-                                │                        │    vipDNSs   │                                     │
-                                │                        │192.168.21.100│                                     │
-                                │                        └──────────────┘                                     │
-                                └─────────────────────────────────────────────────────────────────────────────┘
+                ┌─────────────────────────────────────────────────────────────────────────────┐
+                │                              infrastructure overview                        │
+                ├─────────────────────────────────────────────────────────────────────────────┤
+                │                                                                             │
+                │  ┌─────────────────────────┐              ┌─────────────────────────┐       │
+                │  │   bender (TrueNAS)      │              │      amy (intel i3)     │       │
+                │  │   192.168.21.121        │              │      192.168.21.130     │       │
+                │  │   ─────────────────     │              │      ─────────────────  │       │
+                │  │   • media services      │              │      • notifications    │       │
+                │  │   • downloads (arr)     │◄────────────►│      • monitoring       │       │
+                │  │   • photo management    │     nfs      │      • DNS dns backup   │       │
+                │  │   • primary storage     │              │      • productivity     │       │
+                │  │   • DNS primary         │              │      • password mgmt    │       │
+                │  └─────────────────────────┘              └─────────────────────────┘       │
+                │              │                                        │                     │
+                │              └────────────────┬───────────────────────┘                     │
+                │                               │                                             │
+                │                        ┌──────▼───────┐                                     │
+                │                        │    vipDNSs   │                                     │
+                │                        │192.168.21.100│                                     │
+                │                        └──────────────┘                                     │
+                └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ### why amy exists
@@ -253,31 +253,31 @@ both hosts use synchronized configurations for:
 ## directory structure overview
 
 ```
-                    /docker-compose/                    # docker compose configuration
-                    ├── docker-compose.yaml             # main compose file (v85)
-                    ├── .env                            # environment variables
-                    ├── scripts/                        # operational scripts
-                    │   ├── secure-container-update.sh  # update orchestration
-                    │   ├── health-checks.sh            # health verification
-                    │   └── rollback.sh                 # rollback helper
-                    ├── configs/                        # service configurations
-                    │   └── secure-update/              # update system state
-                    │       ├── critical-containers.json
-                    │       ├── retry-queue.json
-                    │       ├── logs/
-                    │       └── scan-reports/
-                    └── reports/                        # generated reports
-                        └── weekly-reports/
+        /docker-compose/                    # docker compose configuration
+        ├── docker-compose.yaml             # main compose file (v85)
+        ├── .env                            # environment variables
+        ├── scripts/                        # operational scripts
+        │   ├── secure-container-update.sh  # update orchestration
+        │   ├── health-checks.sh            # health verification
+        │   └── rollback.sh                 # rollback helper
+        ├── configs/                        # service configurations
+        │   └── secure-update/              # update system state
+        │       ├── critical-containers.json
+        │       ├── retry-queue.json
+        │       ├── logs/
+        │       └── scan-reports/
+        └── reports/                        # generated reports
+            └── weekly-reports/
 
-                    /docker/                            # container data (persistent)
-                    ├── postgresql/                     # postgresql data
-                    ├── ntfy/                           # notification server
-                    ├── pihole/                        DNSdns server
-                    ├── vaultwarden/                    # password manager
-                    ├── beszel/                         # monitoring
-                    ├── backups/                        # backup storage
-                    │   └── postgres/                   # database backups
-                    └── [other services]/               # service-specific data
+        /docker/                            # container data (persistent)
+        ├── postgresql/                     # postgresql data
+        ├── ntfy/                           # notification server
+        ├── pihole/                        DNSdns server
+        ├── vaultwarden/                    # password manager
+        ├── beszel/                         # monitoring
+        ├── backups/                        # backup storage
+        │   └── postgres/                   # database backups
+        └── [other services]/               # service-specific data
 ```
 
 ---
