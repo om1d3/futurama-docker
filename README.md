@@ -287,7 +287,7 @@ see [PIHOLE-DNS-AUTO-POPULATION.md](docs/PIHOLE-DNS-AUTO-POPULATION.md) for impl
 | decision | rationale |
 |----------|-----------|
 | **two-host split** | failure isolation, TrueNAS upgrade immunity |
-| **pihole HA** | zero-downtime DNS with keepalived vrrp |
+| **pihole HA** | zero-downtime DNS with keepalived VRRP |
 | **automatic DNS** | containers get `*.home.arpa` entries automatically |
 | **local ntfy** | notifications work without internet |
 | **security-first updates** | trivy scanning before deployment |
