@@ -164,6 +164,8 @@ two-host docker infrastructure for media services, utilities, and home automatio
 ```
                 .
                 ├── README.md
+                ├── docs/
+                │   └── PIHOLE-DNS-AUTO-POPULATION.md
                 ├── bender/
                 │   ├── .env.template
                 │   ├── .env.gpg
@@ -171,8 +173,9 @@ two-host docker infrastructure for media services, utilities, and home automatio
                 │   ├── configs/keepalived/keepalived.conf
                 │   ├── docs/
                 │   └── scripts/
+                │       └── pihole-dns-update.sh
                 └── amy/
-                ├── .env.template
+                    ├── .env.template
                     ├── docker-compose.yaml
                     ├── configs/keepalived/keepalived.conf
                     ├── docs/
@@ -232,6 +235,14 @@ ssh root@192.168.21.130 'cd /docker-compose && docker compose up -d'
 
 ## documentation
 
+### shared documentation
+
+| document | description |
+|----------|-------------|
+| [PIHOLE-DNS-AUTO-POPULATION.md](docs/PIHOLE-DNS-AUTO-POPULATION.md) | automatic DNS record population for docker services |
+
+### host-specific documentation
+
 | bender | amy |
 |--------|-----|
 | [01-ARCHITECTURE.md](bender/docs/01-ARCHITECTURE.md) | [01-ARCHITECTURE.md](amy/docs/01-ARCHITECTURE.md) |
@@ -245,12 +256,39 @@ ssh root@192.168.21.130 'cd /docker-compose && docker compose up -d'
 
 ---
 
+## automatic DNS resolution
+
+all services with `tsdproxy.enable: "true"` labels automatically get DNS entries in pi-hole. a cron job on bender scans running containers every 5 minutes and updates pi-hole's configuration.
+
+| feature | value |
+|---------|-------|
+| **domain suffix** | `home.arpa` |
+| **scan interval** | every 5 minutes |
+| **replication** | nebula-sync to amy (hourly) |
+| **script location** | `/root/pihole-dns-update.sh` on bender |
+
+### example DNS names
+
+| bender services | amy services |
+|-----------------|--------------|
+| books.home.arpa | ntfy.home.arpa |
+| media.home.arpa | vault.home.arpa |
+| photo.home.arpa | beszel.home.arpa |
+| pad.home.arpa | home.home.arpa |
+| sync.home.arpa | mealie.home.arpa |
+| transmission.home.arpa | rss.home.arpa |
+
+see [PIHOLE-DNS-AUTO-POPULATION.md](docs/PIHOLE-DNS-AUTO-POPULATION.md) for implementation details.
+
+---
+
 ## key design decisions
 
 | decision | rationale |
 |----------|-----------|
 | **two-host split** | failure isolation, TrueNAS upgrade immunity |
-| **pihole ha** | zero-downtime DNS with keepalived vrrp |
+| **pihole HA** | zero-downtime DNS with keepalived vrrp |
+| **automatic DNS** | containers get `*.home.arpa` entries automatically |
 | **local ntfy** | notifications work without internet |
 | **security-first updates** | trivy scanning before deployment |
 | **shared postgresql per host** | ram efficiency, centralized backup |
