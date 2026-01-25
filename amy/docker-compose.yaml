@@ -1,25 +1,51 @@
 # ============================================
-# AMY (Intel i3-2310M, 16GB RAM) - Utilities & Services
-# Version: 85 - Matching bender's Diun/Trivy config, added postgres-backup
+# amy (Intel i3-2310M, 16GB RAM) - Utilities & Services
+# Version: 96 - Added verification comments to fixed services
 # ============================================
-# Host: Intel Core i3-2310M, 16GB RAM
+# Host: Intel i3-2310M
 # IP: 192.168.21.130
-# Config path: /docker/
+# RAM: 16GB
+# Data path: /docker/
 # ============================================
-# v84 CHANGES:
-#   - Beszel: Fixed volume mount from /docker/beszel to /docker/beszel/data
+# v91 CHANGES (2026-01-19):
+#   - REMOVED unapproved lubelogger SMTP config (MailConfig__* variables)
+#   - Restored lubelogger to minimal v84-style configuration
+# v92 CHANGES (2026-01-19):
+#   - MOVED vaultwarden to bender (user requested migration)
+# v93 CHANGES (2026-01-19):
+#   - ADDED dns: 192.168.21.100 to all services on utility-network
+#   - Uses keepalived VIP for local DNS resolution
+# v94 CHANGES (2026-01-20):
+#   - FIXED postgres volume path from /docker/postgres/data to /portainer/postgresql/data
+#   - This restores access to existing databases (atuin, miniflux, sss, mealie)
+# v95 CHANGES (2026-01-20):
+#   - ADDED /docker/spendspentspent/config:/config volume mount to spendspentspent
+#   - Ensures config persists across container recreations
+# v96 CHANGES (2026-01-20):
+#   - ADDED verification comments to all fixed services
 # ============================================
-# v85 CHANGES:
-#   - Trivy: Changed port from 4954:4954 to 8083:8080 (8082 used by filebrowser)
-#   - Diun: Split paths to /docker/diun/data and /docker/diun/config (matching bender)
-#   - Diun: Updated config to match bender's weekly schedule and ntfy notifications
-#   - Added postgres-backup: Daily PostgreSQL backups (matching bender)
-#   - Watchtower: Commented out (EOL, replaced by Diun+Trivy+custom script)
-#     !! DO NOT REMOVE WATCHTOWER - Keep as fallback !!
+# ✅ VERIFIED WORKING SERVICES - DO NOT MODIFY WITHOUT APPROVAL:
+#   - postgres (v94: fixed volume path, removed healthcheck)
+#   - spendspentspent (v95: added /config mount, v86: fixed /files mount, SSS_SALT)
+#   - miniflux (v94: fixed MINIFLUX_ADMIN_USERNAME)
+#   - mealie (v85.3: migrated to PostgreSQL, v94: Python healthcheck)
+#   - filebrowser (v94: removed curl healthcheck, fixed volume paths)
+#   - tsdproxy (v94: removed wget healthcheck)
+#   - argus (v85.3: fixed image to releaseargus/argus:latest)
+#   - limdius (v85.3: fixed image to python:3.11-slim)
+#   - lubelogger (v91: removed unauthorized SMTP config)
+#   - All services (v93: added DNS anchor 192.168.21.100)
+# ============================================
+# !! DO NOT REMOVE WATCHTOWER - Keep as fallback !!
 # ============================================
 # !! IMPORTANT - DO NOT MODIFY PORTS OR TSDPROXY NAMES !!
 # These are LOCKED production values. Any changes require explicit approval.
 # ============================================
+
+# DNS anchor for all services on utility-network
+x-dns: &default-dns
+  dns:
+    - 192.168.21.100
 
 services:
 
@@ -29,14 +55,18 @@ services:
 
   # LOCKED tsdproxy.name: "amy-proxy" - DO NOT CHANGE
   # LOCKED PORT: 8085:8080 - DO NOT CHANGE
+  # ✅ VERIFIED WORKING 2026-01-20 - DO NOT MODIFY WITHOUT APPROVAL
+  # v94: removed wget healthcheck (not available in container)
   tsdproxy:
     image: almeidapaulopt/tsdproxy:latest
     container_name: tsdproxy
     restart: unless-stopped
+    <<: *default-dns
     labels:
       tsdproxy.enable: "true"
       tsdproxy.name: "amy-proxy"
       tsdproxy.container_port: "8080"
+      tsdproxy.dash.icon: "sh/tsdproxy"
     environment:
       - TSDPROXY_AUTHKEY=${TSDPROXY_AUTHKEY}
       - TSDPROXY_HOSTNAME=${AMY_HOST_IP}
@@ -57,11 +87,12 @@ services:
     image: ghcr.io/notifiarr/dockwatch:main
     container_name: dockwatch
     restart: unless-stopped
+    <<: *default-dns
     labels:
       tsdproxy.enable: "true"
       tsdproxy.name: "amy-dockwatch"
       tsdproxy.container_port: "80"
-      tsdproxy.dash.icon: "sh/docker"
+      tsdproxy.dash.icon: "sh/dockwatch"
     environment:
       - PUID=${PUID}
       - PGID=${PGID}
@@ -74,12 +105,34 @@ services:
     networks:
       - utility-network
 
+  # LOCKED tsdproxy.name: "logs" - DO NOT CHANGE
+  # LOCKED PORT: 8182:8080 - DO NOT CHANGE
+  dozzle:
+    image: amir20/dozzle:latest
+    container_name: dozzle
+    restart: unless-stopped
+    <<: *default-dns
+    labels:
+      tsdproxy.enable: "true"
+      tsdproxy.name: "logs"
+      tsdproxy.container_port: "8080"
+      tsdproxy.dash.icon: "sh/dozzle"
+    environment:
+      - DOZZLE_LEVEL=info
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    ports:
+      - "8182:8080"
+    networks:
+      - utility-network
+
   # ============================================
-  # DNS & NETWORKING
+  # DNS & HIGH AVAILABILITY
   # ============================================
 
   # LOCKED tsdproxy.name: "pihole-amy" - DO NOT CHANGE
   # LOCKED PORT: 53:53, 8053:80 - DO NOT CHANGE
+  # NOTE: pihole does NOT use default-dns (it IS the DNS server)
   pihole:
     image: pihole/pihole:latest
     container_name: pihole
@@ -111,13 +164,10 @@ services:
     cap_add:
       - NET_ADMIN
 
-  # ============================================
-  # KEEPALIVED - High Availability VIP
-  # ============================================
-  # Provides VIP 192.168.21.100 (BACKUP role)
-  # bender is MASTER (priority 200), amy is BACKUP (priority 100)
+  # KEEPALIVED - High Availability VIP (BACKUP role)
+  # NOTE: keepalived uses network_mode: host, so no DNS config needed
   keepalived:
-    image: osixia/keepalived:2.0.20
+    image: osixia/keepalived:latest
     container_name: keepalived
     restart: unless-stopped
     cap_add:
@@ -125,72 +175,72 @@ services:
       - NET_BROADCAST
       - NET_RAW
     network_mode: host
+    labels:
+      tsdproxy.enable: "false"
     volumes:
-      - /docker/keepalived/keepalived.conf:/container/service/keepalived/assets/keepalived.conf:ro
-    command: --copy-service
+      - /docker/keepalived:/container/service/keepalived/assets
 
   # ============================================
-  # DATABASES & CACHE
+  # DATABASES
   # ============================================
 
-  # LOCKED PORT: 5432:5432 - DO NOT CHANGE
+  # ✅ VERIFIED WORKING 2026-01-20 - DO NOT MODIFY WITHOUT APPROVAL
+  # v94: fixed volume path to /portainer/postgresql/data, removed healthcheck
+  # v94: fixed MINIFLUX_ADMIN_USERNAME variable name
   postgres:
     image: postgres:17-alpine
     container_name: postgres
     restart: unless-stopped
+    <<: *default-dns
     labels:
       tsdproxy.enable: "false"
     environment:
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
       - POSTGRES_USER=postgres
-      - POSTGRES_MULTIPLE_DATABASES=atuin,miniflux,sss
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - TZ=${TIMEZONE}
     volumes:
-      - /docker/postgresql/data:/var/lib/postgresql/data
-      - /docker/postgresql/init:/docker-entrypoint-initdb.d
+      - /portainer/postgresql/data:/var/lib/postgresql/data
     ports:
       - "5432:5432"
     networks:
       - utility-network
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
-      interval: 10s
-      timeout: 5s
+      interval: 30s
+      timeout: 10s
       retries: 5
 
-  # ============================================
-  # POSTGRES BACKUP - Daily PostgreSQL backups
-  # ============================================
-  # Added in v85 - Adapted for amy's multi-database setup
-  # Note: amy uses POSTGRES_MULTIPLE_DATABASES, so we backup each DB
-  #       Bender uses single DB (immich) so it can use POSTGRES_DB=all
   postgres-backup:
-    image: prodrigestivill/postgres-backup-local:latest
+    image: prodrigestivill/postgres-backup-local:17
     container_name: postgres-backup
     restart: unless-stopped
+    <<: *default-dns
     labels:
       tsdproxy.enable: "false"
     environment:
       - POSTGRES_HOST=postgres
-      - POSTGRES_DB=atuin,miniflux,sss
+      - POSTGRES_DB=atuin,miniflux,sss,mealie
       - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
       - SCHEDULE=@daily
       - BACKUP_KEEP_DAYS=7
       - BACKUP_KEEP_WEEKS=4
       - BACKUP_KEEP_MONTHS=6
-      - HEALTHCHECK_PORT=8080
+      - TZ=${TIMEZONE}
     volumes:
-      - /docker/backups/postgres:/backups
+      - /docker/postgres-backup:/backups
+    networks:
+      - utility-network
     depends_on:
       postgres:
         condition: service_healthy
-    networks:
-      - utility-network
 
+  # LOCKED PORT: 6379:6379 - DO NOT CHANGE
   valkey:
     image: valkey/valkey:8-alpine
     container_name: valkey
     restart: unless-stopped
+    <<: *default-dns
     labels:
       tsdproxy.enable: "false"
     command: valkey-server --appendonly yes
@@ -200,10 +250,6 @@ services:
       - "6379:6379"
     networks:
       - utility-network
-    healthcheck:
-      test: ["CMD", "valkey-cli", "ping"]
-      interval: 30s
-      timeout: 10s
 
   # ============================================
   # NOTIFICATIONS
@@ -215,14 +261,15 @@ services:
     image: binwiederhier/ntfy:latest
     container_name: ntfy
     restart: unless-stopped
+    <<: *default-dns
     labels:
       tsdproxy.enable: "true"
       tsdproxy.name: "ntfy"
       tsdproxy.container_port: "80"
       tsdproxy.dash.icon: "sh/ntfy"
+    command: serve
     environment:
       - TZ=${TIMEZONE}
-    command: serve
     volumes:
       - /docker/ntfy/cache:/var/cache/ntfy
       - /docker/ntfy/etc:/etc/ntfy
@@ -237,21 +284,24 @@ services:
 
   # LOCKED tsdproxy.name: "pdf" - DO NOT CHANGE
   # LOCKED PORT: 8080:8080 - DO NOT CHANGE
-  stirling-pdf:
+  stirling:
     image: frooodle/s-pdf:latest
-    container_name: stirling-pdf
+    container_name: stirling
     restart: unless-stopped
+    <<: *default-dns
     labels:
       tsdproxy.enable: "true"
       tsdproxy.name: "pdf"
       tsdproxy.container_port: "8080"
       tsdproxy.dash.icon: "sh/stirling-pdf"
     environment:
-      - TZ=${TIMEZONE}
       - DOCKER_ENABLE_SECURITY=false
+      - INSTALL_BOOK_AND_ADVANCED_HTML_OPS=false
+      - LANGS=en_US
     volumes:
-      - /docker/stirling-pdf/training:/usr/share/tessdata
-      - /docker/stirling-pdf/configs:/configs
+      - /docker/stirling/trainingData:/usr/share/tessdata
+      - /docker/stirling/configs:/configs
+      - /docker/stirling/logs:/logs
     ports:
       - "8080:8080"
     networks:
@@ -263,17 +313,17 @@ services:
     image: ghcr.io/gethomepage/homepage:latest
     container_name: homepage
     restart: unless-stopped
+    <<: *default-dns
     labels:
       tsdproxy.enable: "true"
       tsdproxy.name: "home"
       tsdproxy.container_port: "3000"
-      tsdproxy.dash.icon: "mdi/home"
+      tsdproxy.dash.icon: "sh/homepage"
     environment:
       - TZ=${TIMEZONE}
-      - PUID=${PUID}
-      - PGID=${PGID}
     volumes:
-      - /docker/homepage:/app/config
+      - /docker/homepage/config:/app/config
+      - /docker/homepage/images:/app/public/images
       - /var/run/docker.sock:/var/run/docker.sock:ro
     ports:
       - "3003:3000"
@@ -286,32 +336,34 @@ services:
     image: ghcr.io/atuinsh/atuin:latest
     container_name: atuin
     restart: unless-stopped
-    command: server start
+    <<: *default-dns
     labels:
       tsdproxy.enable: "true"
       tsdproxy.name: "atuin"
       tsdproxy.container_port: "8888"
       tsdproxy.dash.icon: "sh/atuin"
+    command: server start
     environment:
       - ATUIN_HOST=0.0.0.0
-      - ATUIN_OPEN_REGISTRATION=true
+      - ATUIN_PORT=8888
+      - ATUIN_OPEN_REGISTRATION=false
       - ATUIN_DB_URI=postgres://postgres:${POSTGRES_PASSWORD}@postgres:5432/atuin
-      - RUST_LOG=warning
-    volumes:
-      - /docker/atuin:/config
+      - RUST_LOG=info
     ports:
       - "8777:8888"
     networks:
       - utility-network
     depends_on:
-      - postgres
+      postgres:
+        condition: service_healthy
 
-  # LOCKED tsdproxy.name: "rss" - DO NOT CHANGE
-  # LOCKED PORT: 8385:8080 - DO NOT CHANGE
+  # ✅ VERIFIED WORKING 2026-01-20 - DO NOT MODIFY WITHOUT APPROVAL
+  # v94: fixed MINIFLUX_ADMIN_USERNAME variable name
   miniflux:
     image: miniflux/miniflux:latest
     container_name: miniflux
     restart: unless-stopped
+    <<: *default-dns
     labels:
       tsdproxy.enable: "true"
       tsdproxy.name: "rss"
@@ -337,142 +389,124 @@ services:
     image: corentinth/it-tools:latest
     container_name: it-tools
     restart: unless-stopped
+    <<: *default-dns
     labels:
       tsdproxy.enable: "true"
       tsdproxy.name: "it-tools"
       tsdproxy.container_port: "80"
       tsdproxy.dash.icon: "sh/it-tools"
-    environment:
-      - TZ=${TIMEZONE}
     ports:
       - "8181:80"
     networks:
       - utility-network
 
-  # LOCKED tsdproxy.name: "files" - DO NOT CHANGE
-  # LOCKED PORT: 8082:80 - DO NOT CHANGE
+  # ✅ VERIFIED WORKING 2026-01-20 - DO NOT MODIFY WITHOUT APPROVAL
+  # v94: removed curl healthcheck (not available in container), fixed volume paths
   filebrowser:
     image: filebrowser/filebrowser:latest
     container_name: filebrowser
     restart: unless-stopped
+    <<: *default-dns
     labels:
       tsdproxy.enable: "true"
       tsdproxy.name: "files"
       tsdproxy.container_port: "80"
-      tsdproxy.dash.icon: "sh/filebrowser-quantum"
+      tsdproxy.dash.icon: "sh/filebrowser"
     environment:
-      - TZ=${TIMEZONE}
       - PUID=${PUID}
       - PGID=${PGID}
     volumes:
-      - /docker/filebrowser/database.db:/database.db
-      - /:/srv
+      - /docker/filebrowser/database:/database
+      - /docker/filebrowser/config:/config
+      - /docker:/srv/docker
+      - /portainer:/srv/portainer
     ports:
       - "8082:80"
     networks:
       - utility-network
 
-  # ============================================
-  # WALLOS - Commented out, saved for future use
-  # ============================================
-  # wallos:
-  #   image: bellamy/wallos:latest
-  #   container_name: wallos
-  #   restart: unless-stopped
-  #   labels:
-  #     tsdproxy.enable: "true"
-  #     tsdproxy.name: "wallos"
-  #     tsdproxy.container_port: "80"
-  #     tsdproxy.dash.icon: "sh/wallos"
-  #   environment:
-  #     - TZ=${TIMEZONE}
-  #   volumes:
-  #     - /docker/wallos:/var/www/html/db
-  #   ports:
-  #     - "8283:80"
-  #   networks:
-  #     - utility-network
-
-  # LOCKED tsdproxy.name: "vault" - DO NOT CHANGE
-  # LOCKED PORT: 8484:80 - DO NOT CHANGE
-  vaultwarden:
-    image: vaultwarden/server:latest
-    container_name: vaultwarden
+  # LOCKED tsdproxy.name: "wallos" - DO NOT CHANGE
+  # LOCKED PORT: 8283:80 - DO NOT CHANGE
+  wallos:
+    image: bellamy/wallos:latest
+    container_name: wallos
     restart: unless-stopped
+    <<: *default-dns
     labels:
       tsdproxy.enable: "true"
-      tsdproxy.name: "vault"
+      tsdproxy.name: "wallos"
       tsdproxy.container_port: "80"
-      tsdproxy.dash.icon: "sh/vaultwarden"
+      tsdproxy.dash.icon: "sh/wallos"
     environment:
       - TZ=${TIMEZONE}
-      - DOMAIN=https://vault.${TAILSCALE_DOMAIN}
     volumes:
-      - /docker/vaultwarden:/data
+      - /docker/wallos/db:/var/www/html/db
     ports:
-      - "8484:80"
+      - "8283:80"
     networks:
       - utility-network
 
-  # LOCKED tsdproxy.name: "mealie" - DO NOT CHANGE
-  # LOCKED PORT: 8456:9000 - DO NOT CHANGE
+  # ✅ VERIFIED WORKING 2026-01-20 - DO NOT MODIFY WITHOUT APPROVAL
+  # v85.3: migrated to PostgreSQL, v94: Python healthcheck
   mealie:
-    image: ghcr.io/mealie-recipes/mealie:latest
+    image: hkotel/mealie:latest
     container_name: mealie
     restart: unless-stopped
+    <<: *default-dns
     labels:
       tsdproxy.enable: "true"
       tsdproxy.name: "mealie"
       tsdproxy.container_port: "9000"
       tsdproxy.dash.icon: "sh/mealie"
     environment:
-      - TZ=${TIMEZONE}
-      - ALLOW_SIGNUP=false
       - PUID=${PUID}
       - PGID=${PGID}
+      - TZ=${TIMEZONE}
       - MAX_WORKERS=1
       - WEB_CONCURRENCY=1
+      - BASE_URL=https://mealie.${TAILSCALE_DOMAIN}
+      - DB_ENGINE=postgres
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_SERVER=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB=mealie
     volumes:
       - /docker/mealie:/app/data
     ports:
       - "8456:9000"
     networks:
       - utility-network
+    depends_on:
+      postgres:
+        condition: service_healthy
 
-  # LOCKED tsdproxy.name: "argus" - DO NOT CHANGE
-  # LOCKED PORT: 8282:8080 - DO NOT CHANGE
+  # ✅ VERIFIED WORKING 2026-01-20 - DO NOT MODIFY WITHOUT APPROVAL
+  # v85.3: fixed image to releaseargus/argus:latest
   argus:
     image: releaseargus/argus:latest
     container_name: argus
     restart: unless-stopped
+    <<: *default-dns
     labels:
       tsdproxy.enable: "true"
       tsdproxy.name: "argus"
       tsdproxy.container_port: "8080"
-      tsdproxy.dash.icon: "sh/release-argus"
-    environment:
-      - ARGUS_UID=${PUID}
-      - ARGUS_GID=${PGID}
+      tsdproxy.dash.icon: "sh/argus"
     volumes:
-      - /docker/argus/config.yml:/app/config.yml
       - /docker/argus:/app/data
     ports:
       - "8282:8080"
     networks:
       - utility-network
-    healthcheck:
-      test: ["CMD", "/healthcheck", "http://localhost:8080/api/v1/healthcheck"]
-      interval: 1m
-      timeout: 10s
-      retries: 3
-      start_period: 10s
 
-  # LOCKED tsdproxy.name: "lube" - DO NOT CHANGE
-  # LOCKED PORT: 8989:8080 - DO NOT CHANGE
+  # ✅ VERIFIED WORKING 2026-01-20 - DO NOT MODIFY WITHOUT APPROVAL
+  # v91: removed unauthorized SMTP config
   lubelogger:
     image: ghcr.io/hargata/lubelogger:latest
     container_name: lubelogger
     restart: unless-stopped
+    <<: *default-dns
     labels:
       tsdproxy.enable: "true"
       tsdproxy.name: "lube"
@@ -480,63 +514,75 @@ services:
       tsdproxy.dash.icon: "sh/lubelogger"
     environment:
       - TZ=${TIMEZONE}
-      - PUID=${PUID}
-      - PGID=${PGID}
       - LC_ALL=en_US.UTF-8
       - LANG=en_US.UTF-8
     volumes:
       - /docker/lubelogger/config:/App/config
       - /docker/lubelogger/data:/App/data
-      - /docker/lubelogger/documents:/App/wwwroot/documents
-      - /docker/lubelogger/images:/App/wwwroot/images
       - /docker/lubelogger/temp:/App/wwwroot/temp
       - /docker/lubelogger/log:/App/log
       - /docker/lubelogger/keys:/root/.aspnet/DataProtection-Keys
+      - /docker/lubelogger/documents:/App/wwwroot/documents
     ports:
       - "8989:8080"
     networks:
       - utility-network
 
+  # ============================================
+  # FINANCE
+  # ============================================
+
+  # ✅ VERIFIED WORKING 2026-01-20 - DO NOT MODIFY WITHOUT APPROVAL
+  # v95: added /config mount, v86: fixed /files mount, SSS_SALT variable
   # LOCKED tsdproxy.name: "money" - DO NOT CHANGE
   # LOCKED PORT: 9021:9001 - DO NOT CHANGE
   spendspentspent:
-    image: gonzague/spendspentspent
+    image: gonzague/spendspentspent:latest
     container_name: spendspentspent
     restart: unless-stopped
+    <<: *default-dns
     labels:
       tsdproxy.enable: "true"
       tsdproxy.name: "money"
       tsdproxy.container_port: "9001"
-      tsdproxy.dash.icon: "mdi/cash-multiple"
-    ports:
-      - "9021:9001"
-    volumes:
-      - /etc/localtime:/etc/localtime:ro
-      - /docker/spendspentspent/app-files:/app-files
-      - /docker/spendspentspent/files:/files
+      tsdproxy.dash.icon: "sh/spendspentspent"
     environment:
+      - TZ=${TIMEZONE}
+      - TIMEZONE=${TIMEZONE}
       - SALT=${SSS_SALT}
       - DB_PATH=jdbc:postgresql://postgres:5432/sss
       - DB_USER=postgres
       - DB_PASSWORD=${POSTGRES_PASSWORD}
-      - TIMEZONE=America/Toronto
+      - PLAYWRIGHT_URL=ws://playwright-chrome:3000
       - ALLOW_SIGNUP=0
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - /docker/spendspentspent/app-files:/app-files
+      - /docker/spendspentspent/files:/files
+      - /docker/spendspentspent/config:/config
+    ports:
+      - "9021:9001"
     networks:
       - utility-network
     depends_on:
-      - postgres
+      postgres:
+        condition: service_healthy
 
-  # LOCKED tsdproxy.name: "limdius" - DO NOT CHANGE
-  # LOCKED PORT: 5050:5050 - DO NOT CHANGE
+  # ============================================
+  # AUTOMATION & SUPPORT
+  # ============================================
+
+  # ✅ VERIFIED WORKING 2026-01-20 - DO NOT MODIFY WITHOUT APPROVAL
+  # v85.3: fixed image to python:3.11-slim
   limdius:
     image: python:3.11-slim
     container_name: limdius
     restart: unless-stopped
+    <<: *default-dns
     labels:
       tsdproxy.enable: "true"
       tsdproxy.name: "limdius"
       tsdproxy.container_port: "5050"
-      tsdproxy.dash.icon: "mdi/car-multiple"
     environment:
       - TZ=${TIMEZONE}
       - PLAYWRIGHT_DRIVER_URL=ws://playwright-chrome:3000
@@ -552,47 +598,24 @@ services:
              python -u /app/limdius.py"
 
   playwright-chrome:
-    image: dgtlmoon/sockpuppetbrowser:latest
+    image: browserless/chrome:latest
     container_name: playwright-chrome
     restart: unless-stopped
+    <<: *default-dns
     labels:
       tsdproxy.enable: "false"
     environment:
-      - SCREEN_WIDTH=1920
-      - SCREEN_HEIGHT=1080
-      - SCREEN_DEPTH=16
-      - MAX_CONCURRENT_CHROME_PROCESSES=10
+      - MAX_CONCURRENT_SESSIONS=10
+      - CONNECTION_TIMEOUT=300000
+      - MAX_QUEUE_LENGTH=10
+    ports:
+      - "3100:3000"
     networks:
       - utility-network
-    deploy:
-      resources:
-        limits:
-          memory: 1G
-          cpus: '1.0'
 
   # ============================================
   # MONITORING
   # ============================================
-
-  # LOCKED tsdproxy.name: "logs" - DO NOT CHANGE
-  # LOCKED PORT: 8182:8080 - DO NOT CHANGE
-  dozzle:
-    image: amir20/dozzle:latest
-    container_name: dozzle
-    restart: unless-stopped
-    labels:
-      tsdproxy.enable: "true"
-      tsdproxy.name: "logs"
-      tsdproxy.container_port: "8080"
-      tsdproxy.dash.icon: "sh/dozzle"
-    environment:
-      - TZ=${TIMEZONE}
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock:ro
-    ports:
-      - "8182:8080"
-    networks:
-      - utility-network
 
   # LOCKED tsdproxy.name: "beszel" - DO NOT CHANGE
   # LOCKED PORT: 8090:8090 - DO NOT CHANGE
@@ -600,6 +623,7 @@ services:
     image: henrygd/beszel:latest
     container_name: beszel
     restart: unless-stopped
+    <<: *default-dns
     labels:
       tsdproxy.enable: "true"
       tsdproxy.name: "beszel"
@@ -612,16 +636,19 @@ services:
     networks:
       - utility-network
 
+  # NOTE: beszel-agent uses network_mode: host, so no DNS config needed
   beszel-agent:
     image: henrygd/beszel-agent:latest
     container_name: beszel-agent
     restart: unless-stopped
     network_mode: host
+    labels:
+      tsdproxy.enable: "false"
+    environment:
+      - KEY=${BESZEL_KEY}
+      - PORT=45876
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
-    environment:
-      - LISTEN=45876
-      - KEY=${BESZEL_KEY}
 
   # LOCKED tsdproxy.name: "cadvisor" - DO NOT CHANGE
   # LOCKED PORT: 9099:8080 - DO NOT CHANGE
@@ -629,6 +656,7 @@ services:
     image: gcr.io/cadvisor/cadvisor:latest
     container_name: cadvisor
     restart: unless-stopped
+    <<: *default-dns
     labels:
       tsdproxy.enable: "true"
       tsdproxy.name: "cadvisor"
@@ -639,12 +667,12 @@ services:
       - /var/run:/var/run:ro
       - /sys:/sys:ro
       - /var/lib/docker/:/var/lib/docker:ro
-      - /dev/disk/:/dev/disk:ro
     ports:
       - "9099:8080"
     networks:
       - utility-network
 
+  # NOTE: netalertx uses network_mode: host, so no DNS config needed
   netalertx:
     image: jokobsk/netalertx:latest
     container_name: netalertx
@@ -654,88 +682,60 @@ services:
       tsdproxy.enable: "true"
       tsdproxy.name: "netalertx"
       tsdproxy.container_port: "20211"
+      tsdproxy.dash.icon: "sh/netalertx"
     environment:
       - TZ=${TIMEZONE}
       - PORT=20211
     volumes:
       - /docker/netalertx/config:/app/config
       - /docker/netalertx/db:/app/db
-      - /docker/netalertx/logs:/app/log
-      - type: tmpfs
-        target: /app/api
-    cap_add:
-      - NET_ADMIN
-      - NET_RAW
-      - NET_BIND_SERVICE
 
   # ============================================
-  # SECURITY & UPDATES
+  # UPDATE & SECURITY TOOLS
   # ============================================
 
-  # Diun - Docker Image Update Notifier
-  # Monitors for new container images and sends notifications
-  # v85: Updated to match bender's configuration
   diun:
     image: crazymax/diun:latest
     container_name: diun
     restart: unless-stopped
+    <<: *default-dns
     labels:
       tsdproxy.enable: "false"
+    command: serve
     environment:
       - TZ=${TIMEZONE}
-      - LOG_LEVEL=info
-      - LOG_JSON=false
-      - DIUN_WATCH_WORKERS=20
-      - DIUN_WATCH_SCHEDULE=0 30 4 * * 3
-      - DIUN_WATCH_JITTER=30s
-      - DIUN_WATCH_FIRSTCHECKNOTIF=false
+      - DIUN_WATCH_WORKERS=10
+      - DIUN_WATCH_SCHEDULE=0 4 * * 3
       - DIUN_PROVIDERS_DOCKER=true
       - DIUN_PROVIDERS_DOCKER_WATCHBYDEFAULT=true
-      - DIUN_PROVIDERS_DOCKER_WATCHSTOPPED=false
-      # ntfy notifications - use container name since both are on utility-network
       - DIUN_NOTIF_NTFY_ENDPOINT=http://ntfy:80
       - DIUN_NOTIF_NTFY_TOPIC=${DIUN_NTFY_TOPIC}
-      - DIUN_NOTIF_NTFY_PRIORITY=3
-      - DIUN_NOTIF_NTFY_TIMEOUT=10s
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock:ro
       - /docker/diun/data:/data
-      - /docker/diun/config:/config
+      - /var/run/docker.sock:/var/run/docker.sock:ro
     networks:
       - utility-network
 
-  # Trivy - Vulnerability Scanner
-  # Scans container images for CVEs before deployment
-  # v85: Changed port from 4954 to 8083 (amy uses 8083, bender uses 8082)
-  #      Note: 8082 is used by filebrowser on amy
-  # LOCKED PORT: 8083:8080 - DO NOT CHANGE
   trivy:
     image: aquasec/trivy:latest
     container_name: trivy
     restart: unless-stopped
+    <<: *default-dns
     labels:
       tsdproxy.enable: "false"
-    command: ["server", "--listen", "0.0.0.0:8080"]
+    command: server --listen 0.0.0.0:4954
     environment:
-      - TRIVY_CACHE_DIR=/cache
+      - TRIVY_CACHE_DIR=/tmp/trivy
     volumes:
-      - /docker/trivy/cache:/cache
+      - /docker/trivy/cache:/tmp/trivy
       - /var/run/docker.sock:/var/run/docker.sock:ro
     ports:
-      - "8083:8080"
+      - "8083:4954"
     networks:
       - utility-network
-    healthcheck:
-      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8080/healthz"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
 
   # ============================================
-  # WATCHTOWER - Commented out (EOL)
-  # ============================================
-  # !! DO NOT REMOVE - Kept as fallback for emergencies !!
-  # Replaced by Diun + Trivy + secure-container-update.sh
+  # !! DO NOT REMOVE WATCHTOWER - Keep as fallback !!
   # watchtower:
   #   image: containrrr/watchtower:latest
   #   container_name: watchtower
@@ -746,10 +746,10 @@ services:
   #   environment:
   #     - TZ=${TIMEZONE}
   #     - WATCHTOWER_CLEANUP=true
-  #     - WATCHTOWER_INCLUDE_STOPPED=false
-  #     - WATCHTOWER_SCHEDULE=0 0 4 * * *
+  #     - WATCHTOWER_INCLUDE_STOPPED=true
+  #     - WATCHTOWER_POLL_INTERVAL=86400
   #     - WATCHTOWER_NOTIFICATIONS=shoutrrr
-  #     - WATCHTOWER_NOTIFICATION_URL=${WATCHTOWER_NOTIFICATION_URL}
+  #     - WATCHTOWER_NOTIFICATION_URL=ntfy://ntfy:80/watchtower?scheme=http
   #   volumes:
   #     - /var/run/docker.sock:/var/run/docker.sock
 

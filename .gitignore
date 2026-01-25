@@ -1,8 +1,198 @@
-# secrets - never commit
-.env
-!.env.template
-!.env.gpg
-!.env.gpg.README
+# ===================================
+# Secrets & Credentials
+# ===================================
 
-# macos
+# API Keys & Tokens
+*.key
+*.pem
+*.p12
+*.pfx
+secrets.yaml
+secrets.yml
+secrets.json
+secrets.txt
+.secrets
+.env
+#.env.*
+*.env
+
+# SSH Keys
+id_rsa
+id_rsa.*
+id_dsa
+id_dsa.*
+id_ecdsa
+id_ecdsa.*
+id_ed25519
+id_ed25519.*
+*.ppk
+
+# Home Assistant Specific
+home-assistant.log
+home-assistant_v2.db
+home-assistant_v2.db-shm
+home-assistant_v2.db-wal
+*.db
+*.db-shm
+*.db-wal
+.storage/
+.cloud/
+.google.token
+.uuid
+ip_bans.yaml
+
+# Passwords & Auth
+password.txt
+passwords.txt
+auth.json
+token.json
+credentials.json
+serviceaccount.json
+client_secret*.json
+
+# Certificate Files
+*.crt
+*.cer
+*.der
+*.key
+*.p7b
+*.p7c
+*.p12
+*.pfx
+*.pem
+*.csr
+
+# Cloud Provider Credentials
+.aws/
+.azure/
+.gcloud/
+gcloud-key.json
+service-account*.json
+
+# ===================================
+# macOS
+# ===================================
 .DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+.AppleDouble
+.LSOverride
+Icon
+.DocumentRevisions-V100
+.fseventsd
+.TemporaryItems
+.VolumeIcon.icns
+.com.apple.timemachine.donotpresent
+.AppleDB
+.AppleDesktop
+Network Trash Folder
+Temporary Items
+.apdisk
+
+# ===================================
+# Windows
+# ===================================
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+ehthumbs_vista.db
+*.stackdump
+[Dd]esktop.ini
+$RECYCLE.BIN/
+*.lnk
+
+# ===================================
+# Linux
+# ===================================
+*~
+.fuse_hidden*
+.directory
+.Trash-*
+.nfs*
+
+# ===================================
+# Editors & IDEs
+# ===================================
+.vscode/
+.vscode/settings.json
+.idea/
+*.swp
+*.swo
+*~
+.project
+.classpath
+.c9/
+*.launch
+.settings/
+*.sublime-workspace
+*.sublime-project
+
+# ===================================
+# Python
+# ===================================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+*.egg-info/
+.pytest_cache/
+
+# ===================================
+# Node.js
+# ===================================
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# ===================================
+# Backup & Temporary Files
+# ===================================
+*.bak
+*.backup
+*.old
+*.orig
+*.tmp
+*.temp
+*.log
+*.cache
+*.swp
+*.swo
+*~
+.#*
+\#*#
+
+# Compressed archives (might contain secrets)
+*.7z
+*.dmg
+*.gz
+*.iso
+*.jar
+*.rar
+*.tar
+*.zip
+
+# ===================================
+# Git
+# ===================================
+*.patch
+*.diff
+
+# ===================================
+# Docker (might contain secrets in configs)
+# ===================================
+docker-compose.override.yml
+.dockerignore
+
+# ===================================
+# Custom Sensitive Files
+# ===================================
+# Add any project-specific sensitive files below:
+# custom-secrets.yaml
+# my-api-keys.txt
