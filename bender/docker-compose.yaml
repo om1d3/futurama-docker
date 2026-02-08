@@ -76,6 +76,8 @@
 #   - ADDED: cAdvisor for container resource monitoring (CPU, memory, I/O)
 #   - Scraped by Prometheus on Home Assistant VM for Grafana dashboard
 #   - Port 9099:8080 (matching amy's cAdvisor port)
+#   - ADDED: /data/tvshows volume mount to jellyfin (maps to same seriale directory as /data/tv)
+#   - Fixes "Access to path /data/tvshows is denied" and missing image errors
 # ============================================
 # ✅ VERIFIED WORKING SERVICES - DO NOT MODIFY WITHOUT APPROVAL:
 #   - immich_redis (v94: upgraded to redis:7-alpine)
@@ -546,7 +548,7 @@ services:
     volumes:
       - /mnt/BIG/filme/configs/jellyfin:/config
       - /mnt/BIG/filme/filme:/data/movies
-      - /mnt/BIG/filme/seriale:/data/tv
+      - /mnt/BIG/filme/seriale:/data/tvshows
       - /mnt/BIG/filme/music:/data/music
     # !! KEEP FOR FUTURE USE - GPU HARDWARE ACCELERATION !!
     # HP MicroServer Gen8 iGPU is disabled in BIOS (no modded BIOS available)
