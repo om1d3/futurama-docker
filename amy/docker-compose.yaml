@@ -1,6 +1,6 @@
 # ============================================
 # amy (Intel i3-2310M, 16GB RAM) - Utilities & Services
-# Version: 96 - Added verification comments to fixed services
+# Version: 98 - Consolidated Telegraf into main docker-compose
 # ============================================
 # Host: Intel i3-2310M
 # IP: 192.168.21.130
@@ -23,17 +23,28 @@
 #   - Ensures config persists across container recreations
 # v96 CHANGES (2026-01-20):
 #   - ADDED verification comments to all fixed services
+#   - FIXED stirling image from frooodle/s-pdf:latest to stirlingtools/stirling-pdf:latest
+#   - FIXED netalertx volume mount and added required capabilities
+#   - FIXED mealie image from hkotel/mealie:latest to ghcr.io/mealie-recipes/mealie:latest
+# v97 CHANGES (2026-02-06):
+#   - ADDED SYSTEM_MAXDPI=1200 to stirling environment variables
+#   - Fixes "DPI value 300 exceeds maximum safe limit of 0" error
+# v98 CHANGES (2026-02-07):
+#   - ADDED telegraf service (consolidated from /portainer/telegraf/docker-compose.yml)
+#   - Telegraf monitors Cisco 3750X switch and Brother MFC-L3710CW printer via SNMP
+#   - Uses existing config at /portainer/telegraf/config/telegraf.conf
 # ============================================
 # ✅ VERIFIED WORKING SERVICES - DO NOT MODIFY WITHOUT APPROVAL:
 #   - postgres (v94: fixed volume path, removed healthcheck)
 #   - spendspentspent (v95: added /config mount, v86: fixed /files mount, SSS_SALT)
 #   - miniflux (v94: fixed MINIFLUX_ADMIN_USERNAME)
-#   - mealie (v85.3: migrated to PostgreSQL, v94: Python healthcheck)
+#   - mealie (v85.3: migrated to PostgreSQL, v94: Python healthcheck, v96: fixed image)
 #   - filebrowser (v94: removed curl healthcheck, fixed volume paths)
 #   - tsdproxy (v94: removed wget healthcheck)
 #   - argus (v85.3: fixed image to releaseargus/argus:latest)
 #   - limdius (v85.3: fixed image to python:3.11-slim)
 #   - lubelogger (v91: removed unauthorized SMTP config)
+#   - stirling (v96: fixed image to stirlingtools/stirling-pdf:latest, v97: added SYSTEM_MAXDPI)
 #   - All services (v93: added DNS anchor 192.168.21.100)
 # ============================================
 # !! DO NOT REMOVE WATCHTOWER - Keep as fallback !!
@@ -219,7 +230,7 @@ services:
       tsdproxy.enable: "false"
     environment:
       - POSTGRES_HOST=postgres
-      - POSTGRES_DB=atuin,miniflux,sss,mealie
+      - POSTGRES_DB=atuin,miniflux,sss,mealie,stirling
       - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
       - SCHEDULE=@daily
@@ -284,8 +295,11 @@ services:
 
   # LOCKED tsdproxy.name: "pdf" - DO NOT CHANGE
   # LOCKED PORT: 8080:8080 - DO NOT CHANGE
+  # ✅ VERIFIED WORKING 2026-02-02 - DO NOT MODIFY WITHOUT APPROVAL
+  # v96: fixed image from frooodle/s-pdf:latest to stirlingtools/stirling-pdf:latest
+  # v97: added SYSTEM_MAXDPI=1200 to fix DPI limit error
   stirling:
-    image: frooodle/s-pdf:latest
+    image: stirlingtools/stirling-pdf:latest
     container_name: stirling
     restart: unless-stopped
     <<: *default-dns
@@ -298,6 +312,7 @@ services:
       - DOCKER_ENABLE_SECURITY=false
       - INSTALL_BOOK_AND_ADVANCED_HTML_OPS=false
       - LANGS=en_US
+      - SYSTEM_MAXDPI=1200
     volumes:
       - /docker/stirling/trainingData:/usr/share/tessdata
       - /docker/stirling/configs:/configs
@@ -448,8 +463,9 @@ services:
 
   # ✅ VERIFIED WORKING 2026-01-20 - DO NOT MODIFY WITHOUT APPROVAL
   # v85.3: migrated to PostgreSQL, v94: Python healthcheck
+  # v96: fixed image from hkotel/mealie:latest to ghcr.io/mealie-recipes/mealie:latest
   mealie:
-    image: hkotel/mealie:latest
+    image: ghcr.io/mealie-recipes/mealie:latest
     container_name: mealie
     restart: unless-stopped
     <<: *default-dns
@@ -673,6 +689,7 @@ services:
       - utility-network
 
   # NOTE: netalertx uses network_mode: host, so no DNS config needed
+  # ✅ FIXED 2026-02-02 - Updated volume mount and added required capabilities
   netalertx:
     image: jokobsk/netalertx:latest
     container_name: netalertx
@@ -687,8 +704,27 @@ services:
       - TZ=${TIMEZONE}
       - PORT=20211
     volumes:
-      - /docker/netalertx/config:/app/config
-      - /docker/netalertx/db:/app/db
+      - /docker/netalertx/data:/data
+    cap_add:
+      - NET_RAW
+      - NET_ADMIN
+      - NET_BIND_SERVICE
+
+  # v98: Consolidated from /portainer/telegraf/docker-compose.yml
+  # Monitors Cisco 3750X switch and Brother MFC-L3710CW printer via SNMP
+  # Config: /portainer/telegraf/config/telegraf.conf
+  # NOTE: telegraf uses network_mode: host, so no DNS config needed
+  telegraf:
+    image: telegraf:latest
+    container_name: telegraf
+    restart: unless-stopped
+    network_mode: host
+    labels:
+      tsdproxy.enable: "false"
+    volumes:
+      - /portainer/telegraf/config/telegraf.conf:/etc/telegraf/telegraf.conf:ro
+    environment:
+      - TZ=${TIMEZONE}
 
   # ============================================
   # UPDATE & SECURITY TOOLS
