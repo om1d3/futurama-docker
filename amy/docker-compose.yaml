@@ -668,6 +668,7 @@ services:
 
   # LOCKED tsdproxy.name: "cadvisor" - DO NOT CHANGE
   # LOCKED PORT: 9099:8080 - DO NOT CHANGE
+  # v98: Added resource-saving flags (docker_only, reduced housekeeping, disabled unused metrics)
   cadvisor:
     image: gcr.io/cadvisor/cadvisor:latest
     container_name: cadvisor
@@ -678,6 +679,10 @@ services:
       tsdproxy.name: "cadvisor"
       tsdproxy.container_port: "8080"
       tsdproxy.dash.icon: "sh/cadvisor"
+    command:
+      - --housekeeping_interval=30s
+      - --docker_only=true
+      - --disable_metrics=percpu,sched,tcp,udp,disk,diskIO,hugetlb,referenced_memory,cpu_topology,resctrl
     volumes:
       - /:/rootfs:ro
       - /var/run:/var/run:ro

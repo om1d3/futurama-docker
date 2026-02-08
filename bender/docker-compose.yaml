@@ -1,6 +1,6 @@
 # ============================================
 # bender (TrueNAS Scale) - Media & Downloads
-# Version: 104 - Switched gluetun from WireGuard to OpenVPN
+# Version: 105 - Added cAdvisor for Grafana monitoring
 # ============================================
 # Host: TrueNAS Scale (HP MicroServer Gen8)
 # CPU: Intel Xeon E3-1265L V2 (iGPU disabled by HP BIOS)
@@ -69,6 +69,13 @@
 #   - REMOVED: WIREGUARD_PRIVATE_KEY and WIREGUARD_ADDRESSES
 #   - ADDED: OPENVPN_USER and OPENVPN_PASSWORD
 #   - REQUIRED: Add SURFSHARK_OPENVPN_USER and SURFSHARK_OPENVPN_PASSWORD to .env file
+# v104 HEALTHCHECK FIX (2026-02-01):
+#   - FIXED: immich_machine_learning healthcheck now uses python3 (curl not available)
+#   - FIXED: nebula-sync healthcheck disabled (minimal container has no binaries)
+# v105 CHANGES (2026-02-07):
+#   - ADDED: cAdvisor for container resource monitoring (CPU, memory, I/O)
+#   - Scraped by Prometheus on Home Assistant VM for Grafana dashboard
+#   - Port 9099:8080 (matching amy's cAdvisor port)
 # ============================================
 # ✅ VERIFIED WORKING SERVICES - DO NOT MODIFY WITHOUT APPROVAL:
 #   - immich_redis (v94: upgraded to redis:7-alpine)
@@ -79,6 +86,8 @@
 #   - vaultwarden (v91: added, moved from amy)
 #   - jellyfin (v96: corrected image to lscr.io/linuxserver/jellyfin:latest)
 #   - All services (v93: added DNS anchor 192.168.21.100)
+#   - immich_machine_learning (v104: python3-based healthcheck)
+#   - nebula-sync (v104: healthcheck disabled - minimal container)
 # ============================================
 # !! IMPORTANT - DO NOT MODIFY TSDPROXY NAMES !!
 # These are LOCKED production values.
@@ -337,6 +346,8 @@ services:
       - /mnt/BIG/filme/configs/keepalived/keepalived.conf:/container/service/keepalived/assets/keepalived.conf:ro
     command: --copy-service
 
+  # ✅ VERIFIED WORKING 2026-02-01 - DO NOT MODIFY WITHOUT APPROVAL
+  # v104 FIX: Healthcheck disabled (minimal container has no binaries)
   # Nebula-sync - Pi-hole Configuration Sync
   # Syncs from bender (primary) to amy (replica)
   # v84 FIX: Wrapped PRIMARY/REPLICAS in quotes for pipe character
@@ -357,11 +368,7 @@ services:
     networks:
       - media-network
     healthcheck:
-      test: ["CMD", "pgrep", "-f", "nebula-sync"]
-      interval: 60s
-      timeout: 10s
-      retries: 3
-      start_period: 30s
+      disable: true
 
   # ============================================
   # DATABASES & CACHE
@@ -491,6 +498,8 @@ services:
       - postgres
       - immich_redis
 
+  # ✅ VERIFIED WORKING 2026-02-01 - DO NOT MODIFY WITHOUT APPROVAL
+  # v104 FIX: Changed healthcheck to use python3 (curl not available in this container)
   immich_machine_learning:
     image: ghcr.io/immich-app/immich-machine-learning:release
     container_name: immich_machine_learning
@@ -505,7 +514,7 @@ services:
     networks:
       - media-network
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3003/ping"]
+      test: ["CMD", "python3", "-c", "import http.client; c=http.client.HTTPConnection('localhost',3003); c.request('GET','/ping'); r=c.getresponse(); exit(0 if r.status==200 else 1)"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -1019,6 +1028,34 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
     network_mode: host
+
+  # v105: Added cAdvisor for container resource monitoring
+  # Scraped by Prometheus (192.168.21.220:9090) for Grafana dashboard
+  # LOCKED PORT: 9099:8080 - DO NOT CHANGE (matches amy's cAdvisor port)
+  # Resource-saving flags: docker_only, reduced housekeeping, disabled unused metrics
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:latest
+    container_name: cadvisor
+    restart: unless-stopped
+    <<: *default-dns
+    labels:
+      tsdproxy.enable: "true"
+      tsdproxy.name: "bender-cadvisor"
+      tsdproxy.container_port: "8080"
+      tsdproxy.dash.icon: "sh/cadvisor"
+    command:
+      - --housekeeping_interval=30s
+      - --docker_only=true
+      - --disable_metrics=percpu,sched,tcp,udp,disk,diskIO,hugetlb,referenced_memory,cpu_topology,resctrl
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+    ports:
+      - "9099:8080"
+    networks:
+      - media-network
 
 # ============================================
 # NETWORKS
