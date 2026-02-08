@@ -77,6 +77,7 @@
 #   - Scraped by Prometheus on Home Assistant VM for Grafana dashboard
 #   - Port 9099:8080 (matching amy's cAdvisor port)
 #   - ADDED: /data/tvshows volume mount to jellyfin (maps to same seriale directory as /data/tv)
+#   - REMOVED: duplicate /data/tv volume mount from jellyfin (tvshows is the active library path)
 #   - Fixes "Access to path /data/tvshows is denied" and missing image errors
 # ============================================
 # ✅ VERIFIED WORKING SERVICES - DO NOT MODIFY WITHOUT APPROVAL:
