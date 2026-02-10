@@ -224,7 +224,7 @@ check_diun() {
     fi
     
     # Check logs for errors
-    local errors=$(docker logs diun 2>&1 | tail -50 | grep -c "ERR" || echo "0")
+    local errors=$(docker logs diun 2>&1 | tail -50 | grep -c "ERR" 2>/dev/null || echo "0")
     if [[ "${errors}" -eq 0 ]]; then
         check_pass "No recent errors in Diun logs"
     else

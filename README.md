@@ -4,6 +4,9 @@
 
 two-host docker infrastructure for media services, utilities, and home automation.
 
+**infrastructure versions:** bender v105 / amy v98
+**last updated:** february 2026
+
 ---
 
 ## network architecture
@@ -194,7 +197,7 @@ two-host docker infrastructure for media services, utilities, and home automatio
                 ├── docs/
                 │   └── PIHOLE-DNS-AUTO-POPULATION.md
                 ├── bender/
-                │   ├── .env.template
+                │   ├── .env.example
                 │   ├── .env.gpg
                 │   ├── docker-compose.yaml
                 │   ├── configs/keepalived/keepalived.conf
@@ -202,7 +205,8 @@ two-host docker infrastructure for media services, utilities, and home automatio
                 │   └── scripts/
                 │       └── pihole-dns-update.sh
                 └── amy/
-                    ├── .env.template
+                    ├── .env.example
+                    ├── .env.gpg
                     ├── docker-compose.yaml
                     ├── configs/
                     │   ├── keepalived/keepalived.conf
@@ -249,9 +253,9 @@ two-host docker infrastructure for media services, utilities, and home automatio
 git clone git@github.com:om1d3/futurama-docker.git
 cd futurama-docker
 
-# configure
-cp bender/.env.template bender/.env && nano bender/.env
-cp amy/.env.template amy/.env && nano amy/.env
+# decrypt secrets
+cd bender && gpg --decrypt --output .env .env.gpg && cd ..
+cd amy && gpg --decrypt --output .env .env.gpg && cd ..
 
 # deploy to bender
 scp bender/docker-compose.yaml bender/.env root@192.168.21.121:/mnt/BIG/filme/docker-compose/
@@ -325,7 +329,50 @@ see [PIHOLE-DNS-AUTO-POPULATION.md](docs/PIHOLE-DNS-AUTO-POPULATION.md) for impl
 | **local ntfy** | notifications work without internet |
 | **security-first updates** | trivy scanning before deployment |
 | **shared postgresql per host** | ram efficiency, centralized backup |
-| **gluetun VPN** | centralized VPN for all download services |
+| **centralized VPN** | gluetun provides single OpenVPN tunnel for all download/ARR services |
+| **cadvisor resource limits** | 97% CPU reduction with `--docker_only` and disabled unused metrics |
+
+---
+
+## monitoring pipeline
+
+```
+bender cadvisor ──┐
+  :9099           │     prometheus        grafana
+                  ├──►  :9090       ──►  (HA add-on)
+amy cadvisor ─────┘     (HA VM)          2 dashboards
+  :9099                 192.168.21.220
+```
+
+each host has a dedicated grafana dashboard with the `instance` variable set to Constant type:
+
+| dashboard | instance value |
+|-----------|---------------|
+| amy docker | `192.168.21.130:9099` |
+| bender docker | `192.168.21.121:9099` |
+
+amy's telegraf also monitors the cisco 3750x switch and brother printer via SNMP → influxdb → grafana on the same HA VM.
+
+---
+
+## update schedule
+
+| host | weekly scan | daily retry |
+|------|-------------|-------------|
+| **bender** | saturday 04:30 | sunday–friday 04:30 |
+| **amy** | wednesday 04:30 | all days except wednesday 04:30 |
+
+---
+
+## backup strategy
+
+| data | location | method | retention |
+|------|----------|--------|-----------|
+| **bender postgresql** | `/mnt/BIG/filme/backups/postgres` | postgres-backup (daily) | 7d / 4w / 6m |
+| **amy postgresql** | `/docker/postgres-backup` | postgres-backup (daily) | 7d / 4w / 6m |
+| **configuration** | this repository | git | unlimited |
+| **secrets** | `*.env.gpg` files | GPG encrypted in repo | with git history |
+| **media libraries** | `/mnt/BIG/filme/` | ZFS snapshots | as needed |
 
 ---
 
@@ -378,6 +425,20 @@ see [PIHOLE-DNS-AUTO-POPULATION.md](docs/PIHOLE-DNS-AUTO-POPULATION.md) for impl
 | dozzle | logs | http://logs.home.arpa:8182 | https://logs.bunny-enigmatic.ts.net |
 | pihole | pihole-amy | http://pihole-amy.home.arpa:8053 | https://pihole-amy.bunny-enigmatic.ts.net |
 | dockwatch | amy-dockwatch | http://amy-dockwatch.home.arpa:9999 | https://amy-dockwatch.bunny-enigmatic.ts.net |
+
+---
+
+## version history
+
+| date | bender | amy | changes |
+|------|--------|-----|---------|
+| 2026-02-07 | v105 | v98 | cadvisor on both hosts, telegraf consolidated, jellyfin tvshows fix |
+| 2026-02-06 | v104 | v97 | gluetun OpenVPN, stirling DPI fix |
+| 2026-01-25 | v103 | v96 | transmission 4.0.5 pinned, qBittorrent reverted |
+| 2026-01-22 | v97 | v96 | gluetun VPN for ARR stack, jellyfin image fix |
+| 2026-01-20 | v96 | v96 | verification comments, service fixes synced |
+| 2026-01-19 | v93 | v93 | DNS anchors, vaultwarden migrated to bender |
+| 2026-01-10 | v86 | v85 | secure update system, full documentation |
 
 ---
 

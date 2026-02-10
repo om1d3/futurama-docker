@@ -1,640 +1,618 @@
-# Amy Troubleshooting Guide
+# amy troubleshooting guide
 
-## Diagnostic and Resolution Procedures
+## diagnostic procedures and common fixes
 
-**Document Version:** 1.0  
-**Infrastructure Version:** 85  
-**Last Updated:** January 10, 2026
-
----
-
-## Table of Contents
-
-1. [Quick Diagnostics](#quick-diagnostics)
-2. [Container Issues](#container-issues)
-3. [Database Issues](#database-issues)
-4. [Network Issues](#network-issues)
-5. [DNS and Pi-hole Issues](#dns-and-pi-hole-issues)
-6. [Update System Issues](#update-system-issues)
-7. [Service-Specific Issues](#service-specific-issues)
-8. [Performance Issues](#performance-issues)
+**document version:** 2.0
+**infrastructure version:** 98
+**last updated:** february 2026
 
 ---
 
-## Quick Diagnostics
+## table of contents
 
-### First Response Checklist
+1. [quick diagnostics](#quick-diagnostics)
+2. [container issues](#container-issues)
+3. [postgresql issues](#postgresql-issues)
+4. [DNS and networking issues](#dns-and-networking-issues)
+5. [update system issues](#update-system-issues)
+6. [monitoring issues](#monitoring-issues)
+7. [service-specific issues](#service-specific-issues)
+8. [historical fixes reference](#historical-fixes-reference)
+
+---
+
+## quick diagnostics
+
+### first response checklist
+
+when something appears broken, run these commands in order:
 
 ```bash
-# 1. Check all container status
-docker compose ps
+cd /docker-compose
 
-# 2. Check for unhealthy containers
-docker compose ps | grep -v "Up\|healthy"
+# 1. how many containers are running vs expected?
+docker compose ps --format "table {{.Names}}\t{{.Status}}" | grep -c "Up"
+# expected: 29 (all active services in v98)
 
-# 3. Check system resources
-free -h
-df -h
-uptime
+# 2. which containers are NOT running?
+docker compose ps --format "table {{.Names}}\t{{.Status}}" | grep -v "Up"
 
-# 4. Check Docker daemon
-systemctl status docker
+# 3. any containers in restart loop?
+docker ps -a --format "{{.Names}}\t{{.Status}}" | grep -i "restarting"
 
-# 5. Run health checks
+# 4. any containers unhealthy?
+docker ps --format "{{.Names}}\t{{.Status}}" | grep -i "unhealthy"
+
+# 5. disk space ok?
+df -h / /portainer /docker
+
+# 6. system resources ok?
+free -h && uptime
+```
+
+### health check suite
+
+```bash
+# full automated health check
 /docker-compose/scripts/health-checks.sh all
+
+# or target specific services
+/docker-compose/scripts/health-checks.sh postgres
+/docker-compose/scripts/health-checks.sh ntfy
+/docker-compose/scripts/health-checks.sh pihole
 ```
-
-### Common Status Indicators
-
-| Status | Meaning | Action |
-|--------|---------|--------|
-| `Up (healthy)` | Container running and healthy | None needed |
-| `Up (unhealthy)` | Running but health check failing | Check logs |
-| `Restarting` | Container crash loop | Check logs, fix config |
-| `Exited (0)` | Normal exit (one-shot container) | Usually OK |
-| `Exited (1)` | Error exit | Check logs |
-| `Exited (137)` | OOM killed | Increase memory |
-| `Exited (143)` | SIGTERM received | Manual stop or restart |
 
 ---
 
-## Container Issues
+## container issues
 
-### Container Won't Start
+### container won't start
 
-**Symptoms:**
-- Container immediately exits
-- Status shows `Exited` or `Restarting`
+**symptoms:** container shows as "exited" or "created" in `docker compose ps`
 
-**Diagnostics:**
 ```bash
-# Check logs
-docker logs <container> 2>&1 | tail -50
+# check the exit code and logs
+docker inspect <container> --format '{{.State.ExitCode}}'
+docker logs <container> --tail 50
 
-# Check compose config
-docker compose config | grep -A 30 "<service_name>:"
-
-# Verify image exists
-docker images | grep <image_name>
+# common causes:
+# exit code 1   — application error (check logs for specifics)
+# exit code 126 — permission denied on entrypoint
+# exit code 127 — entrypoint binary not found (wrong image?)
+# exit code 137 — killed by OOM (out of memory)
+# exit code 139 — segfault (rare, usually bad image)
 ```
 
-**Common Causes and Solutions:**
+**fix — application error (exit 1):**
 
-| Cause | Solution |
-|-------|----------|
-| Missing environment variable | Check `.env` file |
-| Port already in use | `netstat -tlnp \| grep <port>` |
-| Volume permission issue | `chown -R 1000:1000 /docker/<service>` |
-| Missing directory | Create required directories |
-| Corrupted image | `docker compose pull <service>` |
-
-### Container Keeps Restarting
-
-**Symptoms:**
-- RestartCount keeps increasing
-- Brief periods of availability
-
-**Diagnostics:**
 ```bash
-# Check restart count
-docker inspect <container> --format='{{.RestartCount}}'
+# read the full log output
+docker logs <container> 2>&1 | less
 
-# Watch restart loop
-watch -n 2 'docker ps | grep <container>'
-
-# Check logs across restarts
-docker logs <container> 2>&1 | tail -200
+# if related to database connectivity, check postgres first
+/docker-compose/scripts/health-checks.sh postgres
 ```
 
-**Solutions:**
-```bash
-# Stop restart loop
-docker compose stop <container>
+**fix — out of memory (exit 137):**
 
-# Fix issue based on logs, then restart
+```bash
+# check system memory
+free -h
+
+# check which containers use the most memory
+docker stats --no-stream --format "table {{.Name}}\t{{.MemUsage}}" | sort -k2 -h -r | head -10
+
+# restart the container (may work if memory pressure was temporary)
 docker compose up -d <container>
 ```
 
-### Container Unhealthy
+### container in restart loop
 
-**Symptoms:**
-- Status shows `(unhealthy)`
-- Service may be partially working
+**symptoms:** container repeatedly starts and stops, status shows "Restarting"
 
-**Diagnostics:**
 ```bash
-# Check health check definition
-docker inspect <container> --format='{{json .Config.Healthcheck}}' | jq
+# stop the loop first
+docker compose stop <container>
 
-# See health check history
-docker inspect <container> --format='{{json .State.Health}}' | jq
+# check what's failing
+docker logs <container> --tail 100
 
-# Run health check manually
-docker exec <container> <healthcheck_command>
+# common causes:
+# - dependency not ready (postgres, valkey)
+# - port already in use
+# - volume mount path doesn't exist
+# - environment variable missing or malformed
 ```
 
----
+**fix — dependency not ready:**
 
-## Database Issues
-
-### PostgreSQL Won't Start
-
-**Symptoms:**
-- postgres container exits
-- Dependent services fail
-
-**Diagnostics:**
 ```bash
-docker logs postgres --tail 100
-```
-
-**Common Errors:**
-
-| Error | Solution |
-|-------|----------|
-| "database files are incompatible" | Check PostgreSQL version, restore from backup |
-| "could not open file" | Check permissions: `chown -R 1000:1000 /docker/postgresql` |
-| "FATAL: password authentication failed" | Check `POSTGRES_PASSWORD` in `.env` |
-| "database system was not properly shut down" | Recovery runs automatically, wait |
-
-### Database Connection Refused
-
-**Symptoms:**
-- Services can't connect to postgres
-- "Connection refused" errors
-
-**Diagnostics:**
-```bash
-# Check postgres is running
-docker ps | grep postgres
-
-# Check postgres is accepting connections
+# check if postgres is healthy (many services depend on it)
+docker compose ps postgres
 docker exec postgres pg_isready -U postgres
 
-# Test connection
-docker exec postgres psql -U postgres -c "SELECT 1"
-
-# Check network
-docker network inspect utility-network | grep postgres
+# if postgres is down, start it first
+docker compose up -d postgres
+sleep 10
+docker compose up -d <container>
 ```
 
-**Solutions:**
+**fix — port conflict:**
+
 ```bash
-# If postgres running but not accepting
-docker restart postgres
-sleep 30
+# check if the port is already in use
+ss -tlnp | grep <port_number>
+
+# if another process holds the port, identify it
+lsof -i :<port_number>
+```
+
+### container shows "unhealthy"
+
+**symptoms:** `docker ps` shows "(unhealthy)" next to the container
+
+```bash
+# check what the healthcheck is testing
+docker inspect <container> --format '{{json .Config.Healthcheck}}' | jq .
+
+# check healthcheck logs
+docker inspect <container> --format '{{json .State.Health}}' | jq '.Log[-3:]'
+
+# common cause: healthcheck command uses a binary not in the container
+# (this was a recurring issue — see historical fixes section)
+```
+
+---
+
+## postgresql issues
+
+### postgres won't start
+
+```bash
+# check logs
+docker logs postgres --tail 50
+
+# check disk space on the data directory
+df -h /portainer/postgresql/
+du -sh /portainer/postgresql/data/
+
+# check permissions
+ls -la /portainer/postgresql/data/
+
+# check if another postgres instance is running
+docker ps -a | grep postgres
+```
+
+**fix — corrupted WAL files:**
+
+```bash
+# WARNING: this may lose recent transactions
+docker compose stop postgres atuin miniflux spendspentspent mealie postgres-backup
+
+# try starting with recovery
+docker compose up -d postgres
+sleep 10
+docker logs postgres --tail 20
+
+# if still failing, restore from backup
+# (see restore procedures in 07-MAINTENANCE.md)
+```
+
+### database connection refused
+
+**symptoms:** services show "connection refused" to postgres in their logs
+
+```bash
+# verify postgres is running and healthy
+docker compose ps postgres
 docker exec postgres pg_isready -U postgres
 
-# If network issue
-docker compose down
-docker compose up -d
+# verify postgres is listening
+docker exec postgres psql -U postgres -c "SELECT 1;"
+
+# check the network
+docker network inspect docker-compose_utility-network | grep -A5 postgres
 ```
 
-### Restore Database from Backup
+**fix — postgres healthy but services can't connect:**
 
 ```bash
-# Stop dependent services
-docker compose stop atuin miniflux spendspentspent
+# restart the affected service (it may have cached a stale connection)
+docker compose restart <service_name>
 
-# Identify backup to restore
-ls -la /docker/backups/postgres/daily/
-
-# Restore specific database
-docker exec -i postgres psql -U postgres < /docker/backups/postgres/daily/atuin-20260110.sql
-
-# Or restore all databases
-docker exec -i postgres psql -U postgres < /docker/backups/postgres/manual/full-backup.sql
-
-# Restart services
-docker compose start atuin miniflux spendspentspent
+# if all services are affected, restart postgres
+docker compose restart postgres
+sleep 10
+docker compose restart atuin miniflux spendspentspent mealie
 ```
+
+### database does not exist
+
+**symptoms:** service logs show `FATAL: database "xxx" does not exist`
+
+```bash
+# list existing databases
+docker exec postgres psql -U postgres -l
+
+# if a database is missing, create it
+docker exec postgres psql -U postgres -c "CREATE DATABASE <database_name>;"
+
+# then restore from backup if needed
+docker exec -i postgres psql -U postgres -d <database_name> < /docker/postgres-backup/<backup_file>
+```
+
+### postgres-backup fails
+
+**symptoms:** postgres-backup logs show errors
+
+```bash
+# check logs
+docker logs postgres-backup --tail 20
+
+# common issue: "database does not exist"
+# this means POSTGRES_DB lists a database that hasn't been created yet
+# check the current database list in compose:
+grep POSTGRES_DB docker-compose.yaml
+# should be: atuin,miniflux,sss,mealie,stirling
+
+# verify all databases exist
+docker exec postgres psql -U postgres -l | grep -E "atuin|miniflux|sss|mealie|stirling"
+```
+
+> **historical note:** postgres-backup was initially configured with `POSTGRES_DB=all`, which caused `FATAL: database "all" does not exist`. this was fixed by listing databases explicitly. see conversation #26.
 
 ---
 
-## Network Issues
+## DNS and networking issues
 
-### Container Can't Reach Other Containers
+### pihole not resolving
 
-**Symptoms:**
-- Inter-container communication fails
-- "Connection refused" between services
-
-**Diagnostics:**
 ```bash
-# Check network exists
-docker network ls | grep utility-network
+# test DNS resolution through pihole
+dig google.com @127.0.0.1
+dig google.com @192.168.21.130
+dig google.com @192.168.21.100  # VIP
 
-# Check container is on network
-docker inspect <container> --format='{{json .NetworkSettings.Networks}}' | jq
+# check pihole container
+docker compose ps pihole
+docker logs pihole --tail 20
 
-# Test connectivity
-docker exec <container1> ping <container2>
-docker exec <container1> wget -qO- http://<container2>:<port>
-```
-
-**Solutions:**
-```bash
-# Reconnect to network
-docker network connect utility-network <container>
-
-# Recreate network (CAUTION: affects all containers)
-docker compose down
-docker network rm utility-network
-docker compose up -d
-```
-
-### External Network Unreachable
-
-**Symptoms:**
-- Containers can't reach internet
-- DNS resolution fails
-
-**Diagnostics:**
-```bash
-# Test from container
-docker exec <container> ping 8.8.8.8
-docker exec <container> nslookup google.com
-
-# Check host networking
-ping 8.8.8.8
-cat /etc/resolv.conf
-```
-
-**Solutions:**
-```bash
-# If DNS issue, temporarily use external DNS
-docker exec <container> sh -c 'echo "nameserver 8.8.8.8" > /etc/resolv.conf'
-
-# Check Docker DNS settings
-cat /etc/docker/daemon.json
-```
-
----
-
-## DNS and Pi-hole Issues
-
-### Pi-hole Not Resolving
-
-**Symptoms:**
-- DNS queries fail
-- Devices can't reach internet
-
-**Diagnostics:**
-```bash
-# Test Pi-hole directly
-dig @127.0.0.1 google.com
-dig @192.168.21.130 google.com
-
-# Check Pi-hole status
-docker exec pihole pihole status
-
-# Check FTL (DNS resolver) is running
-docker exec pihole pgrep pihole-FTL
-```
-
-**Solutions:**
-```bash
-# Restart Pi-hole
+# restart pihole
 docker compose restart pihole
-
-# Restart DNS resolver
-docker exec pihole pihole restartdns
-
-# Rebuild gravity database
-docker exec pihole pihole -g
 ```
 
-### Keepalived VIP Not Working
+### keepalived VIP not on amy
 
-**Symptoms:**
-- VIP (192.168.21.100) unreachable
-- Failover not happening
-
-**Diagnostics:**
 ```bash
-# Check VIP assignment
-ip addr | grep 192.168.21.100
+# check if VIP is assigned to amy
+ip addr show | grep 192.168.21.100
 
-# Check Keepalived logs
-docker logs keepalived 2>&1 | tail -30
+# if not present, amy is in BACKUP state (bender has it — this is normal)
+# check keepalived status
+docker logs keepalived --tail 20
 
-# Check VRRP state
-docker logs keepalived 2>&1 | grep -E "MASTER|BACKUP|priority"
-
-# Check health script status
-docker logs keepalived 2>&1 | grep -E "Script|succeeded|failed"
-```
-
-**Solutions:**
-```bash
-# If health script failing
-docker exec keepalived wget -q --spider --timeout=2 http://127.0.0.1:8053/admin/
-echo "Exit code: $?"
-
-# Restart Keepalived
+# force amy to claim VIP (only if bender is down)
 docker compose restart keepalived
-
-# Check peer communication (on other host)
-docker logs keepalived 2>&1 | grep "192.168.21"
 ```
 
-### Pi-hole Sync Issues (nebula-sync)
+### containers can't resolve DNS
 
-**Symptoms:**
-- Amy's Pi-hole config doesn't match bender's
-- Blocklists out of sync
+**symptoms:** containers show DNS resolution errors in logs
 
-**Note:** nebula-sync runs on bender, not amy. Check bender's logs:
 ```bash
-# On bender
-docker logs nebula-sync 2>&1 | tail -20
+# check the dns anchor is applied
+docker inspect <container> --format '{{json .HostConfig.Dns}}'
+# should show: ["192.168.21.100"]
+
+# if empty, the service may be missing <<: *default-dns in compose
+# or it uses network_mode: host (which uses the host's DNS)
+
+# test from inside a container
+docker exec <container> nslookup google.com 192.168.21.100
+
+# emergency fix: restart pihole on both hosts
+docker compose restart pihole
+# on bender: docker compose restart pihole
+```
+
+### .home.arpa domains not resolving
+
+```bash
+# test local domain resolution
+dig ntfy.home.arpa @192.168.21.100
+
+# if NXDOMAIN, the pihole-dns-update.sh script on bender may not have run
+# check on bender: crontab -l | grep pihole-dns
+# manual trigger on bender: /root/pihole-dns-update.sh
+
+# verify the DNS entries exist in pihole
+# on bender: docker exec pihole cat /etc/pihole/pihole.toml | grep -A50 "hosts ="
 ```
 
 ---
 
-## Update System Issues
+## update system issues
 
-### Updates Not Running
+### secure-container-update.sh not running
 
-**Symptoms:**
-- No update notifications
-- Containers never updated
-
-**Diagnostics:**
 ```bash
-# Check cron jobs
-crontab -l
+# check cron is configured
+crontab -l | grep secure-container
 
-# Check cron log
-cat /docker-compose/configs/secure-update/logs/cron.log
+# expected output:
+# 30 4 * * 3 /docker-compose/scripts/secure-container-update.sh weekly ...
+# 30 4 * * 0-2,4-6 /docker-compose/scripts/secure-container-update.sh retry ...
 
-# Check Diun is running
-docker compose ps diun
-docker logs diun 2>&1 | tail -20
+# check last execution
+ls -la /docker-compose/configs/secure-update/logs/ | tail -5
+cat /docker-compose/configs/secure-update/logs/cron.log | tail -20
+
+# manual test run
+/docker-compose/scripts/secure-container-update.sh weekly
 ```
 
-**Solutions:**
+### trivy scan failures
+
 ```bash
-# Verify cron is running
-systemctl status cron
-
-# Test update script manually
-/docker-compose/scripts/secure-container-update.sh status
-
-# Trigger manual scan
-/docker-compose/scripts/secure-container-update.sh scan <container>
-```
-
-### Diun Not Sending Notifications
-
-**Symptoms:**
-- Updates detected but no ntfy notification
-- Diun logs show notification errors
-
-**Diagnostics:**
-```bash
-# Check Diun logs for ntfy errors
-docker logs diun 2>&1 | grep -i ntfy
-
-# Test ntfy connectivity
-docker exec diun wget -qO- http://ntfy:80/v1/health
-```
-
-**Common Errors:**
-
-| Error | Solution |
-|-------|----------|
-| "connection refused" | Check ntfy container is running |
-| "dial tcp [::1]:8888" | Wrong endpoint - use `http://ntfy:80` |
-| "topic not found" | Check `DIUN_NTFY_TOPIC` in compose |
-
-**Solution:**
-```bash
-# Verify Diun config
-docker compose config | grep -A 20 "diun:"
-
-# Should show: DIUN_NOTIF_NTFY_ENDPOINT=http://ntfy:80
-# NOT: http://localhost:8888
-```
-
-### Trivy Scan Failures
-
-**Symptoms:**
-- Scans timeout or fail
-- Vulnerability data not available
-
-**Diagnostics:**
-```bash
-# Check Trivy is running
+# check trivy is running
 docker compose ps trivy
-docker logs trivy 2>&1 | tail -20
+curl -s http://localhost:8083/healthz
 
-# Test Trivy manually
+# if trivy is unhealthy, check logs
+docker logs trivy --tail 20
+
+# common fix: clear corrupted cache
+docker compose stop trivy
+rm -rf /docker/trivy/cache/*
+docker compose start trivy
+sleep 30  # trivy needs time to rebuild its vulnerability database
 curl -s http://localhost:8083/healthz
 ```
 
-**Solutions:**
-```bash
-# Restart Trivy
-docker compose restart trivy
+### containers stuck in retry queue
 
-# Wait for database download (first run takes time)
-docker logs -f trivy 2>&1 | grep -i database
+```bash
+# view current retry queue
+cat /docker-compose/configs/secure-update/retry-queue.json | jq .
+
+# check why a container is blocked (re-scan manually)
+docker pull <image>
+docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \
+  aquasec/trivy:latest image --severity CRITICAL,HIGH <image>
+
+# if vulnerabilities are in base image and not exploitable,
+# you can manually update the container:
+docker compose pull <service>
+docker compose up -d <service>
+
+# then clear it from the retry queue
+# edit the file and remove the container entry:
+nano /docker-compose/configs/secure-update/retry-queue.json
+```
+
+### ntfy notifications not arriving
+
+```bash
+# check ntfy is running
+docker compose ps ntfy
+curl -s http://localhost:8888/
+
+# test sending a notification
+curl -d "test from amy troubleshooting" http://localhost:8888/test-topic
+
+# check the script's ntfy configuration
+grep NTFY /docker-compose/scripts/secure-container-update.sh
+# should show: NTFY_ENDPOINT="http://localhost:8888"
+
+# IMPORTANT: bender also sends to amy's ntfy
+# if ntfy is down on amy, bender's notifications fail silently
 ```
 
 ---
 
-## Service-Specific Issues
+## monitoring issues
 
-### ntfy Issues
+### beszel not collecting data
 
-**Symptoms:**
-- Notifications not received
-- ntfy web interface not loading
-
-**Diagnostics:**
 ```bash
-# Check ntfy health
-curl -s http://localhost:8888/v1/health
-
-# Check logs
-docker logs ntfy 2>&1 | tail -30
-
-# Test sending notification
-curl -d "Test message" http://localhost:8888/test-topic
-```
-
-### Vaultwarden Issues
-
-**Symptoms:**
-- Can't log in
-- Sync failures
-
-**Diagnostics:**
-```bash
-# Check container status
-docker compose ps vaultwarden
-
-# Check logs
-docker logs vaultwarden 2>&1 | tail -50
-
-# Verify data directory
-ls -la /docker/vaultwarden/
-```
-
-### Miniflux Issues
-
-**Symptoms:**
-- Can't log in
-- Feed refresh failures
-
-**Diagnostics:**
-```bash
-# Check database connection
-docker exec miniflux /usr/bin/miniflux -info
-
-# Check logs
-docker logs miniflux 2>&1 | tail -50
-
-# Verify database exists
-docker exec postgres psql -U postgres -c "\l" | grep miniflux
-```
-
-### Beszel Issues
-
-**Symptoms:**
-- Agent not reporting
-- Dashboard empty
-
-**Diagnostics:**
-```bash
-# Check Beszel hub
-docker logs beszel 2>&1 | tail -30
-
-# Check Beszel agent
-docker logs beszel-agent 2>&1 | tail -30
-
-# Verify connectivity
+# check beszel hub
+docker compose ps beszel
 curl -s http://localhost:8090/
+
+# check beszel-agent (uses host network)
+docker ps | grep beszel-agent
+docker logs beszel-agent --tail 20
+
+# verify agent can reach hub
+# agent connects to beszel hub on port 8090
+docker logs beszel-agent 2>&1 | grep -i "connect\|error"
+```
+
+### cadvisor high resource usage
+
+```bash
+# check current usage
+docker stats cadvisor --no-stream
+
+# expected: <2% CPU, <50MB memory (with resource-saving flags)
+# if higher, verify the command flags are applied
+docker inspect cadvisor --format '{{json .Config.Cmd}}'
+# should show: --housekeeping_interval=30s --docker_only=true --disable_metrics=...
+
+# if flags are missing, recreate
+docker compose up -d --force-recreate cadvisor
+sleep 30
+docker stats cadvisor --no-stream
+```
+
+### telegraf not collecting SNMP data
+
+```bash
+# check telegraf logs
+docker logs telegraf --tail 20
+
+# common errors:
+# "connection refused" — target device (switch/printer) is unreachable
+# "timeout" — SNMP community string is wrong or device is slow
+
+# test SNMP connectivity manually
+docker exec telegraf telegraf --test --config /etc/telegraf/telegraf.conf 2>&1 | head -40
+
+# verify config file is mounted
+docker exec telegraf cat /etc/telegraf/telegraf.conf | head -5
+
+# if config changed, restart telegraf
+docker compose restart telegraf
+```
+
+### grafana dashboard shows no data
+
+the monitoring pipeline is: cadvisor → prometheus (on HA VM 192.168.21.220) → grafana
+
+```bash
+# 1. verify cadvisor is serving metrics
+curl -s http://localhost:9099/metrics | head -5
+
+# 2. verify prometheus is scraping (on HA VM terminal)
+# docker exec prometheus wget -qO- http://192.168.21.130:9099/metrics | head -5
+
+# 3. check prometheus targets (on HA VM terminal)
+# docker exec prometheus cat /etc/prometheus/prometheus.yml
+
+# if prometheus config was lost (HA VM restart), recreate it:
+# docker exec prometheus sh -c 'cat > /etc/prometheus/prometheus.yml << EOF
+# global:
+#   scrape_interval: 1m
+#   evaluation_interval: 15s
+# alerting:
+#   alertmanagers:
+#     - static_configs:
+#       - targets:
+#         - 192.168.21.220:9093
+# scrape_configs:
+#   - job_name: cadvisor
+#     static_configs:
+#       - targets:
+#         - 192.168.21.130:9099
+#         - 192.168.21.121:9099
+# EOF'
+# docker exec prometheus kill -HUP 1
+```
+
+### grafana dashboard configuration
+
+there are two separate grafana dashboards, one per host. each dashboard has its `instance` variable set to **Constant** type (not Query) to lock it to a specific host.
+
+| dashboard | instance variable type | instance value |
+|-----------|----------------------|----------------|
+| **amy docker** | Constant | `192.168.21.130:9099` |
+| **bender docker** | Constant | `192.168.21.121:9099` |
+
+if a dashboard shows data from the wrong host or no data at all, verify the variable configuration:
+
+1. open the dashboard in grafana
+2. click **Edit** (top right)
+3. click **Settings** → **Variables** tab
+4. click on the **instance** variable
+5. verify **Variable type** is set to `Constant`
+6. verify the **Value** matches the correct host IP and port
+7. click **Apply** → **Save dashboard**
+
+> **note:** the dashboards were originally created with a Query-type `instance` variable that showed both hosts in a dropdown. they were changed to Constant type to create dedicated per-host dashboards. if you need to create a new dashboard for a host, duplicate an existing one (Edit → Settings → JSON Model → copy → import) and change the Constant value to the target host.
+
+---
+
+## service-specific issues
+
+### stirling-pdf DPI error
+
+**symptoms:** stirling logs show `DPI value 300 exceeds maximum safe limit of 0`
+
+**fix:** this was resolved in v97 by adding `SYSTEM_MAXDPI=1200` to stirling's environment. if the error reappears, verify the variable is set:
+
+```bash
+docker exec stirling env | grep MAXDPI
+# should show: SYSTEM_MAXDPI=1200
+```
+
+### mealie won't start or shows errors
+
+**fix history:**
+- v85.3: migrated from sqlite to postgresql
+- v96: image fixed from `hkotel/mealie:latest` to `ghcr.io/mealie-recipes/mealie:latest`
+
+```bash
+# verify correct image
+docker inspect mealie --format '{{.Config.Image}}'
+# should show: ghcr.io/mealie-recipes/mealie:latest
+
+# check database connectivity
+docker exec postgres psql -U postgres -d mealie -c "SELECT 1;"
+```
+
+### spendspentspent data not persisting
+
+**fix history:**
+- v86: added `/files` volume mount and `SSS_SALT` variable
+- v95: added `/config` volume mount
+
+```bash
+# verify all three volume mounts exist
+docker inspect spendspentspent --format '{{json .Mounts}}' | jq '.[].Destination'
+# should show: /app-files, /files, /config
+```
+
+### miniflux admin login fails
+
+**fix history:** v94 corrected `MINIFLUX_ADMIN_USERNAME` variable name
+
+```bash
+# verify environment variable
+docker exec miniflux env | grep ADMIN
+# should show: ADMIN_USERNAME=<your_username>
+
+# if wrong, check .env file
+grep MINIFLUX /docker-compose/.env
+```
+
+### netalertx not scanning
+
+netalertx requires `NET_RAW`, `NET_ADMIN`, and `NET_BIND_SERVICE` capabilities and uses `network_mode: host`.
+
+```bash
+# verify capabilities
+docker inspect netalertx --format '{{json .HostConfig.CapAdd}}'
+# should show: ["NET_RAW","NET_ADMIN","NET_BIND_SERVICE"]
+
+# verify host network
+docker inspect netalertx --format '{{.HostConfig.NetworkMode}}'
+# should show: host
 ```
 
 ---
 
-## Performance Issues
+## historical fixes reference
 
-### High CPU Usage
+this section documents issues that were encountered and resolved during the infrastructure's development. these are preserved as reference in case similar issues recur.
 
-**Diagnostics:**
-```bash
-# Find high CPU containers
-docker stats --no-stream --format "table {{.Name}}\t{{.CPUPerc}}" | sort -k2 -h -r | head -10
-
-# Check host CPU
-top -bn1 | head -20
-```
-
-**Solutions:**
-- Identify and restart problematic container
-- Check for infinite loops in logs
-- Consider resource limits in compose
-
-### High Memory Usage
-
-**Diagnostics:**
-```bash
-# Container memory usage
-docker stats --no-stream --format "table {{.Name}}\t{{.MemUsage}}" | sort -k2 -h -r | head -10
-
-# Host memory
-free -h
-```
-
-**Solutions:**
-```bash
-# If PostgreSQL using too much memory
-docker exec postgres psql -U postgres -c "SHOW shared_buffers;"
-
-# Restart memory-hungry container
-docker compose restart <container>
-```
-
-### Disk Space Issues
-
-**Diagnostics:**
-```bash
-# Host disk usage
-df -h
-
-# Docker disk usage
-docker system df -v
-
-# Find large directories
-du -h /docker/ --max-depth=2 | sort -h | tail -20
-```
-
-**Solutions:**
-```bash
-# Clean unused Docker resources
-docker system prune -f
-
-# Clean old images
-docker image prune -af
-
-# Clean old logs
-find /docker-compose/configs/secure-update/logs/ -mtime +30 -delete
-```
+| version | service | issue | fix |
+|---------|---------|-------|-----|
+| v91 | lubelogger | unauthorized SMTP config added | removed MailConfig__* variables, restored minimal config |
+| v92 | vaultwarden | migrated to bender | removed from amy compose |
+| v93 | all services | DNS not using pihole | added `x-dns` anchor with 192.168.21.100 to all bridge services |
+| v94 | postgres | wrong volume path (`/docker/postgres/data`) | corrected to `/portainer/postgresql/data` |
+| v94 | miniflux | wrong env var name | corrected to `MINIFLUX_ADMIN_USERNAME` |
+| v94 | filebrowser | unhealthy (curl not in image) | removed curl healthcheck |
+| v94 | tsdproxy | unhealthy (wget not in image) | removed wget healthcheck |
+| v95 | spendspentspent | config not persisting | added `/config` volume mount |
+| v96 | stirling | wrong image (`frooodle/s-pdf`) | corrected to `stirlingtools/stirling-pdf:latest` |
+| v96 | netalertx | not scanning network | added `cap_add` and fixed volume mount |
+| v96 | mealie | wrong image (`hkotel/mealie`) | corrected to `ghcr.io/mealie-recipes/mealie:latest` |
+| v97 | stirling | DPI limit error | added `SYSTEM_MAXDPI=1200` |
+| v98 | telegraf | separate stack, inconsistent management | consolidated into main compose with `${TIMEZONE}` |
+| v98 | cadvisor | high CPU/memory usage | added `--docker_only`, `--housekeeping_interval=30s`, `--disable_metrics` flags |
 
 ---
 
-## Emergency Recovery
-
-### Complete Service Failure
-
-```bash
-# 1. Check Docker daemon
-systemctl status docker
-systemctl restart docker
-
-# 2. Restart all containers
-cd /docker-compose
-docker compose down
-docker compose up -d
-
-# 3. Verify critical services
-docker compose ps | grep -E "postgres|ntfy|pihole"
-```
-
-### Restore from Backup
-
-```bash
-# 1. Stop all services
-docker compose down
-
-# 2. Restore Docker data directory
-tar -xzvf /backup/amy-docker-YYYYMMDD.tar.gz -C /
-
-# 3. Restore .env if needed
-gpg -d .env.gpg > .env
-chmod 600 .env
-
-# 4. Start services
-docker compose up -d
-```
-
----
-
-## Quick Reference: Error Messages
-
-| Error | Likely Cause | Quick Fix |
-|-------|--------------|-----------|
-| "port already in use" | Another process on port | `netstat -tlnp \| grep <port>` |
-| "permission denied" | Wrong file ownership | `chown -R 1000:1000 /docker/<service>` |
-| "no such file or directory" | Missing volume/directory | Create directory |
-| "connection refused" | Service not running/wrong port | Check service status |
-| "name resolution failed" | DNS issue | Check Pi-hole, use 8.8.8.8 temporarily |
-| "OOM killed" | Out of memory | Increase swap, add RAM, reduce services |
-
----
-
-*Previous: [07-MAINTENANCE.md](./07-MAINTENANCE.md)*  
-*This is the final document in the series.*
+*previous: [07-MAINTENANCE.md](./07-MAINTENANCE.md)*
+*this is the last document in the amy documentation series*

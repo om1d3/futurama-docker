@@ -1,38 +1,46 @@
-# pi-hole DNS auto-population for docker services
+# pihole DNS auto-population
+
+## automatic local DNS for container services
+
+**document version:** 2.0
+**last updated:** february 2026
+
+---
+
+## table of contents
+
+1. [overview](#overview)
+2. [architecture](#architecture)
+3. [how it works](#how-it-works)
+4. [approaches tested](#approaches-tested)
+5. [current DNS entries](#current-dns-entries)
+6. [script reference](#script-reference)
+7. [adding manual entries](#adding-manual-entries)
+8. [tailscale split DNS integration](#tailscale-split-dns-integration)
+9. [testing and verification](#testing-and-verification)
+10. [troubleshooting](#troubleshooting)
+11. [files reference](#files-reference)
+12. [security considerations](#security-considerations)
+
+---
 
 ## overview
 
-this document describes the implementation of automatic DNS record population for docker containers running on a TrueNAS Scale homelab environment. the solution scans running containers on two hosts (bender and amy), extracts TSDProxy labels, and automatically creates local DNS entries in Pi-hole v6.
+every container service with a `tsdproxy.enable: "true"` label automatically gets a local DNS entry in pihole, making it accessible via `<name>.home.arpa` on the local network. a cron job on bender scans running containers on both bender and amy every 5 minutes, generates DNS entries, and updates pihole's configuration.
 
-## infrastructure
+| property | value |
+|----------|-------|
+| **domain suffix** | `.home.arpa` (RFC 8375 compliant for private networks) |
+| **scan interval** | every 5 minutes |
+| **scan scope** | running containers on bender and amy |
+| **label used** | `tsdproxy.enable: "true"` + `tsdproxy.name` |
+| **pihole version** | v6 (uses `pihole.toml` hosts array) |
+| **replication** | nebula-sync to amy pihole (hourly) |
+| **script** | `/root/pihole-dns-update.sh` on bender |
 
-### hosts
+---
 
-| hostname | IP address | role | OS |
-|----------|------------|------|-----|
-| bender | 192.168.21.121 | primary server (TrueNAS Scale) | Debian-based |
-| amy | 192.168.21.130 | secondary server | Debian-based |
-| VIP | 192.168.21.100 | keepalived virtual IP for DNS | n/a |
-
-### key services
-
-| service | host | purpose |
-|---------|------|---------|
-| pi-hole | bender (primary), amy (replica) | DNS server with ad-blocking |
-| keepalived | both | high availability for DNS (VIP: 192.168.21.100) |
-| nebula-sync | bender | replicates pi-hole config to amy |
-| TSDProxy | both | Tailscale proxy with service labels |
-
-## problem statement
-
-managing DNS records for 30+ docker containers across two hosts presents several challenges:
-
-1. **manual maintenance**: adding/removing containers requires manual DNS updates
-2. **inconsistency**: easy to forget updating DNS when deploying new services
-3. **multiple hosts**: services spread across bender and amy need centralized DNS
-4. **high availability**: DNS changes need to replicate to both pi-hole instances
-
-## solution architecture
+## architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -44,7 +52,7 @@ managing DNS records for 30+ docker containers across two hosts presents several
 │  │ (5 min)     │    │ update.sh   │    │ hosts = []  │      │
 │  └─────────────┘    └──────┬──────┘    └──────┬──────┘      │
 │                            │                   │             │
-│                     SSH to amy          restart pi-hole      │
+│                     SSH to amy          restart pihole        │
 │                            │                   │             │
 └────────────────────────────┼───────────────────┼─────────────┘
                              │                   │
@@ -56,132 +64,117 @@ managing DNS records for 30+ docker containers across two hosts presents several
 │  ┌─────────────┐                   │           │
 │  │ docker      │◀── scan labels    │           ▼
 │  │ containers  │                   │    ┌─────────────┐
-│  └─────────────┘                   │    │ amy pi-hole │
+│  └─────────────┘                   │    │ amy pihole  │
 │                                     │    │ (replica)   │
 └────────────────────────────────────┘    └─────────────┘
 ```
 
-## thought process
+---
 
-### initial approaches considered
+## how it works
 
-#### approach 1: custom.list file (failed)
+1. **cron triggers** `/root/pihole-dns-update.sh` every 5 minutes on bender
+2. **script scans bender** — runs `docker inspect` on all running containers, extracts `tsdproxy.enable` and `tsdproxy.name` labels
+3. **script scans amy** — SSHes to `kube@192.168.21.130` and runs the same docker inspect command
+4. **generates DNS entries** — maps each `tsdproxy.name` to `<name>.home.arpa` with the host's IP address
+5. **change detection** — computes md5 hash of new entries and compares to stored hash in `.dns-state` file
+6. **if changed** — updates `pihole.toml` hosts array using awk, creates backup, restarts pihole
+7. **nebula-sync** — replicates pihole configuration (including DNS entries) to amy's pihole hourly
 
-the first attempt used pi-hole's traditional `custom.list` file for local DNS records:
+### why pihole.toml and not custom.list?
 
-```bash
-# custom.list format
-192.168.21.121  books.home.arpa
-192.168.21.121  media.home.arpa
-```
+pihole v6 changed how local DNS records are stored. the traditional `custom.list` file exists but is not read by the DNS resolver. DNS entries must be placed in the `pihole.toml` file under the `[dns]` section's `hosts = []` array.
 
-**why it failed**: pi-hole v6 no longer reads from `custom.list` for local DNS records. the file exists but is not parsed by the DNS resolver.
+---
 
-#### approach 2: pi-hole API (failed)
+## approaches tested
 
-attempted to use pi-hole v6's API to manage DNS records:
+three approaches were tested during development. only the third works with pihole v6.
 
-```bash
-docker exec pihole pihole api dns/local
-```
+| approach | method | result |
+|----------|--------|--------|
+| **custom.list** | write entries to `/etc/pihole/custom.list` + `pihole reloadlists` | ❌ pihole v6 does not read from custom.list for local DNS |
+| **pihole API** | use `/api/dns/local` endpoint | ❌ endpoint returns 404 in pihole v6 |
+| **pihole.toml hosts array** | modify `[dns] hosts = []` in pihole.toml + restart pihole | ✅ works — entries loaded after restart |
 
-**why it failed**: the API endpoint `/api/dns/local` returns 404. pi-hole v6's API doesn't expose local DNS management in this way.
+---
 
-#### approach 3: pihole.toml hosts array (success)
+## current DNS entries
 
-discovered that pi-hole v6 stores local DNS records in `/etc/pihole/pihole.toml` under the `[dns]` section:
+the script generates entries for all services with `tsdproxy.enable: "true"` labels. as of v98 (amy) and v105 (bender):
 
-```toml
-[dns]
-  hosts = [
-    "192.168.21.220 homeassistant.horia.wtf",
-    "192.168.21.121 books.home.arpa",
-    "192.168.21.130 ntfy.home.arpa"
-  ] ### CHANGED, default = []
-```
+### bender services (192.168.21.121)
 
-**why it works**: modifying this array and restarting pi-hole properly loads the DNS records.
+| DNS name | tsdproxy.name | service |
+|----------|--------------|---------|
+| bender-cadvisor.home.arpa | bender-cadvisor | cadvisor |
+| bender-dockwatch.home.arpa | bender-dockwatch | dockwatch |
+| bender-proxy.home.arpa | bender-proxy | tsdproxy |
+| books.home.arpa | books | audiobookshelf |
+| jdown.home.arpa | jdown | jdownloader |
+| media.home.arpa | media | jellyfin |
+| metube.home.arpa | metube | metube |
+| pad.home.arpa | pad | hedgedoc |
+| photo.home.arpa | photo | immich |
+| pihole-bender.home.arpa | pihole-bender | pihole |
+| prowlarr.home.arpa | prowlarr | prowlarr |
+| sonarr.home.arpa | sonarr | sonarr |
+| radarr.home.arpa | radarr | radarr |
+| lidarr.home.arpa | lidarr | lidarr |
+| readarr.home.arpa | readarr | readarr |
+| bazarr.home.arpa | bazarr | bazarr |
+| spotdl.home.arpa | spotdl | spotdl |
+| sync.home.arpa | sync | syncthing |
+| transmission.home.arpa | transmission | transmission |
+| vault.home.arpa | vault | vaultwarden |
 
-### TrueNAS script execution limitation
+### amy services (192.168.21.130)
 
-TrueNAS Scale has a security restriction that prevents executing scripts from `/mnt` paths:
+| DNS name | tsdproxy.name | service |
+|----------|--------------|---------|
+| amy-dockwatch.home.arpa | amy-dockwatch | dockwatch |
+| amy-proxy.home.arpa | amy-proxy | tsdproxy |
+| argus.home.arpa | argus | argus |
+| atuin.home.arpa | atuin | atuin |
+| beszel.home.arpa | beszel | beszel |
+| cadvisor.home.arpa | cadvisor | cadvisor |
+| files.home.arpa | files | filebrowser |
+| home.home.arpa | home | homepage |
+| it-tools.home.arpa | it-tools | it-tools |
+| limdius.home.arpa | limdius | limdius |
+| logs.home.arpa | logs | dozzle |
+| lube.home.arpa | lube | lubelogger |
+| mealie.home.arpa | mealie | mealie |
+| money.home.arpa | money | spendspentspent |
+| netalertx.home.arpa | netalertx | netalertx |
+| ntfy.home.arpa | ntfy | ntfy |
+| pdf.home.arpa | pdf | stirling-pdf |
+| pihole-amy.home.arpa | pihole-amy | pihole |
+| rss.home.arpa | rss | miniflux |
+| wallos.home.arpa | wallos | wallos |
 
-```bash
-# this fails on TrueNAS
-/mnt/BIG/filme/docker-compose/scripts/export-pihole-dns.sh
-# error: sudo: process unexpected status 0x57f / killed
-```
+### manual entries
 
-**solution**: place the executable script in `/root/` which persists across TrueNAS upgrades and is not subject to this restriction.
+| DNS name | IP address | purpose |
+|----------|------------|---------|
+| homeassistant.horia.wtf | 192.168.21.220 | home assistant VM |
 
-### cron line length limitation
+---
 
-initial attempt to put the entire script inline in crontab failed:
-
-```
-crontab: command too long
-```
-
-**solution**: use a dedicated script file in `/root/` instead of inline commands.
-
-## implementation
-
-### prerequisites
-
-1. **SSH key authentication** from bender to amy:
-
-```bash
-# on bender as root
-ssh-keygen -t ed25519 -f /root/.ssh/id_ed25519 -N ""
-ssh-copy-id kube@192.168.21.130
-```
-
-note: using the `kube` user (member of docker group) instead of root for security.
-
-2. **pi-hole v6** with `pihole.toml` configuration
-3. **nebula-sync** configured with `FULL_SYNC=true` for replication
-4. **TSDProxy labels** on containers:
-
-```yaml
-services:
-  myservice:
-    labels:
-      tsdproxy.enable: "true"
-      tsdproxy.name: "myservice"
-```
+## script reference
 
 ### script location
 
 | location | purpose |
 |----------|---------|
-| `/root/pihole-dns-update.sh` | executable (cron runs this) |
-| `/mnt/BIG/filme/docker-compose/scripts/pihole-dns-update.sh` | reference copy for documentation |
+| `/root/pihole-dns-update.sh` | executable on bender (cron runs this) |
+| `/mnt/BIG/filme/docker-compose/scripts/pihole-dns-update.sh` | reference copy on bender filesystem |
+| `bender/scripts/pihole-dns-update.sh` | reference copy in git repository |
 
-### the script
+### the script (v3.0)
 
 ```bash
 #!/bin/bash
-# ============================================
-# pihole-dns-update.sh
-# version: 3.0 - pi-hole v6 TOML edition
-# ============================================
-# scans running docker containers on bender and amy,
-# extracts tsdproxy labels, and updates pi-hole's pihole.toml
-# hosts array. only updates if changes are detected.
-# relies on nebula-sync (FULL_SYNC=true) to replicate to amy.
-# ============================================
-# installation:
-#   - place executable copy in: /root/pihole-dns-update.sh
-#   - place reference copy in: /mnt/BIG/filme/docker-compose/scripts/
-#   - TrueNAS cannot execute scripts from /mnt directly!
-# ============================================
-# cron (every 5 minutes):
-#   */5 * * * * /root/pihole-dns-update.sh >> /var/log/pihole-dns-export.log 2>&1
-# ============================================
-# pi-hole v6 uses pihole.toml [dns] hosts = [] array
-# instead of custom.list file.
-# ============================================
-
 LOCAL_IP="192.168.21.121"
 REMOTE_IP="192.168.21.130"
 SUFFIX="home.arpa"
@@ -189,13 +182,18 @@ TOML_FILE="/mnt/BIG/filme/configs/pihole/etc-pihole/pihole.toml"
 STATE_FILE="/mnt/BIG/filme/configs/pihole/etc-pihole/.dns-state"
 
 # get bender entries (local)
-bender_entries=$(docker ps -q | xargs -I{} docker inspect {} --format "{{index .Config.Labels \"tsdproxy.enable\"}}|{{index .Config.Labels \"tsdproxy.name\"}}" 2>/dev/null | grep "^true|" | cut -d"|" -f2 | grep -v "^$" | sort -u)
+bender_entries=$(docker ps -q | xargs -I{} docker inspect {} \
+  --format "{{index .Config.Labels \"tsdproxy.enable\"}}|{{index .Config.Labels \"tsdproxy.name\"}}" \
+  2>/dev/null | grep "^true|" | cut -d"|" -f2 | grep -v "^$" | sort -u)
 
 # get amy entries (remote via SSH)
-amy_entries=$(ssh -o ConnectTimeout=5 -o BatchMode=yes kube@192.168.21.130 "docker ps -q | xargs -I{} docker inspect {} --format \"{{index .Config.Labels \\\"tsdproxy.enable\\\"}}|{{index .Config.Labels \\\"tsdproxy.name\\\"}}\"" 2>/dev/null | grep "^true|" | cut -d"|" -f2 | grep -v "^$" | sort -u)
+amy_entries=$(ssh -o ConnectTimeout=5 -o BatchMode=yes kube@192.168.21.130 \
+  "docker ps -q | xargs -I{} docker inspect {} \
+  --format \"{{index .Config.Labels \\\"tsdproxy.enable\\\"}}|{{index .Config.Labels \\\"tsdproxy.name\\\"}}\"" \
+  2>/dev/null | grep "^true|" | cut -d"|" -f2 | grep -v "^$" | sort -u)
 
 # build hosts array content
-# manual entries go first (add your static entries here)
+# manual entries go first
 hosts_lines='    "192.168.21.220 homeassistant.horia.wtf",'
 
 # add bender entries
@@ -211,15 +209,14 @@ done
 # remove trailing comma from last line
 hosts_lines=$(echo "$hosts_lines" | sed '$ s/,$//')
 
-# calculate hash for change detection
+# change detection
 new_hash=$(echo "$hosts_lines" | md5sum | cut -d" " -f1)
 old_hash=$(cat "$STATE_FILE" 2>/dev/null || echo "")
 
 # only update if changes detected
 if [ "$new_hash" != "$old_hash" ]; then
-  # use awk to replace the hosts array in pihole.toml
   awk -v new_hosts="$hosts_lines" '
-    /^  hosts = \[/ { 
+    /^  hosts = \[/ {
       print "  hosts = ["
       print new_hosts
       while (getline && !/\] ### CHANGED/) {}
@@ -228,8 +225,7 @@ if [ "$new_hash" != "$old_hash" ]; then
     }
     { print }
   ' "$TOML_FILE" > "${TOML_FILE}.new"
-  
-  # verify new file is valid before replacing
+
   if [ -s "${TOML_FILE}.new" ]; then
     cp "$TOML_FILE" "${TOML_FILE}.bak"
     mv "${TOML_FILE}.new" "$TOML_FILE"
@@ -247,93 +243,28 @@ fi
 */5 * * * * /root/pihole-dns-update.sh >> /var/log/pihole-dns-export.log 2>&1
 ```
 
-### how it works
+### pihole.toml format
 
-1. **every 5 minutes**, cron executes `/root/pihole-dns-update.sh`
+the script modifies the `[dns]` section of pihole.toml:
 
-2. **scan bender containers**:
-   ```bash
-   docker ps -q | xargs -I{} docker inspect {} --format "..."
-   ```
-   extracts `tsdproxy.enable` and `tsdproxy.name` labels from running containers
+```toml
+[dns]
+  hosts = [
+    "192.168.21.220 homeassistant.horia.wtf",
+    "192.168.21.121 books.home.arpa",
+    "192.168.21.121 media.home.arpa",
+    "192.168.21.130 ntfy.home.arpa",
+    "192.168.21.130 vault.home.arpa"
+  ] ### CHANGED, default = []
+```
 
-3. **scan amy containers** via SSH:
-   ```bash
-   ssh kube@192.168.21.130 "docker ps -q | xargs -I{} docker inspect {} ..."
-   ```
+the `### CHANGED` marker is used by the awk command to identify the end of the auto-generated block.
 
-4. **build DNS entries** in TOML format:
-   ```toml
-   hosts = [
-     "192.168.21.220 homeassistant.horia.wtf",
-     "192.168.21.121 books.home.arpa",
-     "192.168.21.130 ntfy.home.arpa"
-   ]
-   ```
-
-5. **change detection**: calculate MD5 hash of new entries and compare with stored hash
-   - if unchanged: exit silently (no unnecessary restarts)
-   - if changed: proceed with update
-
-6. **update pihole.toml**: use `awk` to replace the `hosts = [...]` array
-
-7. **restart pi-hole**: `docker restart pihole` to load new entries
-
-8. **nebula-sync** (configured separately, runs hourly) replicates the configuration to amy's pi-hole instance
-
-## DNS entries generated
-
-### bender services (192.168.21.121)
-
-| DNS name | service |
-|----------|---------|
-| books.home.arpa | audiobookshelf |
-| media.home.arpa | jellyfin |
-| photo.home.arpa | immich |
-| pad.home.arpa | hedgedoc |
-| sync.home.arpa | syncthing |
-| transmission.home.arpa | transmission |
-| metube.home.arpa | metube |
-| jdown.home.arpa | jdownloader |
-| spotdl.home.arpa | spotdl |
-| pihole-bender.home.arpa | pi-hole web UI |
-| bender-proxy.home.arpa | TSDProxy |
-| bender-dockwatch.home.arpa | dockwatch |
-
-### amy services (192.168.21.130)
-
-| DNS name | service |
-|----------|---------|
-| ntfy.home.arpa | ntfy notifications |
-| vault.home.arpa | vaultwarden |
-| beszel.home.arpa | beszel monitoring |
-| home.home.arpa | homepage dashboard |
-| files.home.arpa | filebrowser |
-| mealie.home.arpa | mealie recipes |
-| rss.home.arpa | miniflux |
-| atuin.home.arpa | atuin shell history |
-| money.home.arpa | spendspentspent |
-| pdf.home.arpa | stirling-pdf |
-| it-tools.home.arpa | it-tools |
-| lube.home.arpa | lubelogger |
-| argus.home.arpa | argus |
-| netalertx.home.arpa | netalertx |
-| logs.home.arpa | dozzle |
-| cadvisor.home.arpa | cadvisor |
-| limdius.home.arpa | limdius |
-| pihole-amy.home.arpa | pi-hole web UI |
-| amy-proxy.home.arpa | TSDProxy |
-| amy-dockwatch.home.arpa | dockwatch |
-
-### manual entries
-
-| DNS name | IP address | purpose |
-|----------|------------|---------|
-| homeassistant.horia.wtf | 192.168.21.220 | home assistant |
+---
 
 ## adding manual entries
 
-edit `/root/pihole-dns-update.sh` and modify the `hosts_lines` variable:
+to add static DNS entries (devices that aren't docker containers), edit `/root/pihole-dns-update.sh` and modify the `hosts_lines` variable:
 
 ```bash
 # manual entries go first (add your static entries here)
@@ -342,7 +273,63 @@ hosts_lines='    "192.168.21.220 homeassistant.horia.wtf",
     "192.168.21.60 nas.home.arpa",'
 ```
 
-## testing
+after editing, force an update:
+
+```bash
+rm /mnt/BIG/filme/configs/pihole/etc-pihole/.dns-state
+/root/pihole-dns-update.sh
+```
+
+> **important:** also update the reference copy at `/mnt/BIG/filme/docker-compose/scripts/pihole-dns-update.sh` and commit to git.
+
+---
+
+## tailscale split DNS integration
+
+when connected to tailscale (at home or away), `.home.arpa` domains resolve through pihole via tailscale's split DNS feature.
+
+### configuration
+
+in the tailscale admin console (https://login.tailscale.com/admin/dns):
+
+| setting | value |
+|---------|-------|
+| **split DNS domain** | `home.arpa` |
+| **nameserver** | `192.168.21.100` (keepalived VIP) |
+
+### how it works
+
+```
+device with tailscale connected
+  ↓
+DNS query for *.home.arpa
+  ↓
+tailscale split DNS → 192.168.21.100:53
+  ↓
+tailscale subnet router forwards to local network
+  ↓
+pihole answers with local IP
+  ↓
+traffic routes appropriately:
+  - at home: direct to 192.168.21.121 or .130
+  - away: via tailscale subnet router
+```
+
+### why not use pihole's tailscale IP?
+
+pihole is behind tsdproxy, which only proxies HTTP/HTTPS. DNS queries (port 53) to pihole's tailscale IP time out. the keepalived VIP (`192.168.21.100`) is used instead, routed through the tailscale subnet router.
+
+### result
+
+| scenario | DNS resolution | traffic path |
+|----------|---------------|-------------|
+| at home, no tailscale | direct via pihole VIP | local network |
+| at home, with tailscale | split DNS via subnet router → pihole VIP | local network |
+| away, with tailscale | split DNS via subnet router → pihole VIP | tailscale tunnel |
+
+---
+
+## testing and verification
 
 ### verify DNS resolution
 
@@ -359,16 +346,16 @@ dig +short vault.home.arpa @192.168.21.100
 dig +short homeassistant.horia.wtf @192.168.21.100
 ```
 
-### check current pi-hole hosts
+### check current pihole hosts
 
 ```bash
 docker exec pihole grep -A50 "^  hosts = \[" /etc/pihole/pihole.toml
 ```
 
-### view logs
+### view auto-population logs
 
 ```bash
-tail -f /var/log/pihole-dns-export.log
+tail -20 /var/log/pihole-dns-export.log
 ```
 
 ### force update
@@ -379,34 +366,42 @@ rm /mnt/BIG/filme/configs/pihole/etc-pihole/.dns-state
 /root/pihole-dns-update.sh
 ```
 
-## files reference
+### verify entries are NOT in pihole web UI
 
-| file | location | purpose |
-|------|----------|---------|
-| script (executable) | `/root/pihole-dns-update.sh` | cron runs this |
-| script (reference) | `/mnt/BIG/filme/docker-compose/scripts/pihole-dns-update.sh` | documentation |
-| pi-hole config | `/mnt/BIG/filme/configs/pihole/etc-pihole/pihole.toml` | DNS configuration |
-| state file | `/mnt/BIG/filme/configs/pihole/etc-pihole/.dns-state` | change detection hash |
-| backup | `/mnt/BIG/filme/configs/pihole/etc-pihole/pihole.toml.bak` | auto-created before updates |
-| log file | `/var/log/pihole-dns-export.log` | cron output |
+entries in the `pihole.toml` hosts array do **not** appear in the pihole web interface under "Local DNS > DNS Records". this is a pihole v6 limitation. entries are visible only through:
+
+```bash
+docker exec pihole grep -A50 "^  hosts = \[" /etc/pihole/pihole.toml
+```
+
+and by checking DNS resolution directly with `dig`.
+
+---
 
 ## troubleshooting
 
-### DNS not resolving
+### DNS entry not resolving
 
-1. check pi-hole is running:
+1. check pihole is running:
    ```bash
    docker ps | grep pihole
    ```
 
-2. verify hosts array in pihole.toml:
+2. verify the entry exists in pihole.toml:
    ```bash
-   docker exec pihole grep -A10 "hosts = \[" /etc/pihole/pihole.toml
+   docker exec pihole grep "media.home.arpa" /etc/pihole/pihole.toml
    ```
 
-3. restart pi-hole:
+3. if missing, check if the container has the correct labels:
    ```bash
-   docker restart pihole
+   docker inspect jellyfin --format '{{index .Config.Labels "tsdproxy.enable"}}|{{index .Config.Labels "tsdproxy.name"}}'
+   # should show: true|media
+   ```
+
+4. force update and restart:
+   ```bash
+   rm /mnt/BIG/filme/configs/pihole/etc-pihole/.dns-state
+   /root/pihole-dns-update.sh
    ```
 
 ### SSH connection to amy fails
@@ -421,16 +416,18 @@ rm /mnt/BIG/filme/configs/pihole/etc-pihole/.dns-state
    ssh-copy-id kube@192.168.21.130
    ```
 
-3. check kube user is in docker group on amy:
+3. verify kube user is in docker group on amy:
    ```bash
    ssh kube@192.168.21.130 "groups"
+   # should include: docker
    ```
 
 ### script not running
 
-1. check cron is configured:
+1. check cron:
    ```bash
    crontab -l | grep pihole
+   # should show: */5 * * * * /root/pihole-dns-update.sh ...
    ```
 
 2. check script is executable:
@@ -441,25 +438,47 @@ rm /mnt/BIG/filme/configs/pihole/etc-pihole/.dns-state
 3. run manually and check for errors:
    ```bash
    /root/pihole-dns-update.sh
+   echo $?
    ```
+
+### pihole ad-blocking impact
+
+pihole's ad-blocking does **not** affect `.home.arpa` domains. the DNS query processing order is:
+
+```
+1. local DNS records (pihole.toml hosts) ← checked FIRST
+2. blocklists (gravity.db)
+3. upstream DNS (1.1.1.1, 8.8.8.8)
+```
+
+local entries take priority over blocklists, so `.home.arpa` domains are never blocked.
+
+---
+
+## files reference
+
+| file | location | purpose |
+|------|----------|---------|
+| script (executable) | `/root/pihole-dns-update.sh` | cron runs this |
+| script (reference) | `/mnt/BIG/filme/docker-compose/scripts/pihole-dns-update.sh` | reference copy |
+| script (git) | `bender/scripts/pihole-dns-update.sh` | version-controlled reference |
+| pihole config | `/mnt/BIG/filme/configs/pihole/etc-pihole/pihole.toml` | DNS configuration |
+| state file | `/mnt/BIG/filme/configs/pihole/etc-pihole/.dns-state` | change detection hash |
+| backup | `/mnt/BIG/filme/configs/pihole/etc-pihole/pihole.toml.bak` | auto-created before updates |
+| log file | `/var/log/pihole-dns-export.log` | cron output |
+
+---
 
 ## security considerations
 
-1. **SSH key authentication**: uses ed25519 key without passphrase for automated access
-2. **non-root SSH**: connects to amy as `kube` user (docker group member) instead of root
-3. **file permissions**: pihole.toml owned by UID 1000 (pi-hole container user)
-4. **backup before changes**: script creates `.bak` file before modifying pihole.toml
+1. **SSH key authentication**: uses ed25519 key without passphrase for automated access from bender to amy
+2. **non-root SSH**: connects to amy as `kube` user (docker group member) instead of root — limits blast radius if key is compromised
+3. **read-only docker access**: the script only inspects container labels — it does not modify containers on either host
+4. **file permissions**: pihole.toml owned by UID 1000 (pihole container user) — script sets correct ownership after modification
+5. **backup before modify**: the script creates `pihole.toml.bak` before every update
+6. **change detection**: hash comparison prevents unnecessary pihole restarts (no restart = no DNS interruption)
+7. **batch mode SSH**: `BatchMode=yes` prevents SSH from hanging on password prompts if key auth fails
 
-## limitations
+---
 
-1. **5-minute delay**: new containers won't have DNS entries for up to 5 minutes
-2. **requires container restart**: pi-hole must restart to load new entries
-3. **SSH dependency**: amy must be reachable via SSH for its entries to be included
-4. **manual entries require script edit**: static DNS entries must be added to the script
-
-## future improvements
-
-- [ ] add ntfy notification when DNS entries change
-- [ ] implement retry logic if amy is temporarily unreachable
-- [ ] add validation of generated TOML before applying
-- [ ] consider using pi-hole v6 API when local DNS endpoints become available
+*this is a shared document referenced by both [bender](../bender/docs/) and [amy](../amy/docs/) documentation.*

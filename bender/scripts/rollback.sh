@@ -1,17 +1,16 @@
 #!/bin/bash
 # ============================================
-# Rollback Script
-# Version: 1.0
+# Manual Rollback Helper Script
+# Version: 1.1
 # Host: bender (TrueNAS Scale)
 # ============================================
-# Manual rollback helper for container images
-# Supports both standard containers and special
-# PostgreSQL handling with dependent services
+# This script helps manually rollback containers
+# to their previous versions using backup tags
 # ============================================
-# Due to TrueNAS execution restrictions, run with:
-#   cp /mnt/BIG/filme/docker-compose/scripts/rollback.sh /tmp/ && \
-#      bash /tmp/rollback.sh <command> && \
-#      rm /tmp/rollback.sh
+# USAGE: Due to TrueNAS execution restrictions, run with:
+# cp /mnt/BIG/filme/docker-compose/scripts/rollback.sh /tmp/ && bash /tmp/rollback.sh list postgres && rm /tmp/rollback.sh
+# ============================================
+# v1.1: Fixed for TrueNAS compatibility
 # ============================================
 
 set -uo pipefail
@@ -24,24 +23,21 @@ COMPOSE_FILE="${BASE_DIR}/docker-compose.yaml"
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
 NC='\033[0m'
 
 # ============================================
-# LOGGING
+# FUNCTIONS
 # ============================================
 
-log_info() { echo -e "[INFO] $*"; }
-log_warn() { echo -e "${YELLOW}[WARN] $*${NC}"; }
-log_error() { echo -e "${RED}[ERROR] $*${NC}"; }
-log_success() { echo -e "${GREEN}[SUCCESS] $*${NC}"; }
-
-# ============================================
-# UTILITIES
-# ============================================
+log_info() { echo -e "${BLUE}[INFO]${NC} $1"; }
+log_success() { echo -e "${GREEN}[SUCCESS]${NC} $1"; }
+log_warn() { echo -e "${YELLOW}[WARN]${NC} $1"; }
+log_error() { echo -e "${RED}[ERROR]${NC} $1"; }
 
 get_current_image() {
     local container="$1"
-    docker inspect "${container}" --format='{{.Config.Image}}' 2>/dev/null
+    docker inspect "${container}" --format '{{.Config.Image}}' 2>/dev/null || echo ""
 }
 
 list_backups() {
@@ -55,35 +51,39 @@ list_backups() {
     
     local base_image=$(echo "${image}" | cut -d: -f1)
     
-    echo "=========================================="
-    echo "Available backups for ${container}"
+    echo ""
+    echo "Available backups for ${container}:"
     echo "=========================================="
     echo ""
-    echo "Current image: ${image}"
-    echo ""
-    echo "Backup images:"
     
+    # Current image
+    local current_id=$(docker inspect "${container}" --format '{{.Image}}' 2>/dev/null | cut -c8-19)
+    echo -e "  ${GREEN}[CURRENT]${NC} ${image}"
+    echo "            ID: ${current_id}"
+    echo ""
+    
+    # Backup images
     for i in 1 2 3; do
         local backup_tag="${base_image}:backup-${i}"
         if docker image inspect "${backup_tag}" > /dev/null 2>&1; then
-            local created=$(docker inspect "${backup_tag}" --format='{{.Created}}' 2>/dev/null | cut -d'T' -f1)
-            echo "  backup-${i}: ${backup_tag} (created: ${created})"
+            local backup_id=$(docker image inspect "${backup_tag}" --format '{{.Id}}' | cut -c8-19)
+            local created=$(docker image inspect "${backup_tag}" --format '{{.Created}}' | cut -d'T' -f1)
+            echo -e "  ${YELLOW}[backup-${i}]${NC} ${backup_tag}"
+            echo "            ID: ${backup_id} | Created: ${created}"
         else
-            echo "  backup-${i}: (not available)"
+            echo -e "  ${RED}[backup-${i}]${NC} Not available"
         fi
     done
+    
     echo ""
 }
-
-# ============================================
-# ROLLBACK FUNCTIONS
-# ============================================
 
 rollback_container() {
     local container="$1"
     local backup_number="${2:-1}"
     
     local image=$(get_current_image "${container}")
+    
     if [[ -z "${image}" ]]; then
         log_error "Container '${container}' not found"
         return 1
@@ -92,6 +92,7 @@ rollback_container() {
     local base_image=$(echo "${image}" | cut -d: -f1)
     local backup_tag="${base_image}:backup-${backup_number}"
     
+    # Check if backup exists
     if ! docker image inspect "${backup_tag}" > /dev/null 2>&1; then
         log_error "Backup '${backup_tag}' not found"
         return 1
@@ -220,14 +221,8 @@ rollback_postgres() {
     log_success "PostgreSQL rollback complete!"
 }
 
-# ============================================
-# CLI
-# ============================================
-
 show_usage() {
     cat << EOF
-Rollback Script v1.0
-
 Usage: $0 <command> [options]
 
 Commands:
@@ -242,22 +237,14 @@ Examples:
     $0 rollback sonarr 2          # Rollback sonarr to backup-2
     $0 postgres                   # Rollback postgres and restart dependents
 
-Backup Versions:
-    - backup-1: Most recent previous version
-    - backup-2: Older version
-    - backup-3: Oldest available backup
-
-PostgreSQL Rollback:
-    PostgreSQL rollback automatically handles dependent services:
-    - immich_server
-    - immich_machine_learning
-    - hedgedoc
-    - postgres-backup
+Notes:
+    - Backup-1 is the most recent previous version
+    - Backup-2 is older
+    - Backup-3 is the oldest available backup
+    - PostgreSQL rollback handles dependent services automatically
 
 Due to TrueNAS execution restrictions, run with:
-    cp /mnt/BIG/filme/docker-compose/scripts/rollback.sh /tmp/ && \\
-       bash /tmp/rollback.sh <command> && \\
-       rm /tmp/rollback.sh
+    cp /mnt/BIG/filme/docker-compose/scripts/rollback.sh /tmp/ && bash /tmp/rollback.sh <command> && rm /tmp/rollback.sh
 EOF
 }
 

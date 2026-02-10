@@ -1,303 +1,238 @@
 # amy directory structure
 
-## file system layout and storage configuration
+## complete file system layout
 
-**document version:** 1.0  
-**infrastructure version:** 85  
-**last updated:** january 10, 2026
+**document version:** 2.0
+**infrastructure version:** 98
+**last updated:** february 2026
 
 ---
 
 ## table of contents
 
 1. [overview](#overview)
-2. [docker compose directory](#docker-compose-directory)
-3. [container data directory](#container-data-directory)
-4. [backup directory](#backup-directory)
-5. [permissions](#permissions)
-6. [comparison with bender](#comparison-with-bender)
+2. [docker-compose directory](#docker-compose-directory)
+3. [container data — /docker/](#container-data--docker)
+4. [legacy paths — /portainer/](#legacy-paths--portainer)
+5. [volume mount reference](#volume-mount-reference)
+6. [network mode reference](#network-mode-reference)
+7. [path conventions](#path-conventions)
 
 ---
 
 ## overview
 
-amy uses a simpler directory structure than bender, with all container data stored locally on the ssd.
+amy uses two primary data locations for container storage:
 
-### key paths
+| path | purpose | notes |
+|------|---------|-------|
+| `/docker-compose/` | compose files, .env, scripts | working directory for `docker compose` commands |
+| `/docker/` | container persistent data | main data path for most services |
+| `/portainer/` | legacy data paths | postgres and telegraf data (historical, do not move) |
 
-| path | purpose |
-|------|---------|
-| `/docker-compose/` | docker compose configuration, scripts |
-| `/docker/` | container persistent data |
-| `/docker/backups/` | postgresql backups |
-
-### storage architecture
-
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                        amy storage                               │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                  │
-│  ┌─────────────────────────────────────────────────────────┐    │
-│  │                    local ssd (256gb)                     │    │
-│  │  ┌─────────────────┐  ┌─────────────────────────────┐   │    │
-│  │  │ /docker-compose │  │         /docker             │   │    │
-│  │  │                 │  │                             │   │    │
-│  │  │ • docker-compose│  │ • postgresql data           │   │    │
-│  │  │ • .env          │  │ • service configs           │   │    │
-│  │  │ • scripts/      │  │ • persistent volumes        │   │    │
-│  │  │ • configs/      │  │ • backups/                  │   │    │
-│  │  └─────────────────┘  └─────────────────────────────┘   │    │
-│  └─────────────────────────────────────────────────────────┘    │
-│                                                                  │
-└─────────────────────────────────────────────────────────────────┘
-```
+the split between `/docker/` and `/portainer/` is historical — postgres and telegraf data existed under `/portainer/` before the main compose file was consolidated. moving these would require database migration and downtime, so the paths are preserved as-is.
 
 ---
 
-## docker compose directory
-
-### structure
+## docker-compose directory
 
 ```
 /docker-compose/
-├── docker-compose.yaml          # main compose file (v85)
-├── .env                         # environment variables (secrets)
-├── scripts/
-│   ├── secure-container-update.sh
-│   ├── health-checks.sh
-│   └── rollback.sh
-├── configs/
-│   └── secure-update/
-│       ├── critical-containers.json
-│       ├── retry-queue.json
-│       ├── logs/
-│       │   └── *.log
-│       └── scan-reports/
-│           └── *.json
-└── reports/
-    └── weekly-reports/
-        └── *.md
+├── docker-compose.yaml          # v98 — main compose file (31 services)
+├── .env                         # environment variables (16 variables)
+└── scripts/
+    ├── secure-container-update.sh   # automated update orchestration
+    ├── health-checks.sh             # post-update health verification
+    └── rollback.sh                  # rollback helper
 ```
-
-### file descriptions
-
-| file | purpose |
-|------|---------|
-| `docker-compose.yaml` | main service definitions (v85, ~800 lines) |
-| `.env` | environment variables and secrets |
-| `scripts/secure-container-update.sh` | weekly update orchestration |
-| `scripts/health-checks.sh` | service health verification |
-| `scripts/rollback.sh` | manual rollback helper |
-| `configs/secure-update/critical-containers.json` | list of critical services |
-| `configs/secure-update/retry-queue.json` | failed updates awaiting retry |
 
 ---
 
-## container data directory
+## container data — /docker/
 
-### structure
+this is the primary data directory for amy's containers. each service gets its own subdirectory.
 
 ```
 /docker/
-├── postgresql/
-│   └── data/                    # postgres data directory
-├── ntfy/
-│   ├── cache/                   # attachment cache
-│   └── etc/                     # configuration
-├── pihole/
-│   ├── etc-pihole/              # pihole config
-│   └── etc-dnsmasq.d/           # dnsmasq config
-├── keepalived/
-│   └── keepalived.conf          # vrrp configuration
-├── vaultwarden/
-│   └── data/                    # vault data
 ├── beszel/
-│   └── data/                    # monitoring data
-├── tsdproxy/
-│   ├── data/                    # tailscale state
-│   └── config/                  # tsdproxy config
-├── dockwatch/
-├── valkey/
-│   └── data/                    # cache data
-├── stirling-pdf/
-│   ├── training/
-│   └── configs/
-├── homepage/
-│   └── config/                  # dashboard config
-├── atuin/
-│   └── config/
-├── filebrowser/
-│   └── database.db
-├── mealie/
-│   └── data/
-├── argus/
-├── lubelogger/
-│   ├── config/
-│   ├── data/
-│   ├── documents/
-│   ├── images/
-│   ├── temp/
-│   ├── log/
-│   └── keys/
-├── spendspentspent/
-│   ├── app-files/
-│   └── files/
-├── limdius/
-├── netalertx/
-│   ├── config/
-│   ├── db/
-│   └── logs/
+│   └── data/                    # beszel hub database and state
 ├── diun/
-│   ├── data/                    # diun database
-│   └── config/                  # diun config
+│   └── data/                    # image update tracking database
+├── dockwatch/                   # dockwatch configuration
+├── dozzle/                      # (no persistent data — reads docker.sock only)
+├── filebrowser/
+│   ├── database/                # filebrowser sqlite database
+│   └── config/                  # filebrowser settings
+├── homepage/
+│   ├── config/                  # homepage dashboard configuration (services.yaml, etc.)
+│   └── images/                  # custom dashboard images
+├── keepalived/                  # keepalived vrrp configuration
+├── lubelogger/
+│   ├── config/                  # application configuration
+│   ├── data/                    # vehicle and maintenance records
+│   ├── temp/                    # temporary upload files
+│   ├── log/                     # application logs
+│   ├── keys/                    # ASP.NET data protection keys
+│   └── documents/               # uploaded documents
+├── limdius/                     # limdius application code and data
+├── mealie/                      # mealie recipe data (/app/data)
+├── netalertx/
+│   └── data/                    # network device scan database
+├── ntfy/
+│   ├── cache/                   # notification message cache
+│   └── etc/                     # ntfy server configuration
+├── pihole/
+│   ├── etc-pihole/              # pihole configuration and database
+│   └── etc-dnsmasq.d/          # dnsmasq overrides
+├── postgres-backup/             # daily postgresql backup files
+├── spendspentspent/
+│   ├── app-files/               # application runtime files
+│   ├── files/                   # uploaded receipt files
+│   └── config/                  # application configuration
+├── stirling/
+│   ├── trainingData/            # tessdata OCR language files
+│   ├── configs/                 # stirling-pdf settings
+│   └── logs/                    # application logs
 ├── trivy/
-│   └── cache/                   # vulnerability db cache
-└── backups/
-    └── postgres/
-        ├── daily/               # daily backups
-        ├── weekly/              # weekly backups
-        └── monthly/             # monthly backups
-```
-
-### service data locations
-
-| service | data path | size estimate |
-|---------|-----------|---------------|
-| postgresql | `/docker/postgresql/data/` | 500mb - 2gb |
-| vaultwarden | `/docker/vaultwarden/` | 50-200mb |
-| pihole | `/docker/pihole/` | 100-500mb |
-| beszel | `/docker/beszel/data/` | 100-500mb |
-| mealie | `/docker/mealie/` | 100mb-1gb |
-| backups | `/docker/backups/postgres/` | 1-5gb |
-
----
-
-## backup directory
-
-### postgresql backup structure
-
-```
-/docker/backups/
-└── postgres/
-    ├── daily/
-    │   ├── atuin-20260110.sql.gz
-    │   ├── miniflux-20260110.sql.gz
-    │   └── sss-20260110.sql.gz
-    ├── weekly/
-    │   ├── atuin-20260106.sql.gz
-    │   ├── miniflux-20260106.sql.gz
-    │   └── sss-20260106.sql.gz
-    └── monthly/
-        ├── atuin-20260101.sql.gz
-        ├── miniflux-20260101.sql.gz
-        └── sss-20260101.sql.gz
-```
-
-### backup retention
-
-| type | retention | count |
-|------|-----------|-------|
-| daily | 7 days | ~21 files |
-| weekly | 4 weeks | ~12 files |
-| monthly | 6 months | ~18 files |
-
-### manual backup location
-
-```
-/docker/backups/postgres/manual/
-```
-
-for ad-hoc backups before major changes.
-
----
-
-## permissions
-
-### ownership
-
-| path | owner | group | permissions |
-|------|-------|-------|-------------|
-| `/docker-compose/` | root | root | 755 |
-| `/docker-compose/.env` | root | root | 600 |
-| `/docker-compose/scripts/` | root | root | 755 |
-| `/docker/` | 1000 | 1000 | 755 |
-| `/docker/postgresql/` | 1000 | 1000 | 700 |
-
-### setting permissions
-
-```bash
-# docker-compose directory
-chown -R root:root /docker-compose/
-chmod 755 /docker-compose/
-chmod 600 /docker-compose/.env
-chmod 755 /docker-compose/scripts/*.sh
-
-# container data directory
-chown -R 1000:1000 /docker/
-chmod 755 /docker/
-chmod 700 /docker/postgresql/data/
+│   └── cache/                   # vulnerability database cache
+├── tsdproxy/
+│   ├── data/                    # tailscale state and certificates
+│   └── config/                  # tsdproxy configuration
+├── valkey/                      # valkey (redis-compatible) append-only data
+└── wallos/
+    └── db/                      # wallos sqlite subscription database
 ```
 
 ---
 
-## comparison with bender
+## legacy paths — /portainer/
 
-### key differences
+these paths predate the consolidated docker-compose setup. they contain production data and must not be relocated without a planned migration.
 
-| aspect | amy | bender |
-|--------|-----|--------|
-| **base path** | `/docker-compose/` | `/mnt/BIG/filme/docker-compose/` |
-| **data path** | `/docker/` | `/mnt/BIG/filme/` |
-| **storage type** | local ssd | zfs pool |
-| **script execution** | direct | requires /tmp copy |
-| **nfs mounts** | none | exports to amy |
-| **backup storage** | local | local + nfs |
-
-### path mapping
-
-| purpose | amy | bender |
-|---------|-----|--------|
-| compose file | `/docker-compose/docker-compose.yaml` | `/mnt/BIG/filme/docker-compose/docker-compose.yaml` |
-| environment | `/docker-compose/.env` | `/mnt/BIG/filme/docker-compose/.env` |
-| scripts | `/docker-compose/scripts/` | `/mnt/BIG/filme/docker-compose/scripts/` |
-| postgres data | `/docker/postgresql/` | `/mnt/BIG/filme/immich/postgresql/` |
-| backups | `/docker/backups/postgres/` | `/mnt/BIG/filme/backups/postgres/` |
-
-### TrueNAS vs ubuntu
-
-1. **TrueNAS vs ubuntu**: bender runs on TrueNAS with zfs pools, requiring paths under `/mnt/`. amy runs standard ubuntu with simpler paths.
-
-2. **script execution**: TrueNAS restricts script execution on mounted filesystems, requiring copy-to-tmp workarounds. amy can execute scripts directly.
-
-3. **storage scale**: bender handles large media files (tbs), while amy's data is primarily small configuration and database files.
-
----
-
-## directory creation
-
-### initial setup commands
-
-```bash
-# create base directories
-mkdir -p /docker-compose/{scripts,configs/secure-update/{logs,scan-reports},reports/weekly-reports}
-mkdir -p /docker/{postgresql/{data,init},ntfy/{cache,etc},pihole/{etc-pihole,etc-dnsmasq.d}}
-mkdir -p /docker/{keepalived,vaultwarden,beszel/data,tsdproxy/{data,config},dockwatch}
-mkdir -p /docker/{valkey,stirling-pdf/{training,configs},homepage,atuin,filebrowser}
-mkdir -p /docker/{mealie,argus,lubelogger/{config,data,documents,images,temp,log,keys}}
-mkdir -p /docker/{spendspentspent/{app-files,files},limdius,netalertx/{config,db,logs}}
-mkdir -p /docker/{diun/{data,config},trivy/cache,backups/postgres/{daily,weekly,monthly,manual}}
-
-# set ownership
-chown -R 1000:1000 /docker/
-chown -R root:root /docker-compose/
-
-# initialize configuration files
-echo '["postgres", "ntfy", "beszel", "pihole", "keepalived", "vaultwarden", "spendspentspent", "diun"]' > /docker-compose/configs/secure-update/critical-containers.json
-echo '{"containers": []}' > /docker-compose/configs/secure-update/retry-queue.json
+```
+/portainer/
+├── postgresql/
+│   └── data/                    # postgresql 17 data directory
+│                                # databases: atuin, miniflux, sss, mealie, stirling
+│                                # ⚠️ DO NOT MOVE — actively used by postgres container
+└── telegraf/
+    └── config/
+        └── telegraf.conf        # telegraf SNMP configuration (read-only mount)
+                                 # monitors: cisco 3750x switch, brother mfc-l3710cw printer
+                                 # ⚠️ DO NOT MOVE — referenced by telegraf container
 ```
 
+### why these paths exist
+
+when amy was initially set up, services were managed through portainer stacks. the postgres database and telegraf configuration were created under `/portainer/`. when the infrastructure was consolidated into a single docker-compose file (v94+), these paths were preserved to avoid data loss and downtime.
+
 ---
 
-*previous: [02-SERVICES-CATALOG.md](./02-SERVICES-CATALOG.md)*  
+## volume mount reference
+
+### services with bridge network (utility-network)
+
+| service | container path | host path | mode |
+|---------|---------------|-----------|------|
+| tsdproxy | /data | /docker/tsdproxy/data | rw |
+| tsdproxy | /config | /docker/tsdproxy/config | rw |
+| dockwatch | /config | /docker/dockwatch | rw |
+| dozzle | /var/run/docker.sock | /var/run/docker.sock | ro |
+| pihole | /etc/pihole | /docker/pihole/etc-pihole | rw |
+| pihole | /etc/dnsmasq.d | /docker/pihole/etc-dnsmasq.d | rw |
+| postgres | /var/lib/postgresql/data | /portainer/postgresql/data | rw |
+| postgres-backup | /backups | /docker/postgres-backup | rw |
+| valkey | /data | /docker/valkey | rw |
+| ntfy | /var/cache/ntfy | /docker/ntfy/cache | rw |
+| ntfy | /etc/ntfy | /docker/ntfy/etc | rw |
+| stirling | /usr/share/tessdata | /docker/stirling/trainingData | rw |
+| stirling | /configs | /docker/stirling/configs | rw |
+| stirling | /logs | /docker/stirling/logs | rw |
+| homepage | /app/config | /docker/homepage/config | rw |
+| homepage | /app/public/images | /docker/homepage/images | rw |
+| homepage | /var/run/docker.sock | /var/run/docker.sock | ro |
+| filebrowser | /database | /docker/filebrowser/database | rw |
+| filebrowser | /config | /docker/filebrowser/config | rw |
+| filebrowser | /srv/docker | /docker | rw |
+| filebrowser | /srv/portainer | /portainer | rw |
+| wallos | /var/www/html/db | /docker/wallos/db | rw |
+| mealie | /app/data | /docker/mealie | rw |
+| argus | /app/data | /docker/argus | rw |
+| lubelogger | /App/config | /docker/lubelogger/config | rw |
+| lubelogger | /App/data | /docker/lubelogger/data | rw |
+| lubelogger | /App/wwwroot/temp | /docker/lubelogger/temp | rw |
+| lubelogger | /App/log | /docker/lubelogger/log | rw |
+| lubelogger | /root/.aspnet/DataProtection-Keys | /docker/lubelogger/keys | rw |
+| lubelogger | /App/wwwroot/documents | /docker/lubelogger/documents | rw |
+| spendspentspent | /app-files | /docker/spendspentspent/app-files | rw |
+| spendspentspent | /files | /docker/spendspentspent/files | rw |
+| spendspentspent | /config | /docker/spendspentspent/config | rw |
+| spendspentspent | /etc/localtime | /etc/localtime | ro |
+| limdius | /app | /docker/limdius | rw |
+| beszel | /beszel_data | /docker/beszel/data | rw |
+| cadvisor | /rootfs | / | ro |
+| cadvisor | /var/run | /var/run | ro |
+| cadvisor | /sys | /sys | ro |
+| cadvisor | /var/lib/docker | /var/lib/docker | ro |
+| diun | /data | /docker/diun/data | rw |
+| diun | /var/run/docker.sock | /var/run/docker.sock | ro |
+| trivy | /tmp/trivy | /docker/trivy/cache | rw |
+| trivy | /var/run/docker.sock | /var/run/docker.sock | ro |
+
+### services with host network
+
+| service | container path | host path | mode |
+|---------|---------------|-----------|------|
+| keepalived | /container/service/keepalived/assets | /docker/keepalived | rw |
+| beszel-agent | /var/run/docker.sock | /var/run/docker.sock | ro |
+| netalertx | /data | /docker/netalertx/data | rw |
+| telegraf | /etc/telegraf/telegraf.conf | /portainer/telegraf/config/telegraf.conf | ro |
+
+---
+
+## network mode reference
+
+most services use the `utility-network` bridge. some require host networking for their function:
+
+| service | network mode | reason |
+|---------|-------------|--------|
+| keepalived | host | needs direct access to network interfaces for vrrp |
+| beszel-agent | host | needs access to host metrics (cpu, memory, disk) |
+| netalertx | host | needs arp scanning capability on the local network |
+| telegraf | host | needs direct network access for SNMP polling |
+| all others | utility-network (bridge) | standard container isolation with dns anchor |
+
+the dns anchor (`x-dns: &default-dns`) points all bridge-networked services to `192.168.21.100` (keepalived vip), ensuring DNS resolution works through the pihole ha pair. host-networked services use the host's own DNS configuration.
+
+---
+
+## path conventions
+
+### naming rules
+
+- all container data lives under `/docker/<service-name>/`
+- subdirectories match the container's internal mount purpose (e.g., `/config`, `/data`)
+- legacy paths under `/portainer/` are frozen — no new services should use this location
+
+### backup considerations
+
+| path | backup method | frequency |
+|------|--------------|-----------|
+| `/docker-compose/` | git repository (futurama-docker) | on change |
+| `/docker/postgres-backup/` | automated by postgres-backup container | daily |
+| `/portainer/postgresql/data/` | backed up via postgres-backup container | daily |
+| `/docker/` (all other) | manual or scheduled backup | as needed |
+| `/portainer/telegraf/config/` | git repository (futurama-docker) | on change |
+
+### disk usage notes
+
+the largest consumers of disk space on amy are typically:
+- `/portainer/postgresql/data/` — database files (atuin history can grow significantly)
+- `/docker/trivy/cache/` — vulnerability database cache (can be safely cleared)
+- `/docker/postgres-backup/` — retained backups (7 daily, 4 weekly, 6 monthly)
+- `/docker/stirling/trainingData/` — OCR language files
+
+---
+
+*previous: [02-SERVICES-CATALOG.md](./02-SERVICES-CATALOG.md)*
 *next: [04-SECURE-UPDATES.md](./04-SECURE-UPDATES.md)*

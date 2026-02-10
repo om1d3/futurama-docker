@@ -14,10 +14,16 @@
 # ============================================
 # Schedule: Saturday 04:30 AM (weekly), Daily 04:30 AM (retry)
 # ============================================
-# Due to TrueNAS execution restrictions, run with:
-#   cp /mnt/BIG/filme/docker-compose/scripts/secure-container-update.sh /tmp/ && \
-#      bash /tmp/secure-container-update.sh <command> && \
-#      rm /tmp/secure-container-update.sh
+# USAGE: Due to TrueNAS execution restrictions, run with:
+# cp /mnt/BIG/filme/docker-compose/scripts/secure-container-update.sh /tmp/ && bash /tmp/secure-container-update.sh weekly && rm /tmp/secure-container-update.sh
+# ============================================
+# v1.1: Fixed Immich API endpoint, removed bc dependency
+# v1.2: Added throttling and system health checks to prevent ZFS I/O saturation
+#       - Added THROTTLE_DELAY (60s between container updates)
+#       - Added MAX_LOAD check (skip if load > 4.0)
+#       - Added MAX_IOWAIT check (skip if iowait > 50%)
+#       - Added check_system_health() function
+#       - Added wait_for_system_recovery() function
 # ============================================
 
 set -uo pipefail
@@ -26,7 +32,7 @@ set -uo pipefail
 # CONFIGURATION
 # ============================================
 
-# Paths
+# Paths (all under /mnt/BIG/filme/docker-compose/)
 BASE_DIR="/mnt/BIG/filme/docker-compose"
 COMPOSE_FILE="${BASE_DIR}/docker-compose.yaml"
 ENV_FILE="${BASE_DIR}/.env"
@@ -35,7 +41,6 @@ SCRIPTS_DIR="${BASE_DIR}/scripts"
 REPORTS_DIR="${BASE_DIR}/reports/weekly-reports"
 LOG_DIR="${CONFIG_DIR}/logs"
 SCAN_REPORTS_DIR="${CONFIG_DIR}/scan-reports"
-BACKUP_DIR="${BASE_DIR}/backups/postgres/pre-upgrade"
 
 # Files
 RETRY_QUEUE="${CONFIG_DIR}/retry-queue.json"
@@ -54,10 +59,19 @@ REPORT_RETENTION_DAYS=180
 # Trivy server
 TRIVY_SERVER="http://localhost:8082"
 
-# Load environment
+# ============================================
+# THROTTLING CONFIGURATION (v1.2)
+# Prevents ZFS I/O saturation on HP MicroServer Gen8
+# ============================================
+THROTTLE_DELAY=60          # Seconds to wait between container updates
+MAX_LOAD=4.0               # Skip updates if 1-minute load average exceeds this
+MAX_IOWAIT=50              # Skip updates if I/O wait percentage exceeds this
+RECOVERY_WAIT=120          # Seconds to wait for system recovery before retrying
+MAX_RECOVERY_ATTEMPTS=5    # Maximum attempts to wait for system recovery
+
+# Notification (loaded from .env)
 source "${ENV_FILE}" 2>/dev/null || true
-NTFY_ENDPOINT="http://${NTFY_ADDRESS:-192.168.21.130:8888}"
-NTFY_TOPIC="${DIUN_NTFY_TOPIC:-container-updates-bender}"
+NTFY_URL="${WATCHTOWER_NOTIFICATION_URL:-}"
 
 # Timestamps
 DATE=$(date +%Y-%m-%d)
@@ -68,7 +82,8 @@ LOG_FILE="${LOG_DIR}/${DATE}.log"
 # INITIALIZATION
 # ============================================
 
-mkdir -p "${CONFIG_DIR}" "${LOG_DIR}" "${SCAN_REPORTS_DIR}" "${REPORTS_DIR}" "${BACKUP_DIR}"
+mkdir -p "${CONFIG_DIR}" "${LOG_DIR}" "${SCAN_REPORTS_DIR}" "${REPORTS_DIR}"
+mkdir -p "${BASE_DIR}/backups/postgres/pre-upgrade"
 
 # Initialize retry queue if not exists
 if [[ ! -f "${RETRY_QUEUE}" ]]; then
@@ -77,28 +92,47 @@ fi
 
 # Initialize critical containers list if not exists
 if [[ ! -f "${CRITICAL_CONTAINERS}" ]]; then
-    echo '["postgres"]' > "${CRITICAL_CONTAINERS}"
+    cat > "${CRITICAL_CONTAINERS}" << 'EOF'
+{
+  "critical": [
+    {
+      "name": "postgres",
+      "pre_upgrade": ["backup_postgres"],
+      "health_checks": ["pg_isready", "pg_connect", "pg_databases"],
+      "functional_tests": ["immich_db_access", "hedgedoc_db_access"],
+      "integration_tests": ["immich_api_ping", "hedgedoc_http"],
+      "dependent_services": ["immich_server", "immich_machine_learning", "hedgedoc", "postgres-backup"]
+    }
+  ],
+  "non_critical": [
+    "pihole",
+    "keepalived",
+    "tsdproxy",
+    "immich_server",
+    "immich_redis"
+  ]
+}
+EOF
 fi
 
 # ============================================
-# LOGGING
+# LOGGING FUNCTIONS
 # ============================================
 
 log() {
     local level="$1"
-    shift
-    local message="$*"
+    local message="$2"
     local timestamp=$(date '+%Y-%m-%d %H:%M:%S')
     echo "[${timestamp}] [${level}] ${message}" | tee -a "${LOG_FILE}"
 }
 
-log_info() { log "INFO" "$@"; }
-log_warn() { log "WARN" "$@"; }
-log_error() { log "ERROR" "$@"; }
-log_success() { log "SUCCESS" "$@"; }
+log_info() { log "INFO" "$1"; }
+log_warn() { log "WARN" "$1"; }
+log_error() { log "ERROR" "$1"; }
+log_success() { log "SUCCESS" "$1"; }
 
 # ============================================
-# NOTIFICATIONS
+# NOTIFICATION FUNCTIONS
 # ============================================
 
 send_notification() {
@@ -107,497 +141,927 @@ send_notification() {
     local priority="${3:-default}"
     local tags="${4:-package}"
     
-    curl -s -X POST "${NTFY_ENDPOINT}/${NTFY_TOPIC}" \
-        -H "Title: ${title}" \
-        -H "Priority: ${priority}" \
-        -H "Tags: ${tags}" \
-        -d "${message}" > /dev/null 2>&1 || true
+    if [[ -n "${NTFY_URL}" ]]; then
+        curl -s -o /dev/null \
+            -H "Title: ${title}" \
+            -H "Priority: ${priority}" \
+            -H "Tags: ${tags}" \
+            -d "${message}" \
+            "${NTFY_URL}" 2>/dev/null || true
+    fi
 }
 
 # ============================================
-# RETRY QUEUE MANAGEMENT
+# SYSTEM HEALTH FUNCTIONS (v1.2)
 # ============================================
 
-add_to_retry_queue() {
-    local container="$1"
-    local reason="$2"
-    local timestamp=$(date -Iseconds)
+get_load_average() {
+    # Get 1-minute load average
+    awk '{print $1}' /proc/loadavg
+}
+
+get_iowait() {
+    # Get current I/O wait percentage from iostat
+    # Returns integer percentage
+    local iowait=$(iostat -c 1 2 2>/dev/null | tail -1 | awk '{print $4}' | cut -d. -f1)
+    echo "${iowait:-0}"
+}
+
+check_system_health() {
+    # Returns 0 if system is healthy enough to proceed
+    # Returns 1 if system is overloaded
     
-    # Read current queue
-    local queue=$(cat "${RETRY_QUEUE}")
+    local current_load=$(get_load_average)
+    local current_iowait=$(get_iowait)
     
-    # Check if already in queue
-    if echo "${queue}" | grep -q "\"name\": \"${container}\""; then
-        log_info "Container ${container} already in retry queue"
-        return
+    log_info "System health check: load=${current_load}, iowait=${current_iowait}%"
+    
+    # Check load average (using awk for float comparison)
+    local load_ok=$(awk -v current="${current_load}" -v max="${MAX_LOAD}" 'BEGIN {print (current < max) ? 1 : 0}')
+    
+    if [[ "${load_ok}" -eq 0 ]]; then
+        log_warn "System load (${current_load}) exceeds threshold (${MAX_LOAD})"
+        return 1
     fi
     
-    # Add to queue
-    local new_entry="{\"name\": \"${container}\", \"reason\": \"${reason}\", \"added\": \"${timestamp}\", \"attempts\": 0}"
-    echo "${queue}" | jq ".containers += [${new_entry}]" > "${RETRY_QUEUE}"
-    log_info "Added ${container} to retry queue: ${reason}"
+    # Check I/O wait
+    if [[ "${current_iowait}" -gt "${MAX_IOWAIT}" ]]; then
+        log_warn "I/O wait (${current_iowait}%) exceeds threshold (${MAX_IOWAIT}%)"
+        return 1
+    fi
+    
+    log_info "System health OK"
+    return 0
 }
 
-remove_from_retry_queue() {
-    local container="$1"
-    local queue=$(cat "${RETRY_QUEUE}")
-    echo "${queue}" | jq "del(.containers[] | select(.name == \"${container}\"))" > "${RETRY_QUEUE}"
-    log_info "Removed ${container} from retry queue"
-}
-
-increment_retry_attempts() {
-    local container="$1"
-    local queue=$(cat "${RETRY_QUEUE}")
-    echo "${queue}" | jq "(.containers[] | select(.name == \"${container}\") | .attempts) += 1" > "${RETRY_QUEUE}"
-}
-
-get_retry_containers() {
-    cat "${RETRY_QUEUE}" | jq -r '.containers[].name'
+wait_for_system_recovery() {
+    # Wait for system to recover before proceeding
+    # Returns 0 if system recovers, 1 if max attempts reached
+    
+    local attempts=0
+    
+    while [[ ${attempts} -lt ${MAX_RECOVERY_ATTEMPTS} ]]; do
+        if check_system_health; then
+            log_info "System recovered after ${attempts} wait cycles"
+            return 0
+        fi
+        
+        attempts=$((attempts + 1))
+        log_warn "System overloaded, waiting ${RECOVERY_WAIT}s for recovery (attempt ${attempts}/${MAX_RECOVERY_ATTEMPTS})"
+        sleep "${RECOVERY_WAIT}"
+    done
+    
+    log_error "System did not recover after ${MAX_RECOVERY_ATTEMPTS} attempts"
+    return 1
 }
 
 # ============================================
-# IMAGE MANAGEMENT
+# CONTAINER MANAGEMENT FUNCTIONS
 # ============================================
+
+get_running_containers() {
+    docker ps --format '{{.Names}}' | sort
+}
 
 get_current_image() {
     local container="$1"
-    docker inspect "${container}" --format='{{.Config.Image}}' 2>/dev/null
+    docker inspect "${container}" --format '{{.Config.Image}}' 2>/dev/null || echo ""
 }
 
-get_image_id() {
+get_current_image_id() {
+    local container="$1"
+    docker inspect "${container}" --format '{{.Image}}' 2>/dev/null || echo ""
+}
+
+pull_new_image() {
     local image="$1"
-    docker inspect "${image}" --format='{{.Id}}' 2>/dev/null
+    log_info "Pulling image: ${image}"
+    docker pull "${image}" 2>&1 | tee -a "${LOG_FILE}"
+    return ${PIPESTATUS[0]}
 }
 
-rotate_backup_images() {
+get_latest_image_id() {
+    local image="$1"
+    docker inspect "${image}" --format '{{.Id}}' 2>/dev/null || echo ""
+}
+
+is_update_available() {
+    local container="$1"
+    local current_id=$(get_current_image_id "${container}")
+    local image=$(get_current_image "${container}")
+    
+    if [[ -z "${image}" ]]; then
+        return 1
+    fi
+    
+    pull_new_image "${image}" > /dev/null 2>&1
+    local latest_id=$(get_latest_image_id "${image}")
+    
+    if [[ "${current_id}" != "${latest_id}" ]]; then
+        return 0
+    fi
+    return 1
+}
+
+# ============================================
+# IMAGE BACKUP FUNCTIONS
+# ============================================
+
+backup_image() {
     local container="$1"
     local image=$(get_current_image "${container}")
     local base_image=$(echo "${image}" | cut -d: -f1)
     
-    log_info "Rotating backup images for ${container}"
+    log_info "Creating backup tags for ${container}"
     
-    # Delete oldest backup
-    docker rmi "${base_image}:backup-${IMAGE_BACKUP_COUNT}" 2>/dev/null || true
-    
-    # Shift backups
-    for ((i=IMAGE_BACKUP_COUNT-1; i>=1; i--)); do
-        local next=$((i+1))
-        if docker image inspect "${base_image}:backup-${i}" > /dev/null 2>&1; then
-            docker tag "${base_image}:backup-${i}" "${base_image}:backup-${next}" 2>/dev/null || true
-            docker rmi "${base_image}:backup-${i}" 2>/dev/null || true
+    # Rotate backups: backup-3 -> delete, backup-2 -> backup-3, backup-1 -> backup-2, current -> backup-1
+    for i in $(seq $((IMAGE_BACKUP_COUNT)) -1 1); do
+        local old_tag="${base_image}:backup-${i}"
+        
+        if docker image inspect "${old_tag}" > /dev/null 2>&1; then
+            if [[ ${i} -eq ${IMAGE_BACKUP_COUNT} ]]; then
+                docker rmi "${old_tag}" 2>/dev/null || true
+            else
+                local new_tag="${base_image}:backup-$((i + 1))"
+                docker tag "${old_tag}" "${new_tag}" 2>/dev/null || true
+            fi
         fi
     done
     
     # Tag current as backup-1
-    if docker image inspect "${image}" > /dev/null 2>&1; then
-        docker tag "${image}" "${base_image}:backup-1"
-        log_info "Tagged current image as ${base_image}:backup-1"
+    local current_id=$(get_current_image_id "${container}")
+    if [[ -n "${current_id}" ]]; then
+        docker tag "${current_id}" "${base_image}:backup-1"
+        log_success "Tagged current image as ${base_image}:backup-1"
+    fi
+}
+
+restore_backup() {
+    local container="$1"
+    local image=$(get_current_image "${container}")
+    local base_image=$(echo "${image}" | cut -d: -f1)
+    local backup_tag="${base_image}:backup-1"
+    
+    log_warn "Restoring ${container} from backup"
+    
+    if docker image inspect "${backup_tag}" > /dev/null 2>&1; then
+        docker tag "${backup_tag}" "${image}"
+        log_success "Restored ${image} from ${backup_tag}"
+        return 0
+    else
+        log_error "No backup found for ${container}"
+        return 1
     fi
 }
 
 # ============================================
-# VULNERABILITY SCANNING
+# TRIVY SCANNING FUNCTIONS
 # ============================================
 
 scan_image() {
     local image="$1"
-    local container="$2"
-    local report_file="${SCAN_REPORTS_DIR}/${container}_${DATETIME}.json"
+    local safe_name=$(echo ${image} | tr '/:' '_')
+    local report_file="${SCAN_REPORTS_DIR}/${DATE}/${safe_name}.json"
     
-    log_info "Scanning ${image} for vulnerabilities..."
+    mkdir -p "${SCAN_REPORTS_DIR}/${DATE}"
     
-    # Run Trivy scan
-    local scan_result
-    scan_result=$(curl -s -X POST "${TRIVY_SERVER}/image" \
-        -H "Content-Type: application/json" \
-        -d "{\"image\": \"${image}\"}" 2>/dev/null)
+    log_info "Scanning image: ${image}"
     
-    if [[ -z "${scan_result}" ]]; then
-        # Fallback to CLI if server fails
-        scan_result=$(docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \
-            aquasec/trivy:latest image --format json "${image}" 2>/dev/null)
+    # Use Trivy client mode to connect to server
+    if command -v trivy &> /dev/null; then
+        trivy image --server "${TRIVY_SERVER}" --format json --output "${report_file}" "${image}" 2>&1 | tee -a "${LOG_FILE}"
+    else
+        # Fallback: use docker to run trivy
+        docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \
+            aquasec/trivy:latest image --server "${TRIVY_SERVER}" \
+            --format json "${image}" > "${report_file}" 2>&1
     fi
     
-    echo "${scan_result}" > "${report_file}"
+    if [[ -f "${report_file}" && -s "${report_file}" ]]; then
+        echo "${report_file}"
+    else
+        echo ""
+    fi
+}
+
+count_vulnerabilities() {
+    local report_file="$1"
+    local severity="$2"
     
-    # Count vulnerabilities
-    local critical_count=$(echo "${scan_result}" | jq '[.Results[]?.Vulnerabilities[]? | select(.Severity == "CRITICAL")] | length' 2>/dev/null || echo "0")
-    local high_count=$(echo "${scan_result}" | jq '[.Results[]?.Vulnerabilities[]? | select(.Severity == "HIGH")] | length' 2>/dev/null || echo "0")
+    if [[ ! -f "${report_file}" ]]; then
+        echo "0"
+        return
+    fi
     
-    log_info "Scan results for ${container}: CRITICAL=${critical_count}, HIGH=${high_count}"
+    local count=$(jq -r "[.Results[]?.Vulnerabilities[]? | select(.Severity == \"${severity}\")] | length" "${report_file}" 2>/dev/null || echo "0")
+    echo "${count}"
+}
+
+check_scan_result() {
+    local report_file="$1"
     
-    # Check thresholds
-    if [[ "${critical_count}" -gt "${MAX_CRITICAL}" ]] || [[ "${high_count}" -gt "${MAX_HIGH}" ]]; then
-        log_error "Vulnerability threshold exceeded for ${container}"
+    local critical=$(count_vulnerabilities "${report_file}" "CRITICAL")
+    local high=$(count_vulnerabilities "${report_file}" "HIGH")
+    local medium=$(count_vulnerabilities "${report_file}" "MEDIUM")
+    local low=$(count_vulnerabilities "${report_file}" "LOW")
+    
+    log_info "Scan results: CRITICAL=${critical}, HIGH=${high}, MEDIUM=${medium}, LOW=${low}"
+    
+    if [[ ${critical} -gt ${MAX_CRITICAL} ]]; then
+        log_error "CRITICAL vulnerabilities (${critical}) exceed threshold (${MAX_CRITICAL})"
         return 1
     fi
     
-    log_success "Scan passed for ${container}"
+    if [[ ${high} -gt ${MAX_HIGH} ]]; then
+        log_error "HIGH vulnerabilities (${high}) exceed threshold (${MAX_HIGH})"
+        return 1
+    fi
+    
+    log_success "Scan passed: No CRITICAL or HIGH vulnerabilities"
     return 0
 }
 
 # ============================================
-# HEALTH CHECKS
+# POSTGRES-SPECIFIC FUNCTIONS
 # ============================================
 
-run_health_checks() {
-    local container="$1"
+backup_postgres() {
+    log_info "Creating PostgreSQL backup before upgrade"
     
-    log_info "Running health checks for ${container}..."
+    local backup_dir="${BASE_DIR}/backups/postgres/pre-upgrade"
+    local backup_file="${backup_dir}/backup-${DATETIME}.sql"
     
-    # Use external health check script if available
-    if [[ -f "${SCRIPTS_DIR}/health-checks.sh" ]]; then
-        cp "${SCRIPTS_DIR}/health-checks.sh" /tmp/health-checks.sh
-        if bash /tmp/health-checks.sh "${container}" > /dev/null 2>&1; then
-            rm /tmp/health-checks.sh
-            log_success "Health checks passed for ${container}"
+    mkdir -p "${backup_dir}"
+    
+    if docker exec postgres pg_dumpall -U postgres > "${backup_file}" 2>&1; then
+        if [[ -s "${backup_file}" ]]; then
+            local size=$(du -h "${backup_file}" | cut -f1)
+            log_success "PostgreSQL backup created: ${backup_file} (${size})"
             return 0
-        else
-            rm /tmp/health-checks.sh
-            log_error "Health checks failed for ${container}"
-            return 1
         fi
     fi
     
-    # Fallback to basic checks
-    sleep 30
-    
-    # Check container is running
-    if ! docker ps --filter "name=${container}" --filter "status=running" -q | grep -q .; then
-        log_error "Container ${container} is not running"
-        return 1
-    fi
-    
-    # Check container health status
-    local health=$(docker inspect "${container}" --format='{{.State.Health.Status}}' 2>/dev/null || echo "none")
-    if [[ "${health}" == "unhealthy" ]]; then
-        log_error "Container ${container} is unhealthy"
-        return 1
-    fi
-    
-    log_success "Basic health checks passed for ${container}"
-    return 0
+    log_error "PostgreSQL backup failed!"
+    rm -f "${backup_file}"
+    return 1
 }
 
 # ============================================
-# POSTGRES SPECIAL HANDLING
+# HEALTH CHECK FUNCTIONS
+# ============================================
+
+run_health_check() {
+    local container="$1"
+    local check_type="$2"
+    
+    case "${check_type}" in
+        # Container-level checks
+        "container_running")
+            docker ps --filter "name=${container}" --filter "status=running" -q | grep -q .
+            ;;
+        "container_not_restarting")
+            local restart_count=$(docker inspect "${container}" --format '{{.RestartCount}}' 2>/dev/null || echo "999")
+            [[ ${restart_count} -lt 3 ]]
+            ;;
+        "no_oom_kill")
+            local oom=$(docker inspect "${container}" --format '{{.State.OOMKilled}}' 2>/dev/null || echo "true")
+            [[ "${oom}" == "false" ]]
+            ;;
+        
+        # PostgreSQL checks
+        "pg_isready")
+            docker exec postgres pg_isready -U postgres > /dev/null 2>&1
+            ;;
+        "pg_connect")
+            docker exec postgres psql -U postgres -c "SELECT 1" > /dev/null 2>&1
+            ;;
+        "pg_databases")
+            docker exec postgres psql -U postgres -c "\l" 2>/dev/null | grep -q "immich"
+            ;;
+        
+        # PostgreSQL functional tests
+        "immich_db_access")
+            docker exec postgres psql -U postgres -d immich -c 'SELECT COUNT(*) FROM "user"' > /dev/null 2>&1
+            ;;
+        "hedgedoc_db_access")
+            docker exec postgres psql -U postgres -d hedgedoc -c "SELECT 1" > /dev/null 2>&1
+            ;;
+        
+        # Integration tests
+        "immich_api_ping")
+            curl -s -f "http://localhost:2283/api/server/ping" 2>/dev/null | grep -q "pong"
+            ;;
+        "hedgedoc_http")
+            local code=$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:3000" 2>/dev/null)
+            [[ "${code}" =~ ^(200|302|301)$ ]]
+            ;;
+        
+        *)
+            log_warn "Unknown health check: ${check_type}"
+            return 0
+            ;;
+    esac
+}
+
+run_all_health_checks() {
+    local container="$1"
+    local check_types="$2"
+    local all_passed=true
+    
+    for check in ${check_types}; do
+        if run_health_check "${container}" "${check}"; then
+            log_success "Health check passed: ${check}"
+        else
+            log_error "Health check failed: ${check}"
+            all_passed=false
+        fi
+    done
+    
+    if ${all_passed}; then
+        return 0
+    else
+        return 1
+    fi
+}
+
+# ============================================
+# CONTAINER UPDATE FUNCTIONS
 # ============================================
 
 is_critical_container() {
     local container="$1"
-    cat "${CRITICAL_CONTAINERS}" | jq -e "index(\"${container}\")" > /dev/null 2>&1
+    jq -e ".critical[] | select(.name == \"${container}\")" "${CRITICAL_CONTAINERS}" > /dev/null 2>&1
 }
 
-backup_postgres() {
-    log_info "Creating PostgreSQL backup before upgrade..."
-    
-    local backup_file="${BACKUP_DIR}/pre-upgrade_${DATETIME}.sql"
-    
-    if docker exec postgres pg_dumpall -U postgres > "${backup_file}" 2>/dev/null; then
-        gzip "${backup_file}"
-        log_success "PostgreSQL backup created: ${backup_file}.gz"
-        return 0
-    else
-        log_error "PostgreSQL backup failed"
-        return 1
-    fi
+get_critical_config() {
+    local container="$1"
+    local field="$2"
+    jq -r ".critical[] | select(.name == \"${container}\") | .${field}[]?" "${CRITICAL_CONTAINERS}" 2>/dev/null | tr '\n' ' '
 }
-
-update_postgres() {
-    local image=$(get_current_image "postgres")
-    
-    log_info "Starting PostgreSQL upgrade process..."
-    
-    # Phase 1: Pre-upgrade (BEFORE stopping anything)
-    log_info "Phase 1: Pulling and scanning new image..."
-    
-    if ! docker pull "${image}" > /dev/null 2>&1; then
-        log_error "Failed to pull new postgres image"
-        return 1
-    fi
-    
-    if ! scan_image "${image}" "postgres"; then
-        add_to_retry_queue "postgres" "Vulnerability scan failed"
-        return 1
-    fi
-    
-    # Phase 2: Backup
-    log_info "Phase 2: Creating backup..."
-    
-    if ! backup_postgres; then
-        log_error "Backup failed, aborting upgrade"
-        return 1
-    fi
-    
-    rotate_backup_images "postgres"
-    
-    # Phase 3: Upgrade
-    log_info "Phase 3: Stopping and upgrading..."
-    
-    cd "${BASE_DIR}"
-    docker compose stop postgres
-    docker compose up -d postgres
-    
-    # Wait for postgres to be ready
-    log_info "Waiting for PostgreSQL to be ready..."
-    local max_wait=60
-    local waited=0
-    while ! docker exec postgres pg_isready -U postgres > /dev/null 2>&1; do
-        sleep 2
-        waited=$((waited + 2))
-        if [[ ${waited} -ge ${max_wait} ]]; then
-            log_error "PostgreSQL failed to start within ${max_wait} seconds"
-            rollback_postgres
-            return 1
-        fi
-    done
-    
-    # Phase 4: Verification
-    log_info "Phase 4: Running verification..."
-    
-    if ! run_health_checks "postgres"; then
-        log_error "Health checks failed, rolling back..."
-        rollback_postgres
-        return 1
-    fi
-    
-    log_success "PostgreSQL upgrade completed successfully"
-    send_notification "PostgreSQL Updated" "PostgreSQL has been successfully updated on bender" "default" "white_check_mark"
-    return 0
-}
-
-rollback_postgres() {
-    local image=$(get_current_image "postgres")
-    local base_image=$(echo "${image}" | cut -d: -f1)
-    
-    log_warn "Rolling back PostgreSQL..."
-    
-    cd "${BASE_DIR}"
-    
-    # Stop postgres
-    docker compose stop postgres
-    
-    # Restore backup image
-    if docker image inspect "${base_image}:backup-1" > /dev/null 2>&1; then
-        docker tag "${base_image}:backup-1" "${image}"
-        log_info "Restored backup-1 image"
-    fi
-    
-    # Start postgres
-    docker compose up -d postgres
-    
-    # Wait for recovery
-    sleep 30
-    
-    if docker exec postgres pg_isready -U postgres > /dev/null 2>&1; then
-        log_success "PostgreSQL rollback completed"
-        send_notification "PostgreSQL Rollback" "PostgreSQL was rolled back due to upgrade failure" "high" "warning"
-    else
-        log_error "PostgreSQL rollback may have failed - manual intervention required"
-        send_notification "PostgreSQL CRITICAL" "PostgreSQL rollback failed - manual intervention required" "urgent" "rotating_light"
-    fi
-}
-
-# ============================================
-# CONTAINER UPDATE
-# ============================================
 
 update_container() {
     local container="$1"
-    
-    log_info "Processing update for ${container}..."
-    
-    # Special handling for postgres
-    if [[ "${container}" == "postgres" ]]; then
-        update_postgres
-        return $?
-    fi
-    
     local image=$(get_current_image "${container}")
-    if [[ -z "${image}" ]]; then
-        log_error "Could not get image for ${container}"
+    local is_critical=$(is_critical_container "${container}" && echo "true" || echo "false")
+    
+    log_info "=========================================="
+    log_info "Updating container: ${container}"
+    log_info "Image: ${image}"
+    log_info "Critical: ${is_critical}"
+    log_info "=========================================="
+    
+    # Step 1: Pull new image (BEFORE any database operations)
+    log_info "Step 1: Pulling new image"
+    if ! pull_new_image "${image}"; then
+        log_error "Failed to pull new image"
         return 1
     fi
     
-    local old_id=$(get_image_id "${image}")
+    # Step 2: Scan with Trivy (BEFORE any database operations)
+    log_info "Step 2: Scanning with Trivy"
+    local report_file=$(scan_image "${image}")
     
-    # Pull new image
-    log_info "Pulling ${image}..."
-    if ! docker pull "${image}" > /dev/null 2>&1; then
-        log_error "Failed to pull ${image}"
+    if [[ -z "${report_file}" ]]; then
+        log_error "Failed to scan image"
         return 1
     fi
     
-    local new_id=$(get_image_id "${image}")
-    
-    # Check if image actually changed
-    if [[ "${old_id}" == "${new_id}" ]]; then
-        log_info "No update available for ${container}"
-        return 0
+    if ! check_scan_result "${report_file}"; then
+        log_warn "Container ${container} blocked due to vulnerabilities"
+        add_to_retry_queue "${container}"
+        return 2
     fi
     
-    log_info "New image available for ${container}"
-    
-    # Scan new image
-    if ! scan_image "${image}" "${container}"; then
-        add_to_retry_queue "${container}" "Vulnerability scan failed"
-        # Restore old image
-        docker pull "${image}@${old_id}" > /dev/null 2>&1 || true
-        return 1
+    # Step 3: Pre-upgrade actions (backup for critical containers)
+    if [[ "${is_critical}" == "true" ]]; then
+        log_info "Step 3: Running pre-upgrade actions"
+        local pre_upgrade=$(get_critical_config "${container}" "pre_upgrade")
+        
+        for action in ${pre_upgrade}; do
+            log_info "Running pre-upgrade action: ${action}"
+            if ! ${action}; then
+                log_error "Pre-upgrade action failed: ${action}"
+                return 1
+            fi
+        done
     fi
     
-    # Rotate backups
-    rotate_backup_images "${container}"
+    # Step 4: Stop container
+    log_info "Step 4: Stopping container"
+    docker stop "${container}" 2>&1 | tee -a "${LOG_FILE}"
     
-    # Deploy new container
-    log_info "Deploying new ${container}..."
+    # Step 5: Backup current image
+    log_info "Step 5: Backing up current image"
+    backup_image "${container}"
+    
+    # Step 6: Start with new image
+    log_info "Step 6: Starting with new image"
     cd "${BASE_DIR}"
-    docker compose up -d --force-recreate "${container}"
+    docker compose up -d --force-recreate "${container}" 2>&1 | tee -a "${LOG_FILE}"
     
-    # Run health checks
-    if ! run_health_checks "${container}"; then
-        log_error "Health checks failed for ${container}, rolling back..."
-        
-        # Rollback
-        local base_image=$(echo "${image}" | cut -d: -f1)
-        docker tag "${base_image}:backup-1" "${image}"
-        docker compose up -d --force-recreate "${container}"
-        
-        add_to_retry_queue "${container}" "Health check failed after update"
-        send_notification "Update Failed" "${container} update failed and was rolled back" "high" "x"
+    # Wait for container to start
+    sleep 30
+    
+    # Step 7: Run health checks and functional tests
+    log_info "Step 7: Running health checks"
+    
+    local checks="container_running container_not_restarting no_oom_kill"
+    
+    if [[ "${is_critical}" == "true" ]]; then
+        checks="${checks} $(get_critical_config "${container}" "health_checks")"
+        checks="${checks} $(get_critical_config "${container}" "functional_tests")"
+        checks="${checks} $(get_critical_config "${container}" "integration_tests")"
+    fi
+    
+    if ! run_all_health_checks "${container}" "${checks}"; then
+        # Step 8: Rollback on failure
+        log_error "Health checks failed - initiating rollback"
+        rollback_container "${container}"
         return 1
     fi
     
-    # Success
+    # Restart dependent services for critical containers
+    if [[ "${is_critical}" == "true" ]]; then
+        log_info "Restarting dependent services"
+        local dependents=$(get_critical_config "${container}" "dependent_services")
+        
+        for dep in ${dependents}; do
+            log_info "Restarting: ${dep}"
+            docker compose up -d --force-recreate "${dep}" 2>&1 | tee -a "${LOG_FILE}"
+        done
+        
+        sleep 30
+        
+        # Re-run integration tests after dependent restart
+        log_info "Re-running integration tests after dependent restart"
+        local integration_tests=$(get_critical_config "${container}" "integration_tests")
+        
+        if ! run_all_health_checks "${container}" "${integration_tests}"; then
+            log_error "Integration tests failed after dependent restart - initiating rollback"
+            rollback_container "${container}"
+            return 1
+        fi
+    fi
+    
+    log_success "Container ${container} updated successfully"
     remove_from_retry_queue "${container}"
-    log_success "Successfully updated ${container}"
-    send_notification "Container Updated" "${container} has been successfully updated" "default" "white_check_mark"
     return 0
 }
 
+rollback_container() {
+    local container="$1"
+    
+    log_warn "=========================================="
+    log_warn "ROLLBACK: ${container}"
+    log_warn "=========================================="
+    
+    # Stop current container
+    docker stop "${container}" 2>&1 | tee -a "${LOG_FILE}"
+    
+    # Restore backup image
+    if restore_backup "${container}"; then
+        # Start with restored image
+        cd "${BASE_DIR}"
+        docker compose up -d --force-recreate "${container}" 2>&1 | tee -a "${LOG_FILE}"
+        
+        sleep 30
+        
+        # Verify rollback
+        if run_health_check "${container}" "container_running"; then
+            log_success "Rollback successful for ${container}"
+            
+            # Restart dependent services
+            if is_critical_container "${container}"; then
+                local dependents=$(get_critical_config "${container}" "dependent_services")
+                for dep in ${dependents}; do
+                    docker compose up -d --force-recreate "${dep}" 2>&1 | tee -a "${LOG_FILE}"
+                done
+            fi
+            
+            send_notification \
+                "⚠️ Container Rolled Back" \
+                "Container ${container} was rolled back to previous version after failed health checks" \
+                "high" \
+                "warning,rotating_light"
+            
+            return 0
+        fi
+    fi
+    
+    log_error "Rollback FAILED for ${container}"
+    send_notification \
+        "🚨 CRITICAL: Rollback Failed" \
+        "Container ${container} rollback failed! Manual intervention required!" \
+        "urgent" \
+        "rotating_light,skull"
+    
+    return 1
+}
+
 # ============================================
-# MAIN WORKFLOWS
+# RETRY QUEUE FUNCTIONS
+# ============================================
+
+add_to_retry_queue() {
+    local container="$1"
+    local current=$(cat "${RETRY_QUEUE}")
+    
+    if ! echo "${current}" | jq -e ".containers[] | select(. == \"${container}\")" > /dev/null 2>&1; then
+        echo "${current}" | jq ".containers += [\"${container}\"]" > "${RETRY_QUEUE}"
+        log_info "Added ${container} to retry queue"
+    fi
+}
+
+remove_from_retry_queue() {
+    local container="$1"
+    local current=$(cat "${RETRY_QUEUE}")
+    
+    echo "${current}" | jq ".containers -= [\"${container}\"]" > "${RETRY_QUEUE}"
+    log_info "Removed ${container} from retry queue"
+}
+
+get_retry_queue() {
+    jq -r '.containers[]' "${RETRY_QUEUE}" 2>/dev/null
+}
+
+# ============================================
+# REPORT GENERATION
+# ============================================
+
+generate_report() {
+    local deployed="$1"
+    local blocked="$2"
+    local rolledback="$3"
+    local unchanged="$4"
+    local scan_type="$5"
+    local skipped="${6:-}"
+    
+    local report_file="${REPORTS_DIR}/${DATE}-${scan_type}-report.md"
+    
+    local deployed_count=$(echo -e "${deployed}" | grep -c "✅" || echo 0)
+    local blocked_count=$(echo -e "${blocked}" | grep -c "❌" || echo 0)
+    local rolledback_count=$(echo -e "${rolledback}" | grep -c "⚠️" || echo 0)
+    local unchanged_count=$(echo -e "${unchanged}" | grep -c "⏸️" || echo 0)
+    local skipped_count=$(echo -e "${skipped}" | grep -c "⏭️" || echo 0)
+    
+    cat > "${report_file}" << EOF
+# Container Update Report
+
+**Host:** bender
+**Date:** $(date '+%Y-%m-%d %H:%M:%S')
+**Scan Type:** ${scan_type}
+
+## Summary
+
+| Status | Count |
+|--------|-------|
+| ✅ Deployed | ${deployed_count} |
+| ❌ Blocked | ${blocked_count} |
+| ⚠️ Rolled Back | ${rolledback_count} |
+| ⏸️ Up to Date | ${unchanged_count} |
+| ⏭️ Skipped (System Load) | ${skipped_count} |
+
+## Deployed Containers
+
+${deployed:-"None"}
+
+## Blocked Containers (Vulnerability Issues)
+
+${blocked:-"None"}
+
+## Rolled Back Containers (Health Check Failures)
+
+${rolledback:-"None"}
+
+## Skipped Containers (System Overloaded)
+
+${skipped:-"None"}
+
+## Unchanged Containers
+
+${unchanged:-"None"}
+
+---
+*Generated by secure-container-update.sh v1.2*
+EOF
+
+    log_info "Report generated: ${report_file}"
+    echo "${report_file}"
+}
+
+# ============================================
+# CLEANUP FUNCTIONS
+# ============================================
+
+cleanup_old_reports() {
+    log_info "Cleaning up reports older than ${REPORT_RETENTION_DAYS} days"
+    
+    find "${SCAN_REPORTS_DIR}" -type d -mtime +${REPORT_RETENTION_DAYS} -exec rm -rf {} \; 2>/dev/null || true
+    find "${REPORTS_DIR}" -type f -mtime +${REPORT_RETENTION_DAYS} -delete 2>/dev/null || true
+    find "${LOG_DIR}" -type f -mtime +${REPORT_RETENTION_DAYS} -delete 2>/dev/null || true
+}
+
+# ============================================
+# MAIN FUNCTIONS
 # ============================================
 
 weekly_scan() {
-    log_info "Starting weekly container update scan..."
-    send_notification "Weekly Scan Started" "Starting weekly container security scan on bender" "low" "mag"
+    log_info "=========================================="
+    log_info "WEEKLY SCAN STARTING"
+    log_info "=========================================="
     
-    local updated=0
-    local failed=0
-    local skipped=0
+    # v1.2: Initial system health check
+    log_info "Performing initial system health check"
+    if ! check_system_health; then
+        log_warn "System is overloaded at start, waiting for recovery"
+        if ! wait_for_system_recovery; then
+            log_error "System did not recover, aborting weekly scan"
+            send_notification \
+                "🚨 Weekly Scan Aborted" \
+                "System overloaded, weekly scan aborted on bender" \
+                "high" \
+                "warning"
+            return 1
+        fi
+    fi
     
-    # Get all running containers
-    local containers=$(docker compose -f "${COMPOSE_FILE}" ps --format '{{.Name}}' 2>/dev/null)
+    send_notification \
+        "📦 Weekly Container Scan Starting" \
+        "Checking all containers for updates on bender" \
+        "low" \
+        "hourglass"
     
-    for container in ${containers}; do
-        # Skip infrastructure containers
-        if [[ "${container}" =~ ^(tsdproxy|diun|trivy)$ ]]; then
-            log_info "Skipping infrastructure container: ${container}"
-            ((skipped++))
+    local deployed=""
+    local blocked=""
+    local rolledback=""
+    local unchanged=""
+    local skipped=""
+    local containers_processed=0
+    
+    for container in $(get_running_containers); do
+        local image=$(get_current_image "${container}")
+        
+        # Skip containers without proper image info
+        if [[ -z "${image}" ]]; then
             continue
         fi
         
-        if update_container "${container}"; then
-            ((updated++))
-        else
-            ((failed++))
+        # Skip infrastructure containers that shouldn't be auto-updated
+        if [[ "${container}" == "diun" || "${container}" == "trivy" ]]; then
+            unchanged="${unchanged}- ⏸️ ${container} (infrastructure)\n"
+            continue
         fi
+        
+        # v1.2: Check system health before each container (after first one)
+        if [[ ${containers_processed} -gt 0 ]]; then
+            log_info "Waiting ${THROTTLE_DELAY}s before next container (throttling)"
+            sleep "${THROTTLE_DELAY}"
+            
+            if ! check_system_health; then
+                log_warn "System overloaded, waiting for recovery before ${container}"
+                if ! wait_for_system_recovery; then
+                    log_warn "System did not recover, skipping remaining containers"
+                    skipped="${skipped}- ⏭️ ${container} (system overloaded)\n"
+                    
+                    # Add remaining containers to skipped list
+                    continue
+                fi
+            fi
+        fi
+        
+        log_info "Checking: ${container}"
+        
+        if is_update_available "${container}"; then
+            log_info "Update available for ${container}"
+            
+            local result=0
+            update_container "${container}" || result=$?
+            
+            case ${result} in
+                0)
+                    deployed="${deployed}- ✅ ${container}\n"
+                    ;;
+                1)
+                    rolledback="${rolledback}- ⚠️ ${container} (rolled back)\n"
+                    ;;
+                2)
+                    blocked="${blocked}- ❌ ${container} (vulnerabilities)\n"
+                    ;;
+            esac
+        else
+            unchanged="${unchanged}- ⏸️ ${container}\n"
+        fi
+        
+        containers_processed=$((containers_processed + 1))
     done
     
     # Generate report
-    local report="Weekly Update Report - ${DATE}\n"
-    report+="Updated: ${updated}\n"
-    report+="Failed: ${failed}\n"
-    report+="Skipped: ${skipped}\n"
+    generate_report "${deployed}" "${blocked}" "${rolledback}" "${unchanged}" "weekly" "${skipped}"
     
-    echo -e "${report}" > "${REPORTS_DIR}/weekly_${DATE}.txt"
+    # Send summary notification
+    local deployed_count=$(echo -e "${deployed}" | grep -c "✅" || echo 0)
+    local blocked_count=$(echo -e "${blocked}" | grep -c "❌" || echo 0)
+    local rolledback_count=$(echo -e "${rolledback}" | grep -c "⚠️" || echo 0)
+    local unchanged_count=$(echo -e "${unchanged}" | grep -c "⏸️" || echo 0)
+    local skipped_count=$(echo -e "${skipped}" | grep -c "⏭️" || echo 0)
     
-    log_info "Weekly scan complete: ${updated} updated, ${failed} failed, ${skipped} skipped"
-    send_notification "Weekly Scan Complete" "Updated: ${updated}, Failed: ${failed}, Skipped: ${skipped}" "default" "chart_with_upwards_trend"
+    local summary="Deployed: ${deployed_count}, Blocked: ${blocked_count}, Rolled Back: ${rolledback_count}, Unchanged: ${unchanged_count}, Skipped: ${skipped_count}"
     
-    # Cleanup old reports
-    find "${REPORTS_DIR}" -type f -mtime +${REPORT_RETENTION_DAYS} -delete
-    find "${SCAN_REPORTS_DIR}" -type f -mtime +${REPORT_RETENTION_DAYS} -delete
+    send_notification \
+        "📦 Weekly Container Update Complete" \
+        "${summary}" \
+        "default" \
+        "white_check_mark"
+    
+    cleanup_old_reports
+    
+    log_success "Weekly scan completed"
 }
 
 daily_retry() {
-    log_info "Starting daily retry of failed updates..."
+    log_info "=========================================="
+    log_info "DAILY RETRY SCAN STARTING"
+    log_info "=========================================="
     
-    local containers=$(get_retry_containers)
+    local queue=$(get_retry_queue)
     
-    if [[ -z "${containers}" ]]; then
-        log_info "No containers in retry queue"
+    if [[ -z "${queue}" ]]; then
+        log_info "Retry queue is empty - nothing to do"
         return 0
     fi
     
-    for container in ${containers}; do
-        log_info "Retrying update for ${container}..."
-        increment_retry_attempts "${container}"
-        
-        if update_container "${container}"; then
-            remove_from_retry_queue "${container}"
+    # v1.2: Initial system health check
+    log_info "Performing initial system health check"
+    if ! check_system_health; then
+        log_warn "System is overloaded at start, waiting for recovery"
+        if ! wait_for_system_recovery; then
+            log_error "System did not recover, aborting daily retry"
+            send_notification \
+                "🚨 Daily Retry Aborted" \
+                "System overloaded, daily retry aborted on bender" \
+                "high" \
+                "warning"
+            return 1
         fi
+    fi
+    
+    send_notification \
+        "🔄 Daily Retry Scan Starting" \
+        "Retrying blocked containers on bender" \
+        "low" \
+        "arrows_counterclockwise"
+    
+    local deployed=""
+    local still_blocked=""
+    local skipped=""
+    local containers_processed=0
+    
+    for container in ${queue}; do
+        # v1.2: Check system health before each container (after first one)
+        if [[ ${containers_processed} -gt 0 ]]; then
+            log_info "Waiting ${THROTTLE_DELAY}s before next container (throttling)"
+            sleep "${THROTTLE_DELAY}"
+            
+            if ! check_system_health; then
+                log_warn "System overloaded, waiting for recovery before ${container}"
+                if ! wait_for_system_recovery; then
+                    log_warn "System did not recover, skipping ${container}"
+                    skipped="${skipped}- ⏭️ ${container} (system overloaded)\n"
+                    continue
+                fi
+            fi
+        fi
+        
+        log_info "Retrying: ${container}"
+        
+        local result=0
+        update_container "${container}" || result=$?
+        
+        case ${result} in
+            0)
+                deployed="${deployed}- ✅ ${container} (now clean)\n"
+                ;;
+            *)
+                still_blocked="${still_blocked}- ❌ ${container} (still blocked)\n"
+                ;;
+        esac
+        
+        containers_processed=$((containers_processed + 1))
     done
+    
+    # Generate report
+    generate_report "${deployed}" "${still_blocked}" "" "" "retry" "${skipped}"
+    
+    # Send summary
+    local deployed_count=$(echo -e "${deployed}" | grep -c "✅" || echo 0)
+    local blocked_count=$(echo -e "${still_blocked}" | grep -c "❌" || echo 0)
+    local skipped_count=$(echo -e "${skipped}" | grep -c "⏭️" || echo 0)
+    
+    local summary="Deployed: ${deployed_count}, Still Blocked: ${blocked_count}, Skipped: ${skipped_count}"
+    
+    send_notification \
+        "🔄 Daily Retry Complete" \
+        "${summary}" \
+        "default" \
+        "arrows_counterclockwise"
+    
+    log_success "Daily retry scan completed"
 }
-
-# ============================================
-# CLI
-# ============================================
 
 show_usage() {
     cat << EOF
-Secure Container Update Script v1.2
-
-Usage: $0 <command> [options]
+Usage: $0 <command>
 
 Commands:
-    weekly              Run weekly update scan (all containers)
-    retry               Retry failed updates from queue
-    scan <container>    Scan and update specific container
-    status              Show current status and retry queue
-    help                Show this help message
+    weekly      Run weekly full scan of all containers
+    retry       Run daily retry scan of blocked containers
+    scan        Scan a specific container: $0 scan <container_name>
+    status      Show current status and retry queue
+    health      Check current system health (v1.2)
+    help        Show this help message
 
 Examples:
-    $0 weekly                    # Run full weekly scan
-    $0 retry                     # Retry failed updates
-    $0 scan jellyfin             # Update specific container
-    $0 status                    # Show status
+    $0 weekly           # Run weekly scan
+    $0 retry            # Run daily retry
+    $0 scan postgres    # Scan and update postgres only
+    $0 status           # Show current status
+    $0 health           # Check system health
 
-Schedule (crontab):
-    # Weekly scan (Saturday 04:30 AM)
-    30 4 * * 6 cp ${SCRIPTS_DIR}/secure-container-update.sh /tmp/ && bash /tmp/secure-container-update.sh weekly && rm /tmp/secure-container-update.sh
-    
-    # Daily retry (every day 04:30 AM)
-    30 4 * * * cp ${SCRIPTS_DIR}/secure-container-update.sh /tmp/ && bash /tmp/secure-container-update.sh retry && rm /tmp/secure-container-update.sh
+Note: Due to TrueNAS execution restrictions, run with:
+    cp /mnt/BIG/filme/docker-compose/scripts/secure-container-update.sh /tmp/ && bash /tmp/secure-container-update.sh weekly && rm /tmp/secure-container-update.sh
 
-Due to TrueNAS execution restrictions, always run via:
-    cp ${SCRIPTS_DIR}/secure-container-update.sh /tmp/ && bash /tmp/secure-container-update.sh <command> && rm /tmp/secure-container-update.sh
+v1.2 Throttling Configuration:
+    THROTTLE_DELAY=${THROTTLE_DELAY}s between container updates
+    MAX_LOAD=${MAX_LOAD} (skip if 1-min load average exceeds)
+    MAX_IOWAIT=${MAX_IOWAIT}% (skip if I/O wait exceeds)
+    RECOVERY_WAIT=${RECOVERY_WAIT}s (wait time for system recovery)
+    MAX_RECOVERY_ATTEMPTS=${MAX_RECOVERY_ATTEMPTS} (max recovery wait cycles)
 EOF
 }
 
 show_status() {
     echo "=========================================="
-    echo "Secure Container Update Status"
+    echo "Secure Container Update Status (v1.2)"
     echo "=========================================="
     echo ""
+    echo "System Health:"
+    local current_load=$(get_load_average)
+    local current_iowait=$(get_iowait)
+    echo "  Load Average (1min): ${current_load} (threshold: ${MAX_LOAD})"
+    echo "  I/O Wait: ${current_iowait}% (threshold: ${MAX_IOWAIT}%)"
+    if check_system_health 2>/dev/null; then
+        echo "  Status: ✅ Healthy"
+    else
+        echo "  Status: ⚠️ Overloaded"
+    fi
+    echo ""
+    echo "Throttling Configuration:"
+    echo "  Delay between updates: ${THROTTLE_DELAY}s"
+    echo "  Recovery wait time: ${RECOVERY_WAIT}s"
+    echo "  Max recovery attempts: ${MAX_RECOVERY_ATTEMPTS}"
+    echo ""
     echo "Retry Queue:"
-    local queue=$(cat "${RETRY_QUEUE}" 2>/dev/null)
-    local count=$(echo "${queue}" | jq '.containers | length' 2>/dev/null || echo "0")
-    if [[ "${count}" -eq 0 ]]; then
+    local queue=$(get_retry_queue)
+    if [[ -z "${queue}" ]]; then
         echo "  (empty)"
     else
-        echo "${queue}" | jq -r '.containers[] | "  - \(.name): \(.reason) (attempts: \(.attempts))"'
+        for container in ${queue}; do
+            echo "  - ${container}"
+        done
     fi
     echo ""
     echo "Critical Containers:"
-    cat "${CRITICAL_CONTAINERS}" | jq -r '.[] | "  - \(.)"'
+    jq -r '.critical[].name' "${CRITICAL_CONTAINERS}" 2>/dev/null | while read name; do
+        echo "  - ${name}"
+    done
     echo ""
     echo "Recent Logs:"
     if [[ -f "${LOG_FILE}" ]]; then
-        tail -10 "${LOG_FILE}" 2>/dev/null
+        tail -5 "${LOG_FILE}" 2>/dev/null
     else
         echo "  (no logs)"
+    fi
+}
+
+show_health() {
+    echo "=========================================="
+    echo "System Health Check"
+    echo "=========================================="
+    echo ""
+    local current_load=$(get_load_average)
+    local current_iowait=$(get_iowait)
+    echo "Current Metrics:"
+    echo "  Load Average (1min): ${current_load}"
+    echo "  I/O Wait: ${current_iowait}%"
+    echo ""
+    echo "Thresholds:"
+    echo "  Max Load: ${MAX_LOAD}"
+    echo "  Max I/O Wait: ${MAX_IOWAIT}%"
+    echo ""
+    if check_system_health; then
+        echo "Result: ✅ System is healthy - safe to run updates"
+    else
+        echo "Result: ⚠️ System is overloaded - updates would be skipped"
     fi
 }
 
@@ -620,10 +1084,23 @@ main() {
                 log_error "Container name required"
                 exit 1
             fi
+            # v1.2: Check system health before single container scan
+            if ! check_system_health; then
+                log_warn "System is overloaded"
+                read -p "Continue anyway? (y/N) " -n 1 -r
+                echo
+                if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+                    log_info "Scan aborted by user"
+                    exit 0
+                fi
+            fi
             update_container "$2"
             ;;
         status)
             show_status
+            ;;
+        health)
+            show_health
             ;;
         help|--help|-h)
             show_usage
@@ -637,4 +1114,3 @@ main() {
 }
 
 main "$@"
-        
