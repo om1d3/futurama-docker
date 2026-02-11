@@ -1,6 +1,6 @@
 # ============================================
 # amy (Intel i3-2310M, 16GB RAM) - Utilities & Services
-# Version: 98 - Consolidated Telegraf into main docker-compose
+# Version: 99 - Fixed atuin command for new image structure
 # ============================================
 # Host: Intel i3-2310M
 # IP: 192.168.21.130
@@ -33,6 +33,10 @@
 #   - ADDED telegraf service (consolidated from /portainer/telegraf/docker-compose.yml)
 #   - Telegraf monitors Cisco 3750X switch and Brother MFC-L3710CW printer via SNMP
 #   - Uses existing config at /portainer/telegraf/config/telegraf.conf
+# v99 CHANGES (2026-02-11):
+#   - FIXED atuin command from "server start" to "start"
+#   - Upstream changed binary from "atuin" to "atuin-server" (entrypoint)
+#   - "server" subcommand no longer exists — "start" is now a direct subcommand
 # ============================================
 # ✅ VERIFIED WORKING SERVICES - DO NOT MODIFY WITHOUT APPROVAL:
 #   - postgres (v94: fixed volume path, removed healthcheck)
@@ -45,6 +49,7 @@
 #   - limdius (v85.3: fixed image to python:3.11-slim)
 #   - lubelogger (v91: removed unauthorized SMTP config)
 #   - stirling (v96: fixed image to stirlingtools/stirling-pdf:latest, v97: added SYSTEM_MAXDPI)
+#   - atuin (v99: fixed command for new atuin-server binary)
 #   - All services (v93: added DNS anchor 192.168.21.100)
 # ============================================
 # !! DO NOT REMOVE WATCHTOWER - Keep as fallback !!
@@ -347,6 +352,8 @@ services:
 
   # LOCKED tsdproxy.name: "atuin" - DO NOT CHANGE
   # LOCKED PORT: 8777:8888 - DO NOT CHANGE
+  # ✅ VERIFIED WORKING 2026-02-11 - DO NOT MODIFY WITHOUT APPROVAL
+  # v99: fixed command from "server start" to "start" (upstream changed to atuin-server binary)
   atuin:
     image: ghcr.io/atuinsh/atuin:latest
     container_name: atuin
@@ -357,7 +364,7 @@ services:
       tsdproxy.name: "atuin"
       tsdproxy.container_port: "8888"
       tsdproxy.dash.icon: "sh/atuin"
-    command: server start
+    command: start
     environment:
       - ATUIN_HOST=0.0.0.0
       - ATUIN_PORT=8888
