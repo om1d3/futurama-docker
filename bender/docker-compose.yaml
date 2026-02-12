@@ -1,6 +1,6 @@
 # ============================================
 # bender (TrueNAS Scale) - Media & Downloads
-# Version: 105 - Added cAdvisor for Grafana monitoring
+# Version: 106 - Auto-restart stale VPN connections
 # ============================================
 # Host: TrueNAS Scale (HP MicroServer Gen8)
 # CPU: Intel Xeon E3-1265L V2 (iGPU disabled by HP BIOS)
@@ -79,6 +79,11 @@
 #   - ADDED: /data/tvshows volume mount to jellyfin (maps to same seriale directory as /data/tv)
 #   - REMOVED: duplicate /data/tv volume mount from jellyfin (tvshows is the active library path)
 #   - Fixes "Access to path /data/tvshows is denied" and missing image errors
+# v106 CHANGES (2026-02-12):
+#   - IMPROVED: gluetun healthcheck uses IP-based HTTP test (avoids BusyBox DNS failures)
+#   - ADDED: autoheal container to auto-restart unhealthy gluetun (stale VPN sessions)
+#   - ADDED: autoheal label to gluetun for targeted restart
+#   - Recovery cycle: healthcheck fails 3x → Docker marks unhealthy → autoheal restarts → loops
 # ============================================
 # ✅ VERIFIED WORKING SERVICES - DO NOT MODIFY WITHOUT APPROVAL:
 #   - immich_redis (v94: upgraded to redis:7-alpine)
@@ -238,6 +243,7 @@ services:
   # v100: Added DOT=off for DNS troubleshooting
   # v103: Restored port 9091:9091 for Transmission
   # v104: Changed back from WireGuard to OpenVPN (WireGuard blocked peer connections)
+  # v106: Improved healthcheck (IP-based) + autoheal for stale VPN auto-restart
   # ============================================
   gluetun:
     image: qmcgaw/gluetun:latest
@@ -246,6 +252,8 @@ services:
     <<: *default-dns
     labels:
       tsdproxy.enable: "false"
+      # v106: autoheal will restart this container when healthcheck fails
+      autoheal: "true"
     cap_add:
       - NET_ADMIN
     devices:
@@ -283,12 +291,32 @@ services:
       - "5800:5800"
     networks:
       - media-network
+    # v106: IP-based healthcheck avoids BusyBox DNS resolution failures
+    # Tests actual HTTP data transfer through VPN tunnel using Cloudflare trace
+    # If VPN session is stale, wget times out → healthcheck fails → autoheal restarts
     healthcheck:
-      test: ["CMD", "wget", "-q", "--spider", "http://ipinfo.io"]
-      interval: 30s
+      test: ["CMD-SHELL", "wget -qO- --timeout=5 'http://1.1.1.1/cdn-cgi/trace' 2>/dev/null | grep -q 'warp='"]
+      interval: 60s
       timeout: 10s
       retries: 3
-      start_period: 30s
+      start_period: 60s
+
+  # v106: Auto-restart unhealthy containers (targets gluetun stale VPN sessions)
+  # Only restarts containers with label autoheal=true
+  # Checks every 60s, waits 300s after startup before acting
+  autoheal:
+    image: willfarrell/autoheal:latest
+    container_name: autoheal
+    restart: unless-stopped
+    labels:
+      tsdproxy.enable: "false"
+    environment:
+      - AUTOHEAL_CONTAINER_LABEL=autoheal
+      - AUTOHEAL_INTERVAL=60
+      - AUTOHEAL_START_PERIOD=300
+      - AUTOHEAL_DEFAULT_STOP_TIMEOUT=10
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
 
   # ============================================
   # DNS & HIGH AVAILABILITY
