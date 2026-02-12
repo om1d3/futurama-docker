@@ -1,6 +1,6 @@
 # ============================================
 # bender (TrueNAS Scale) - Media & Downloads
-# Version: 106 - Auto-restart stale VPN connections
+# Version: 107 - Transmission I/O throttling + IOMMU disable
 # ============================================
 # Host: TrueNAS Scale (HP MicroServer Gen8)
 # CPU: Intel Xeon E3-1265L V2 (iGPU disabled by HP BIOS)
@@ -84,6 +84,12 @@
 #   - ADDED: autoheal container to auto-restart unhealthy gluetun (stale VPN sessions)
 #   - ADDED: autoheal label to gluetun for targeted restart
 #   - Recovery cycle: healthcheck fails 3x → Docker marks unhealthy → autoheal restarts → loops
+# v107 CHANGES (2026-02-12):
+#   - ADDED: Transmission download/seed queue limits (prevents 812-torrent I/O stampede)
+#   - ADDED: Transmission cache 64MB (batches writes to ZFS instead of constant small I/O)
+#   - ADDED: Transmission peer limits (300 global, 30 per torrent)
+#   - CHANGED: MicroSD GRUB intel_iommu=on → intel_iommu=off (eliminates DMAR faults)
+#   - REASON: HP iLO DMAR interrupt faults escalated ZFS I/O stalls into hard freezes
 # ============================================
 # ✅ VERIFIED WORKING SERVICES - DO NOT MODIFY WITHOUT APPROVAL:
 #   - immich_redis (v94: upgraded to redis:7-alpine)
@@ -623,6 +629,7 @@ services:
   # v103: RESTORED Transmission 4.0.5 (qBittorrent caused system crashes)
   # !! PINNED TO 4.0.5 - DO NOT UPGRADE !!
   # Transmission 4.0.6+ is NOT on FileList whitelist!
+  # v107: Added queue limits and cache to prevent I/O storms on ZFS
   # LOCKED tsdproxy.name: "transmission" - DO NOT CHANGE
   # LOCKED PORT: 9091:9091 (exposed via gluetun) - DO NOT CHANGE
   transmission:
@@ -643,6 +650,17 @@ services:
       - TRANSMISSION_INCOMPLETE_DIR=/data/incomplete
       - TRANSMISSION_WATCH_DIR=/data/watch
       - TRANSMISSION_BIND_ADDRESS_IPV4=0.0.0.0
+      # v107: Queue limits - prevents all 812 torrents from hammering ZFS simultaneously
+      - TRANSMISSION_DOWNLOAD_QUEUE_ENABLED=true
+      - TRANSMISSION_DOWNLOAD_QUEUE_SIZE=10
+      - TRANSMISSION_SEED_QUEUE_ENABLED=true
+      - TRANSMISSION_SEED_QUEUE_SIZE=50
+      - TRANSMISSION_QUEUE_STALLED_MINUTES=5
+      # v107: Write cache - batches small writes in RAM before flushing to ZFS
+      - TRANSMISSION_CACHE_SIZE_MB=64
+      # v107: Peer limits - spread connections across more torrents
+      - TRANSMISSION_PEER_LIMIT_GLOBAL=300
+      - TRANSMISSION_PEER_LIMIT_PER_TORRENT=30
     volumes:
       - /mnt/BIG/filme/transmission/config/transmission-home:/config
       - /mnt/BIG/filme/transmission:/data
