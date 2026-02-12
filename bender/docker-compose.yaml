@@ -655,7 +655,7 @@ services:
       - TRANSMISSION_DOWNLOAD_QUEUE_SIZE=10
       - TRANSMISSION_SEED_QUEUE_ENABLED=true
       - TRANSMISSION_SEED_QUEUE_SIZE=50
-      - TRANSMISSION_QUEUE_STALLED_MINUTES=5
+      - TRANSMISSION_QUEUE_STALLED_MINUTES=1
       # v107: Write cache - batches small writes in RAM before flushing to ZFS
       - TRANSMISSION_CACHE_SIZE_MB=64
       # v107: Peer limits - spread connections across more torrents
