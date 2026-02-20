@@ -1,6 +1,6 @@
 # ============================================
 # bender (TrueNAS Scale) - Media & Downloads
-# Version: 107 - Transmission I/O throttling + IOMMU disable
+# Version: 108 - TTS audiobook pipeline + Transmission Flood UI baked
 # ============================================
 # Host: TrueNAS Scale (HP MicroServer Gen8)
 # CPU: Intel Xeon E3-1265L V2 (iGPU disabled by HP BIOS)
@@ -90,6 +90,23 @@
 #   - ADDED: Transmission peer limits (300 global, 30 per torrent)
 #   - CHANGED: MicroSD GRUB intel_iommu=on → intel_iommu=off (eliminates DMAR faults)
 #   - REASON: HP iLO DMAR interrupt faults escalated ZFS I/O stalls into hard freezes
+# v108 CHANGES (2026-02-18):
+#   - ADDED: edge-tts container (Microsoft Edge neural TTS API, port 5050)
+#   - ADDED: epub2tts-edge container (on-demand EPUB/TXT → M4B audiobook converter)
+#   - ADDED: tts-pipeline container (watches input folder, automates full PDF/EPUB → audiobook)
+#   - tts-pipeline accepts: .pdf, .epub, .url files (filename format: "Author - Title.ext")
+#   - .url files contain a URL to a PDF on line 1 — auto-fetched and processed
+#   - Output goes directly to audiobookshelf library for automatic pickup
+#   - epub2tts-edge uses profiles:tools, only runs when invoked manually
+#   - ADDED: Custom Transmission image with pre-baked Flood UI
+#   - CHANGED: Transmission from image: to build: (eliminates lscr.io mod download on every restart)
+#   - REMOVED: linuxserver/mods:transmission-floodui from DOCKER_MODS
+#   - ADDED: TRANSMISSION_WEB_HOME=/flood-for-transmission/
+#   - REQUIRED: Create /mnt/BIG/filme/configs/epub2tts-edge/Dockerfile + patch_epub2tts.py
+#   - REQUIRED: Create /mnt/BIG/filme/configs/tts-pipeline/Dockerfile + pipeline.sh + preprocess.py + patch_epub2tts.py
+#   - REQUIRED: Create /mnt/BIG/filme/configs/transmission/Dockerfile
+#   - REQUIRED: Create /mnt/BIG/filme/tts/input/ directory
+#   - REQUIRED: Build images: docker compose build epub2tts-edge tts-pipeline transmission
 # ============================================
 # ✅ VERIFIED WORKING SERVICES - DO NOT MODIFY WITHOUT APPROVAL:
 #   - immich_redis (v94: upgraded to redis:7-alpine)
@@ -630,10 +647,13 @@ services:
   # !! PINNED TO 4.0.5 - DO NOT UPGRADE !!
   # Transmission 4.0.6+ is NOT on FileList whitelist!
   # v107: Added queue limits and cache to prevent I/O storms on ZFS
+  # v108: Custom build with pre-baked Flood UI (no more lscr.io mod downloads)
   # LOCKED tsdproxy.name: "transmission" - DO NOT CHANGE
   # LOCKED PORT: 9091:9091 (exposed via gluetun) - DO NOT CHANGE
   transmission:
-    image: lscr.io/linuxserver/transmission:4.0.5
+    build:
+      context: /mnt/BIG/filme/configs/transmission
+      dockerfile: Dockerfile
     container_name: transmission
     restart: unless-stopped
     labels:
@@ -645,7 +665,9 @@ services:
       - PUID=${PUID}
       - PGID=${PGID}
       - TZ=${TIMEZONE}
-      - DOCKER_MODS=linuxserver/mods:transmission-floodui|linuxserver/mods:transmission-env-var-settings
+      # v108: Only env-var-settings mod remains; Flood UI is pre-baked in image
+      - DOCKER_MODS=linuxserver/mods:transmission-env-var-settings
+      - TRANSMISSION_WEB_HOME=/flood-for-transmission/
       - TRANSMISSION_DOWNLOAD_DIR=/data/completed
       - TRANSMISSION_INCOMPLETE_DIR=/data/incomplete
       - TRANSMISSION_WATCH_DIR=/data/watch
@@ -1014,6 +1036,83 @@ services:
       - media-network
 
   # ============================================
+  # TEXT-TO-SPEECH - Audiobook Generation
+  # ============================================
+
+  # v108: Edge TTS API - OpenAI-compatible neural TTS endpoint
+  # Uses Microsoft Edge's free cloud-based neural TTS (no API key required)
+  # Romanian voices: ro-RO-AlinaNeural (female), ro-RO-EmilNeural (male)
+  # LOCKED PORT: 5050:5050 - DO NOT CHANGE
+  edge-tts:
+    image: travisvn/openai-edge-tts:latest
+    container_name: edge-tts
+    restart: unless-stopped
+    <<: *default-dns
+    labels:
+      tsdproxy.enable: "false"
+    environment:
+      - DEFAULT_VOICE=ro-RO-AlinaNeural
+      - DEFAULT_RESPONSE_FORMAT=mp3
+      - DEFAULT_SPEED=1.0
+      - REQUIRE_API_KEY=False
+    ports:
+      - "5050:5050"
+    networks:
+      - media-network
+    mem_limit: 512M
+    cpus: 0.6
+
+  # v108: epub2tts-edge - EPUB/TXT to M4B audiobook converter (on-demand)
+  # Uses profiles:tools - does NOT start with docker compose up -d
+  # Run manually: docker compose run --rm epub2tts-edge "/audiobooks/Author/Title/book.epub" --speaker ro-RO-AlinaNeural
+  # Output .m4b lands next to input file → audiobookshelf auto-detects it
+  # REQUIRED: Build first with: docker compose build epub2tts-edge
+  epub2tts-edge:
+    build:
+      context: /mnt/BIG/filme/configs/epub2tts-edge
+      dockerfile: Dockerfile
+    container_name: epub2tts-edge
+    <<: *default-dns
+    labels:
+      tsdproxy.enable: "false"
+    volumes:
+      - /mnt/BIG/filme/audiobookshelf/audiobooks:/audiobooks
+      - /mnt/BIG/filme/tts/input:/input
+    networks:
+      - media-network
+    mem_limit: 4G
+    cpus: 0.6
+    profiles:
+      - tools
+
+  # v108: TTS Pipeline - Automated PDF/EPUB/URL to audiobook watcher
+  # Watches /mnt/BIG/filme/tts/input/ for new files:
+  #   "Author - Title.pdf"  → PDF → EPUB → M4B → audiobookshelf
+  #   "Author - Title.epub" → EPUB → M4B → audiobookshelf
+  #   "Author - Title.url"  → fetch PDF from URL → PDF → EPUB → M4B → audiobookshelf
+  # Failed files are renamed with FAILED_ prefix (not deleted)
+  # REQUIRED: Build first with: docker compose build tts-pipeline
+  tts-pipeline:
+    build:
+      context: /mnt/BIG/filme/configs/tts-pipeline
+      dockerfile: Dockerfile
+    container_name: tts-pipeline
+    restart: unless-stopped
+    <<: *default-dns
+    labels:
+      tsdproxy.enable: "false"
+    environment:
+      - TZ=${TIMEZONE}
+      - TTS_SPEAKER=ro-RO-AlinaNeural
+    volumes:
+      - /mnt/BIG/filme/tts/input:/input
+      - /mnt/BIG/filme/audiobookshelf/audiobooks:/audiobooks
+    networks:
+      - media-network
+    mem_limit: 4G
+    cpus: 0.6
+
+  # ============================================
   # UTILITIES
   # ============================================
 
@@ -1056,11 +1155,8 @@ services:
   #     - MAX_CONCURRENT_CHROME_PROCESSES=10
   #   networks:
   #     - media-network
-  #   deploy:
-  #     resources:
-  #       limits:
-  #         memory: 1024M
-  #         cpus: '1.5'
+  #   mem_limit: 1024M
+  #   cpus: 1.5
 
   # ============================================
   # MONITORING
