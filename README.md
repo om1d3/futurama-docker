@@ -4,7 +4,7 @@
 
 two-host docker infrastructure for media services, utilities, and home automation.
 
-**infrastructure versions:** bender v105 / amy v98
+**infrastructure versions:** bender v109 / amy v99
 **last updated:** february 2026
 
 ---
@@ -30,7 +30,7 @@ two-host docker infrastructure for media services, utilities, and home automatio
                          |   +------------+           +------------+     |
                          |   |   pihole   |<---VRRP-->|   pihole   |     |
                          |   |  (master)  |  failover |  (backup)  |     |
-                         |   | priority150|           | priority100|     |
+                         |   | priority200|           | priority100|     |
                          |   |  port 8053 |           |  port 8053 |     |
                          |   +------------+           +------------+     |
                          |          |                         |          |
@@ -82,8 +82,8 @@ two-host docker infrastructure for media services, utilities, and home automatio
                 |  | |bookshelf| | :8383   |     |  | |    :9696    | | :7878   | |     |
                 |  | | :8081   | +---------+     |  | +-------------+ +---------+ |     |
                 |  | +---------+ +---------+     |  | +---------+ +-------------+ |     |
-                |  | | spotdl  | |jdownldr |     |  | | lidarr  | |   readarr  | |      |
-                |  | | :8800   | | :5800   |     |  | | :8686   | |    :8787   | |      |
+                |  | | spotdl  | |jdownldr |     |  | | lidarr  | |   readarr  | |     |
+                |  | | :8800   | | :5800   |     |  | | :8686   | |    :8787   | |     |
                 |  | +---------+ +---------+     |  | +---------+ +-------------+ |     |
                 |  +-----------------------------+  | +---------+ +-------------+ |     |
                 |                                   | | bazarr  | |  unpackerr  | |     |
@@ -91,13 +91,13 @@ two-host docker infrastructure for media services, utilities, and home automatio
                 |  | collaboration               |  | +---------+ +-------------+ |     |
                 |  | +---------+ +-----------+   |  +-----------------------------+     |
                 |  | |hedgedoc | |vaultwarden|   |                                      |
-                |  | | :3000   | |   :8484   |   |                                      |
-                |  | +---------+ +-----------+   |                                      |
-                |  +-----------------------------+                                      |
-                |                                                                       |
-                |  +---------------------------+                                        |
-                |  | postgresql (vectorchord)  |                                        |
-                |  | :5432 [immich, hedgedoc]  |                                        |
+                |  | | :3000   | |   :8484   |   |  +-----------------------------+     |
+                |  | +---------+ +-----------+   |  | text-to-speech              |     |
+                |  +-----------------------------+  | +---------+ +-------------+ |     |
+                |                                   | |edge-tts | |tts-pipeline | |     |
+                |  +---------------------------+    | | :5050   | |    :5051    | |     |
+                |  | postgresql (vectorchord)  |    | +---------+ +-------------+ |     |
+                |  | :5432 [immich, hedgedoc]  |    +-----------------------------+     |
                 |  +---------------------------+                                        |
                 |                                                                       |
                 |  +---------------------------------------------------------------+    |
@@ -110,6 +110,10 @@ two-host docker infrastructure for media services, utilities, and home automatio
                 |  | |cadvisor | |nebula-sync| |flaresolvrr| |  beszel-agent    |  |    |
                 |  | | :9099   | | (hourly)  | |   :8191   | |  (host network)  |  |    |
                 |  | +---------+ +-----------+ +-----------+ +------------------+  |    |
+                |  | +----------+ +------------------+                             |    |
+                |  | | autoheal | | dockerproxy      |                             |    |
+                |  | | (gluetun)| |     :2375        |                             |    |
+                |  | +----------+ +------------------+                             |    |
                 |  +---------------------------------------------------------------+    |
                 |                                                                       |
                 +-----------------------------------------------------------------------+
@@ -178,14 +182,14 @@ two-host docker infrastructure for media services, utilities, and home automatio
 
 | host | hardware | ip address | role |
 |------|----------|------------|------|
-| **bender** | TrueNAS Scale (HP MicroServer Gen8, Xeon E3-1265L V2) | 192.168.21.121 | media services, downloads, primary storage |
+| **bender** | TrueNAS Scale (HP MicroServer Gen8, Xeon E3-1265L V2) | 192.168.21.121 | media services, downloads, TTS, primary storage |
 | **amy** | Intel i3-2310M, 16GB | 192.168.21.130 | utilities, monitoring, notifications |
 
 ### shared services
 
 | service | vip | primary | backup |
 |---------|-----|---------|--------|
-| **pihole DNS** | 192.168.21.100 | bender (priority 150) | amy (priority 100) |
+| **pihole DNS** | 192.168.21.100 | bender (priority 200) | amy (priority 100) |
 
 ---
 
@@ -219,16 +223,17 @@ two-host docker infrastructure for media services, utilities, and home automatio
 
 ## services summary
 
-### bender services (33 containers)
+### bender services (36 containers)
 
 | category | services |
 |----------|----------|
 | **media** | immich_server, immich_machine_learning, immich_redis, jellyfin, audiobookshelf, metube, spotdl |
 | **downloads** | gluetun (VPN), transmission, sonarr, radarr, prowlarr, bazarr, lidarr, readarr, unpackerr, jdownloader, flaresolverr |
 | **collaboration** | hedgedoc, vaultwarden, syncthing |
+| **text-to-speech** | edge-tts, tts-pipeline |
 | **databases** | postgresql, postgres-backup |
 | **dns & ha** | pihole, keepalived, nebula-sync |
-| **infrastructure** | tsdproxy, dockwatch, dockerproxy |
+| **infrastructure** | tsdproxy, dockwatch, dockerproxy, autoheal |
 | **monitoring** | beszel-agent, cadvisor |
 | **updates** | diun, trivy |
 
@@ -277,6 +282,7 @@ ssh root@192.168.21.130 'cd /docker-compose && docker compose up -d'
 | document | description |
 |----------|-------------|
 | [PIHOLE-DNS-AUTO-POPULATION.md](docs/PIHOLE-DNS-AUTO-POPULATION.md) | automatic DNS record population for docker services |
+| [TTS-PIPELINE.md](docs/TTS-PIPELINE.md) | automated PDF/EPUB to audiobook conversion pipeline |
 
 ### host-specific documentation
 
@@ -309,11 +315,12 @@ all services with `tsdproxy.enable: "true"` labels automatically get DNS entries
 | bender services | amy services |
 |-----------------|--------------|
 | photo.home.arpa | ntfy.home.arpa |
-| media.home.arpa | vault.home.arpa |
-| books.home.arpa | beszel.home.arpa |
-| pad.home.arpa | home.home.arpa |
-| sync.home.arpa | mealie.home.arpa |
-| transmission.home.arpa | rss.home.arpa |
+| media.home.arpa | beszel.home.arpa |
+| books.home.arpa | home.home.arpa |
+| pad.home.arpa | mealie.home.arpa |
+| sync.home.arpa | rss.home.arpa |
+| transmission.home.arpa | money.home.arpa |
+| tts.home.arpa | logs.home.arpa |
 
 see [PIHOLE-DNS-AUTO-POPULATION.md](docs/PIHOLE-DNS-AUTO-POPULATION.md) for implementation details.
 
@@ -331,6 +338,9 @@ see [PIHOLE-DNS-AUTO-POPULATION.md](docs/PIHOLE-DNS-AUTO-POPULATION.md) for impl
 | **shared postgresql per host** | ram efficiency, centralized backup |
 | **centralized VPN** | gluetun provides single OpenVPN tunnel for all download/ARR services |
 | **cadvisor resource limits** | 97% CPU reduction with `--docker_only` and disabled unused metrics |
+| **autoheal for VPN** | auto-restarts gluetun on stale VPN sessions, prevents silent download failures |
+| **cloud TTS** | edge-tts uses free Microsoft neural voices — no GPU needed, better quality than local Piper |
+| **pre-baked Flood UI** | custom Transmission build eliminates linuxserver mod download on every restart |
 
 ---
 
@@ -392,6 +402,7 @@ amy's telegraf also monitors the cisco 3750x switch and brother printer via SNMP
 | metube | metube | http://metube.home.arpa:8383 | https://metube.bunny-enigmatic.ts.net |
 | jdownloader | jdown | http://jdown.home.arpa:5800 | https://jdown.bunny-enigmatic.ts.net |
 | spotdl | spotdl | http://spotdl.home.arpa:8800 | https://spotdl.bunny-enigmatic.ts.net |
+| tts-pipeline | tts | http://tts.home.arpa:5051 | https://tts.bunny-enigmatic.ts.net |
 | prowlarr | prowlarr | http://prowlarr.home.arpa:9696 | https://prowlarr.bunny-enigmatic.ts.net |
 | sonarr | sonarr | http://sonarr.home.arpa:8989 | https://sonarr.bunny-enigmatic.ts.net |
 | radarr | radarr | http://radarr.home.arpa:7878 | https://radarr.bunny-enigmatic.ts.net |
@@ -432,6 +443,11 @@ amy's telegraf also monitors the cisco 3750x switch and brother printer via SNMP
 
 | date | bender | amy | changes |
 |------|--------|-----|---------|
+| 2026-02-20 | v109 | v99 | TTS multi-voice web UI, atuin command fix |
+| 2026-02-18 | v108 | v99 | edge-tts + tts-pipeline, custom Transmission build with pre-baked Flood UI |
+| 2026-02-12 | v107 | v99 | Transmission queue/cache/peer limits, intel_iommu fix |
+| 2026-02-12 | v106 | v99 | autoheal for gluetun, IP-based VPN healthcheck |
+| 2026-02-11 | v105 | v99 | atuin command fix (upstream binary change) |
 | 2026-02-07 | v105 | v98 | cadvisor on both hosts, telegraf consolidated, jellyfin tvshows fix |
 | 2026-02-06 | v104 | v97 | gluetun OpenVPN, stirling DPI fix |
 | 2026-01-25 | v103 | v96 | transmission 4.0.5 pinned, qBittorrent reverted |
