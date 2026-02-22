@@ -199,12 +199,26 @@ two-host docker infrastructure for media services, utilities, and home automatio
                 .
                 ├── README.md
                 ├── docs/
-                │   └── PIHOLE-DNS-AUTO-POPULATION.md
+                │   ├── PIHOLE-DNS-AUTO-POPULATION.md
+                │   └── TTS-PIPELINE.md
                 ├── bender/
                 │   ├── .env.example
                 │   ├── .env.gpg
                 │   ├── docker-compose.yaml
-                │   ├── configs/keepalived/keepalived.conf
+                │   ├── configs/
+                │   │   ├── keepalived/keepalived.conf
+                │   │   ├── tts-pipeline/
+                │   │   │   ├── Dockerfile
+                │   │   │   ├── pipeline.sh
+                │   │   │   ├── webapp.py
+                │   │   │   ├── start.sh
+                │   │   │   ├── preprocess.py
+                │   │   │   └── patch_epub2tts.py
+                │   │   ├── epub2tts-edge/
+                │   │   │   ├── Dockerfile
+                │   │   │   └── patch_epub2tts.py
+                │   │   └── transmission/
+                │   │       └── Dockerfile
                 │   ├── docs/
                 │   └── scripts/
                 │       └── pihole-dns-update.sh
