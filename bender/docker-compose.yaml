@@ -1060,6 +1060,7 @@ services:
       tsdproxy.dash.icon: "sh/audiobookshelf"
     environment:
       - TZ=${TIMEZONE}
+      - NTFY_URL=http://192.168.21.130:8888/tts-pipeline
     volumes:
       - /mnt/BIG/filme/tts/input:/input
       - /mnt/BIG/filme/audiobookshelf/audiobooks:/audiobooks

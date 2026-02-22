@@ -25,6 +25,20 @@ update_status() {
         "$state" "$book" "$voice" "$detail" "$(date '+%Y-%m-%d %H:%M:%S')" > "$STATUS_FILE"
 }
 
+send_notification() {
+    local title="$1"
+    local message="$2"
+    local priority="${3:-default}"
+    local tags="${4:-book}"
+    [ -z "${NTFY_URL:-}" ] && return
+    curl -s -o /dev/null \
+        -H "Title: ${title}" \
+        -H "Priority: ${priority}" \
+        -H "Tags: ${tags}" \
+        -d "${message}" \
+        "${NTFY_URL}" 2>/dev/null || true
+}
+
 mkdir -p "$WORK_DIR" "$OUTPUT_DIR"
 for dir in "${!VOICE_MAP[@]}"; do
     mkdir -p "$dir"
@@ -106,6 +120,11 @@ convert_epub_to_m4b() {
     if [ -z "$m4b_file" ] || [ ! -f "$m4b_file" ]; then
         err "No .m4b file found after conversion"
         update_status "failed" "$author - $title" "$speaker" "No M4B file produced"
+        send_notification \
+            "❌ TTS Failed" \
+            "$author - $title ($speaker): No M4B file produced" \
+            "high" \
+            "warning,book"
         return 1
     fi
 
@@ -138,6 +157,11 @@ convert_epub_to_m4b() {
     size=$(du -h "$final_path" | cut -f1)
     log "Audiobook ready: $final_path ($size)"
     log "   Audiobookshelf will auto-detect the new book."
+    send_notification \
+        "✅ Audiobook Ready" \
+        "$author - $title ($size) is now in audiobookshelf" \
+        "default" \
+        "white_check_mark,book"
     update_status "idle"
     return 0
 }
@@ -163,6 +187,11 @@ process_pdf() {
     if [[ "$file_type" != "%PDF-" ]]; then
         err "File is not a valid PDF (got: $file_type). Possibly an HTML page."
         update_status "failed" "$PARSED_AUTHOR - $PARSED_TITLE" "$speaker" "Not a valid PDF"
+        send_notification \
+            "❌ TTS Failed" \
+            "$PARSED_AUTHOR - $PARSED_TITLE: Not a valid PDF (possibly an HTML page)" \
+            "high" \
+            "warning,book"
         mv "$pdf_path" "$input_dir/FAILED_${filename}" 2>/dev/null
         return 1
     fi
@@ -181,6 +210,11 @@ process_pdf() {
         --no-images 2>&1; then
         err "PDF to EPUB conversion failed for: $filename"
         update_status "failed" "$PARSED_AUTHOR - $PARSED_TITLE" "$speaker" "PDF to EPUB failed"
+        send_notification \
+            "❌ TTS Failed" \
+            "$PARSED_AUTHOR - $PARSED_TITLE: PDF to EPUB conversion failed" \
+            "high" \
+            "warning,book"
         rm -rf "$work_subdir"
         mv "$pdf_path" "$input_dir/FAILED_${filename}" 2>/dev/null
         return 1
@@ -262,6 +296,11 @@ process_url() {
     if ! curl -fsSL --max-time 600 -o "$pdf_path" "$url" 2>&1; then
         err "Failed to download from: $url"
         update_status "failed" "$name_no_ext" "$speaker" "Download failed"
+        send_notification \
+            "❌ TTS Failed" \
+            "$name_no_ext: Failed to download from URL" \
+            "high" \
+            "warning,book"
         rm -f "$url_file" "$pdf_path"
         return 1
     fi
@@ -275,6 +314,11 @@ process_url() {
     if [[ "$file_type" != "%PDF-" ]]; then
         err "Downloaded file is not a valid PDF (got: $file_type). URL may point to an HTML page."
         update_status "failed" "$name_no_ext" "$speaker" "Downloaded file is not a PDF"
+        send_notification \
+            "❌ TTS Failed" \
+            "$name_no_ext: Downloaded file is not a valid PDF (possibly an HTML page)" \
+            "high" \
+            "warning,book"
         rm -f "$url_file" "$pdf_path"
         return 1
     fi
@@ -329,6 +373,7 @@ process_file_in_dir() {
 
 log "TTS Pipeline starting..."
 log "  Output directory: $OUTPUT_DIR"
+log "  Notifications: ${NTFY_URL:-disabled}"
 log "  Voice directories:"
 for dir in "${!VOICE_MAP[@]}"; do
     log "    $dir -> ${VOICE_MAP[$dir]}"
