@@ -259,6 +259,8 @@ edge-tts API (:5050, OpenAI-compatible)
 audiobookshelf library (/audiobooks/cărți/)
 ```
 
+notifications are sent via ntfy (on amy) when a conversion completes successfully or fails. the pipeline subscribes to the `tts-pipeline` topic at `http://192.168.21.130:8888/tts-pipeline`.
+
 the web interface on port 5051 allows file upload and URL pasting. the pipeline.sh watcher monitors all 4 voice directories and auto-selects the voice based on which directory contains the input file. output goes directly into audiobookshelf's library for automatic pickup.
 
 epub2tts-edge is available as an on-demand tool (`docker compose run epub2tts-edge`) for manual conversions via the `profiles: tools` mechanism.

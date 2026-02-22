@@ -488,6 +488,7 @@ all ARR services route through gluetun VPN and depend on it.
 | network | media-network |
 | tsdproxy.name | `tts` (LOCKED) |
 | resource limits | 4 GB memory, 0.6 CPU |
+| notifications | ntfy via `NTFY_URL=http://192.168.21.130:8888/tts-pipeline` (success + failure) |
 | input directories | /input/ro-emil, /input/ro-alina, /input/en-ryan, /input/en-sonia |
 | output | `/audiobooks/cărți/` (audiobookshelf library) |
 | web UI | Flask app on port 5051 (file upload + URL pasting) |

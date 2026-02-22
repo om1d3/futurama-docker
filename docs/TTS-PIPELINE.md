@@ -345,6 +345,7 @@ events monitored: `close_write` (file finished writing) and `moved_to` (file mov
 | `parse_filename` | splits `Author - Title.ext` into PARSED_AUTHOR and PARSED_TITLE |
 | `preprocess_text` | runs preprocess.py on text fallback files |
 | `update_status` | writes JSON status to /tmp/tts-status.json (read by webapp.py) |
+| `send_notification` | sends ntfy notification on success or failure (skips silently if NTFY_URL is unset) |
 
 ### epub2tts-edge integration
 
@@ -462,6 +463,38 @@ audiobookshelf monitors its `/audiobooks` volume for new files. when the pipelin
 ### EPUB companion
 
 when processing a PDF (which is converted to EPUB as an intermediate step), the pipeline copies the generated EPUB alongside the M4B. when processing an EPUB directly, the source EPUB is copied. this allows users to read the text version alongside the audiobook.
+
+---
+
+## notifications
+
+the pipeline sends ntfy notifications on conversion completion and failure. notifications go to the `tts-pipeline` topic on amy's ntfy server.
+
+### configuration
+
+the `NTFY_URL` environment variable is set in docker-compose.yaml:
+
+```yaml
+environment:
+  - NTFY_URL=http://192.168.21.130:8888/tts-pipeline
+```
+
+if `NTFY_URL` is empty or unset, notifications are silently skipped — the pipeline still functions normally.
+
+### notification events
+
+| event | priority | tags | example message |
+|-------|----------|------|-----------------|
+| conversion complete | default | white_check_mark, book | "Author - Title (142 MB) is now in audiobookshelf" |
+| no M4B produced | high | warning, book | "Author - Title (speaker): No M4B file produced" |
+| invalid PDF | high | warning, book | "Author - Title: Not a valid PDF (possibly an HTML page)" |
+| PDF to EPUB failed | high | warning, book | "Author - Title: PDF to EPUB conversion failed" |
+| URL download failed | high | warning, book | "Author - Title: Failed to download from URL" |
+| downloaded file not PDF | high | warning, book | "Author - Title: Downloaded file is not a valid PDF" |
+
+### subscribing
+
+subscribe to the `tts-pipeline` topic via the ntfy app or web UI at `http://ntfy.home.arpa:8888/tts-pipeline` or `https://ntfy.bunny-enigmatic.ts.net/tts-pipeline`.
 
 ---
 
