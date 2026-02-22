@@ -2,8 +2,8 @@
 
 ## operational runbook
 
-**document version:** 2.0
-**infrastructure version:** 98
+**document version:** 3.0
+**infrastructure version:** 99
 **last updated:** february 2026
 
 ---
@@ -19,366 +19,333 @@
 7. [restore procedures](#restore-procedures)
 8. [emergency procedures](#emergency-procedures)
 9. [service-specific maintenance](#service-specific-maintenance)
+10. [system maintenance](#system-maintenance)
 
 ---
 
 ## overview
 
-amy runs 29 active services managed by a single docker-compose.yaml (v98). most maintenance is automated through cron jobs and the secure container update system. this document covers both automated and manual procedures.
+amy runs 29 active services managed by a single docker-compose.yaml (v99). most maintenance is automated through cron jobs and the secure container update system. unlike bender, amy can execute scripts directly without copying to `/tmp/`.
 
-### automated maintenance summary
+### automated tasks
 
-| task | schedule | mechanism |
-|------|----------|-----------|
-| container vulnerability scan + update | wednesday 04:30 | secure-container-update.sh (cron) |
-| blocked container retry | daily 04:30 (except wednesday) | secure-container-update.sh retry (cron) |
-| postgresql backup | daily (midnight) | postgres-backup container |
-| pihole config replication | hourly | nebula-sync on bender → amy |
+| task | schedule | system |
+|------|----------|--------|
+| container vulnerability scan | wednesday 04:30 | secure-container-update.sh weekly |
+| retry blocked containers | all other days 04:30 | secure-container-update.sh retry |
+| pihole config sync | hourly (from bender) | nebula-sync on bender |
+| postgresql backup | daily | postgres-backup container |
 | image update notifications | wednesday 04:00 | diun |
-
-### key paths
-
-| path | purpose |
-|------|---------|
-| `/docker-compose/` | compose file, .env, scripts |
-| `/docker-compose/scripts/` | secure-container-update.sh, health-checks.sh, rollback.sh |
-| `/docker-compose/configs/secure-update/logs/` | update execution logs |
-| `/docker/postgres-backup/` | automated database backups |
-| `/docker/` | container persistent data |
-| `/portainer/postgresql/data/` | postgresql data directory |
 
 ---
 
 ## daily operations
 
-### what happens automatically
-
-1. **postgres-backup** runs at midnight, backing up atuin, miniflux, sss, mealie, and stirling databases
-2. **retry job** runs at 04:30 (except wednesday), re-scanning any containers blocked by vulnerabilities
-
-### recommended daily checks
-
-these are optional but helpful for catching issues early:
+### verify all containers running
 
 ```bash
-# quick health overview
-docker compose ps --format "table {{.Names}}\t{{.Status}}" | grep -v "running"
+cd /docker-compose
 
-# check if any containers restarted unexpectedly
-docker ps --format "{{.Names}}\t{{.Status}}" | grep -i "restarting"
+# quick count (expect 29)
+docker compose ps --format "{{.Names}}" | wc -l
 
-# check postgres-backup last run
-docker logs postgres-backup --tail 5 2>&1 | tail -3
+# show any non-running containers
+docker compose ps --format "table {{.Names}}\t{{.Status}}" | grep -v "Up"
+
+# check for unhealthy containers
+docker ps --format "{{.Names}}\t{{.Status}}" | grep -i "unhealthy"
 ```
 
-if any containers show as unhealthy or restarting, investigate with:
+### check notification system
 
 ```bash
-docker logs <container_name> --tail 50
+# verify ntfy is responding
+curl -s -o /dev/null -w "%{http_code}" http://localhost:8888
+
+# send test notification
+curl -s -X POST http://localhost:8888/test \
+  -H "Title: Health Check" \
+  -d "Amy maintenance check $(date)"
 ```
 
 ---
 
 ## weekly operations
 
-### what happens automatically (wednesday)
-
-1. **diun** scans all images for updates at 04:00 and sends ntfy notifications
-2. **secure-container-update.sh** runs at 04:30:
-   - pulls new images for containers with available updates
-   - scans each with trivy for critical/high CVEs
-   - deploys clean images, blocks vulnerable ones
-   - runs health checks after each update
-   - sends ntfy notifications for all events
-
-### recommended weekly checks
+### review update reports
 
 ```bash
-# review update logs from wednesday
-cat /docker-compose/configs/secure-update/logs/$(date -d "last wednesday" +%Y-%m-%d).log
+# list recent reports
+ls -lt /docker-compose/reports/weekly-reports/ | head -5
 
-# check retry queue for stuck containers
-cat /docker-compose/configs/secure-update/retry-queue.json
-
-# verify all 29 services are running
-docker compose ps --format "table {{.Names}}\t{{.Status}}" | wc -l
-
-# check disk usage
-df -h / | tail -1
-du -sh /docker/ /portainer/ /docker-compose/configs/secure-update/
+# read latest report
+cat /docker-compose/reports/weekly-reports/$(ls -t /docker-compose/reports/weekly-reports/ | head -1)
 ```
 
-### clearing the trivy cache
-
-if the trivy cache grows too large:
+### check retry queue
 
 ```bash
-# check current size
-du -sh /docker/trivy/cache/
+cat /docker-compose/configs/secure-update/retry-queue.json
+```
 
-# clear and let trivy rebuild on next scan
-docker compose stop trivy
-rm -rf /docker/trivy/cache/*
-docker compose start trivy
+if containers are stuck for more than a week:
 
-# verify trivy is healthy
-sleep 10 && docker compose ps trivy
+```bash
+bash /docker-compose/scripts/secure-container-update.sh scan <container_name>
+```
+
+### check disk usage
+
+```bash
+# filesystem usage
+df -h /
+
+# docker disk usage
+docker system df
+
+# largest directories
+du -sh /docker/*/ 2>/dev/null | sort -rh | head -10
+du -sh /portainer/*/ 2>/dev/null | sort -rh | head -5
 ```
 
 ---
 
 ## monthly operations
 
-### recommended monthly checks
+### clean up unused docker resources
 
 ```bash
-# review backup retention (should show 7 daily, 4 weekly, 6 monthly)
-ls -la /docker/postgres-backup/
+cd /docker-compose
 
-# check docker disk usage
-docker system df
-
-# prune unused images (only dangling — safe)
+# remove unused images
 docker image prune -f
 
-# check overall system resources
-free -h
-df -h
-uptime
+# remove build cache
+docker builder prune -f
+
+# check for dangling volumes
+docker volume ls --filter dangling=true
 ```
 
-### pruning old update logs
+### verify backups
 
 ```bash
-# remove logs older than 180 days
-find /docker-compose/configs/secure-update/logs/ -name "*.log" -mtime +180 -delete
-find /docker-compose/configs/secure-update/scan-reports/ -name "*.json" -mtime +180 -delete
+# check postgres backup exists and is recent
+ls -lht /docker/postgres-backup/ | head -10
+
+# verify backup sizes are reasonable
+find /docker/postgres-backup/ -name "*.sql*" -mtime -1 -exec ls -lh {} \;
+```
+
+### system updates
+
+```bash
+# update debian packages
+apt update && apt upgrade -y
+
+# check if reboot required
+[ -f /var/run/reboot-required ] && echo "Reboot required" || echo "No reboot needed"
 ```
 
 ---
 
 ## common tasks
 
-### deploy a compose file change
-
-```bash
-cd /docker-compose
-
-# always validate before applying
-docker compose config > /dev/null && echo "✅ YAML valid" || echo "❌ YAML invalid"
-
-# apply changes (only affected containers are recreated)
-docker compose up -d
-
-# verify
-docker compose ps --format "table {{.Names}}\t{{.Status}}" | grep -v "running"
-```
-
 ### restart a single service
 
 ```bash
-# graceful restart
+cd /docker-compose
 docker compose restart <service_name>
-
-# force recreate (picks up image or config changes)
-docker compose up -d --force-recreate <service_name>
 ```
 
-### update a single service manually
+### restart all services
 
 ```bash
-# pull latest image
+cd /docker-compose
+docker compose down && docker compose up -d
+```
+
+### view logs
+
+```bash
+# recent logs
+docker logs <container_name> --tail 50
+
+# follow logs
+docker logs <container_name> -f
+
+# logs with timestamps
+docker logs <container_name> --tail 100 -t
+```
+
+### update a single container manually
+
+```bash
+cd /docker-compose
 docker compose pull <service_name>
-
-# recreate with new image
-docker compose up -d --force-recreate <service_name>
-
-# verify
-docker compose ps <service_name>
-docker logs <service_name> --tail 20
+docker compose up -d <service_name>
 ```
 
-### view service logs
+### check container resource usage
 
 ```bash
-# follow logs in real-time
-docker logs -f <service_name>
-
-# last 100 lines with timestamps
-docker logs -t --tail 100 <service_name>
-
-# search for errors
-docker logs <service_name> 2>&1 | grep -i "error\|fatal\|panic"
-```
-
-### access a container shell
-
-```bash
-# interactive shell (most containers)
-docker exec -it <service_name> /bin/sh
-
-# bash if available
-docker exec -it <service_name> /bin/bash
-
-# run a single command
-docker exec <service_name> <command>
-```
-
-### check service health
-
-```bash
-# run full health check suite
-/docker-compose/scripts/health-checks.sh all
-
-# check specific service
-/docker-compose/scripts/health-checks.sh postgres
-/docker-compose/scripts/health-checks.sh ntfy
-/docker-compose/scripts/health-checks.sh pihole
+docker stats --no-stream
 ```
 
 ---
 
 ## backup procedures
 
-### postgresql — automatic
+### automated postgres backup
 
-the `postgres-backup` container handles daily backups automatically.
-
-| property | value |
-|----------|-------|
-| **databases** | atuin, miniflux, sss, mealie, stirling |
-| **schedule** | daily at midnight |
-| **location** | `/docker/postgres-backup/` |
-| **retention** | 7 daily, 4 weekly, 6 monthly |
-
-verify backups are running:
+postgres-backup runs daily and backs up atuin, miniflux, sss, mealie, and stirling:
 
 ```bash
-docker logs postgres-backup --tail 10 2>&1
-ls -la /docker/postgres-backup/
+# verify backup container is running
+docker ps --format "{{.Names}}\t{{.Status}}" | grep postgres-backup
+
+# check latest backups
+ls -lht /docker/postgres-backup/ | head -10
 ```
 
-### postgresql — manual
+### manual postgres backup
 
 ```bash
-# full backup of all databases
-docker exec postgres pg_dumpall -U postgres > /docker/backups/postgres/manual/backup-$(date +%Y%m%d-%H%M%S).sql
+# full dump (all databases)
+docker exec postgres pg_dumpall -U postgres > /docker/backups/postgres/manual-$(date +%Y%m%d).sql
 
-# single database backup
-docker exec postgres pg_dump -U postgres atuin > /docker/backups/postgres/manual/atuin-$(date +%Y%m%d).sql
-docker exec postgres pg_dump -U postgres miniflux > /docker/backups/postgres/manual/miniflux-$(date +%Y%m%d).sql
-docker exec postgres pg_dump -U postgres sss > /docker/backups/postgres/manual/sss-$(date +%Y%m%d).sql
-docker exec postgres pg_dump -U postgres mealie > /docker/backups/postgres/manual/mealie-$(date +%Y%m%d).sql
-docker exec postgres pg_dump -U postgres stirling > /docker/backups/postgres/manual/stirling-$(date +%Y%m%d).sql
-
-# verify backup
-ls -la /docker/backups/postgres/manual/
-head -20 /docker/backups/postgres/manual/backup-*.sql
+# single database
+docker exec postgres pg_dump -U postgres atuin > /docker/backups/postgres/atuin-$(date +%Y%m%d).sql
 ```
 
 ### configuration backup
 
-the docker-compose.yaml, .env.template, telegraf.conf, and all documentation are version-controlled in the `futurama-docker` git repository.
+the git repository at `~/code/futurama-docker` (pushed to `github.com/om1d3/futurama-docker`) contains all configuration:
 
 ```bash
-# encrypt .env for offline backup
-cd /docker-compose
-gpg --symmetric --cipher-algo AES256 -o .env.gpg .env
+# on laptop
+cd ~/code/futurama-docker
 
-# backup compose file
-cp docker-compose.yaml docker-compose.yaml.backup.$(date +%Y%m%d)
-```
+# pull latest configs from production
+scp root@192.168.21.130:/docker-compose/docker-compose.yaml amy/docker-compose.yaml
+scp root@192.168.21.130:/docker-compose/.env /tmp/amy.env
 
-### full data backup
+# re-encrypt .env
+gpg --symmetric --cipher-algo AES256 -o amy/.env.gpg /tmp/amy.env
+rm /tmp/amy.env
 
-```bash
-# backup entire docker data directory (stop services first for consistency)
-docker compose stop
-tar -czvf /tmp/amy-docker-$(date +%Y%m%d).tar.gz /docker/
-docker compose start
+# update .env.example
+sed 's/=.*/=/' /tmp/amy.env > amy/.env.example
 
-# or backup while running (less consistent but no downtime)
-tar -czvf /tmp/amy-docker-$(date +%Y%m%d).tar.gz /docker/
+# commit and push
+git add .
+git commit -m "amy v99: <description>"
+git push
 ```
 
 ---
 
 ## restore procedures
 
-### postgresql restore — full
+### restore postgres from backup
 
 ```bash
-# stop all dependent services
-docker compose stop atuin miniflux spendspentspent mealie postgres-backup
+# list available backups
+bash /docker-compose/scripts/rollback.sh list-postgres
 
-# restore from backup
-docker exec -i postgres psql -U postgres < /docker/backups/postgres/manual/backup-20260208.sql
+# restore full backup
+bash /docker-compose/scripts/rollback.sh postgres /docker/postgres-backup/last/atuin-latest.sql.gz
 
-# restart dependent services
-docker compose start atuin miniflux spendspentspent mealie postgres-backup
-
-# verify
-/docker-compose/scripts/health-checks.sh postgres
+# restore single database
+bash /docker-compose/scripts/rollback.sh database atuin /docker/postgres-backup/daily/atuin-20260210.sql.gz
 ```
 
-### postgresql restore — single database
+### restore single container from image backup
 
 ```bash
-# stop only the affected service
-docker compose stop miniflux
+# list backups
+bash /docker-compose/scripts/rollback.sh list-containers ntfy
 
-# drop and recreate the database
-docker exec postgres psql -U postgres -c "DROP DATABASE IF EXISTS miniflux;"
-docker exec postgres psql -U postgres -c "CREATE DATABASE miniflux;"
+# rollback to most recent backup
+bash /docker-compose/scripts/rollback.sh container ntfy
 
-# restore
-docker exec -i postgres psql -U postgres -d miniflux < /docker/backups/postgres/manual/miniflux-20260208.sql
-
-# restart the service
-docker compose start miniflux
+# rollback to second backup
+bash /docker-compose/scripts/rollback.sh container ntfy 2
 ```
 
-### container image rollback
+### restore from git repository
 
 ```bash
-# use the rollback script
-/docker-compose/scripts/rollback.sh list-containers <service_name>
-/docker-compose/scripts/rollback.sh container <service_name>
+# on laptop
+cd ~/code/futurama-docker
 
-# or manual rollback
-docker compose stop <service_name>
-docker tag <old_image> <service_image>:latest
-docker compose up -d <service_name>
-```
+# decrypt .env
+gpg --decrypt --output /tmp/amy.env amy/.env.gpg
 
-### full docker-compose rollback
+# deploy to amy
+scp amy/docker-compose.yaml root@192.168.21.130:/docker-compose/
+scp /tmp/amy.env root@192.168.21.130:/docker-compose/.env
+rm /tmp/amy.env
 
-```bash
-# restore from backup
-cp docker-compose.yaml docker-compose.yaml.broken
-cp docker-compose.yaml.backup.<date> docker-compose.yaml
-
-# validate
-docker compose config > /dev/null && echo "✅ YAML valid"
-
-# apply
-docker compose up -d
+# restart services on amy
+ssh root@192.168.21.130 'cd /docker-compose && docker compose up -d'
 ```
 
 ---
 
 ## emergency procedures
 
-### all services down
+### ntfy down (both hosts lose notifications)
 
 ```bash
-# check docker daemon
-systemctl status docker
+# check ntfy
+docker ps | grep ntfy
+docker logs ntfy --tail 20
 
-# if docker is down, restart it
-systemctl restart docker
+# restart ntfy
+docker restart ntfy
 
-# bring up all services
+# verify
+curl -s -o /dev/null -w "%{http_code}" http://localhost:8888
+```
+
+### pihole down / DNS failover active
+
+if bender's pihole failed and amy is serving DNS:
+
+```bash
+# verify amy's pihole is healthy
+docker ps | grep pihole
+dig @localhost google.com +short
+
+# check keepalived VIP is on amy
+ip addr show enp4s0 | grep 192.168.21.100
+
+# check when nebula-sync last replicated config
+ls -la /docker/pihole/etc-pihole/pihole.toml
+```
+
+### postgres won't start
+
+```bash
+# check logs
+docker logs postgres --tail 50
+
+# check disk space
+df -h /
+df -h /portainer/
+
+# check data directory
+ls -la /portainer/postgresql/data/
+
+# if data corruption suspected
+bash /docker-compose/scripts/rollback.sh list-postgres
+```
+
+### all services down after reboot
+
+```bash
+# start all services
 cd /docker-compose
 docker compose up -d
 
@@ -386,153 +353,134 @@ docker compose up -d
 docker compose ps --format "table {{.Names}}\t{{.Status}}"
 ```
 
-### DNS failure (pihole down)
-
-```bash
-# check pihole status
-docker compose ps pihole
-docker logs pihole --tail 20
-
-# restart pihole
-docker compose restart pihole
-
-# check keepalived VIP status
-ip addr show | grep 192.168.21.100
-
-# if VIP is not on amy, check keepalived
-docker logs keepalived --tail 20
-docker compose restart keepalived
-
-# emergency: set fallback DNS on the host
-echo "nameserver 1.1.1.1" > /etc/resolv.conf
-```
-
-### postgresql won't start
-
-```bash
-# check logs for the error
-docker logs postgres --tail 50
-
-# common fix: check disk space
-df -h /portainer/postgresql/
-
-# common fix: check permissions
-ls -la /portainer/postgresql/data/
-
-# if data is corrupted, restore from backup
-docker compose stop postgres atuin miniflux spendspentspent mealie postgres-backup
-# (restore procedure — see restore section above)
-```
-
-### ntfy down (no notifications)
-
-```bash
-# check ntfy status
-docker compose ps ntfy
-docker logs ntfy --tail 20
-
-# restart ntfy
-docker compose restart ntfy
-
-# test notification delivery
-curl -d "test message" http://localhost:8888/test-topic
-
-# IMPORTANT: bender also depends on amy's ntfy for notifications
-# if ntfy stays down, bender's diun and update script notifications will fail silently
-```
-
-### container in restart loop
-
-```bash
-# identify the container
-docker ps -a --format "table {{.Names}}\t{{.Status}}" | grep -i "restarting"
-
-# check logs for the root cause
-docker logs <container_name> --tail 100
-
-# stop the container to prevent restart loop
-docker compose stop <container_name>
-
-# investigate and fix, then restart
-docker compose start <container_name>
-```
-
 ---
 
 ## service-specific maintenance
 
-### pihole
+### atuin
+
+the atuin command was changed from `server start` to `start` in v99 due to an upstream binary change (atuin → atuin-server):
 
 ```bash
-# check gravity database (blocklists)
-docker exec pihole pihole -g
+# verify atuin is running
+docker ps --format "{{.Names}}\t{{.Status}}" | grep atuin
 
-# check query log stats
-docker exec pihole pihole -c -e
+# check logs for startup errors
+docker logs atuin --tail 20
 
-# flush DNS cache
-docker exec pihole pihole restartdns
+# if atuin fails with "unknown command 'server'", verify compose has:
+#   command: start
+# (not: command: server start)
 ```
 
-### telegraf (SNMP monitoring)
-
-telegraf monitors the cisco 3750x switch and brother MFC-L3710CW printer via SNMP. the config is read-only mounted from `/portainer/telegraf/config/telegraf.conf`.
+### telegraf
 
 ```bash
-# check telegraf status
+# check telegraf is collecting data
 docker logs telegraf --tail 20
 
-# test SNMP connectivity to the switch
-docker exec telegraf telegraf --test --config /etc/telegraf/telegraf.conf 2>&1 | head -30
+# verify SNMP connectivity to switch
+docker exec telegraf snmpwalk -v2c -c futurama 192.168.21.5 1.3.6.1.2.1.1.5.0 2>/dev/null || echo "SNMP failed"
 
-# if modifying telegraf.conf, edit the source file:
-nano /portainer/telegraf/config/telegraf.conf
+# verify SNMP connectivity to printer
+docker exec telegraf snmpwalk -v2c -c public 192.168.21.10 1.3.6.1.2.1.1.1.0 2>/dev/null || echo "SNMP failed"
 
-# then restart telegraf to pick up changes
-docker compose restart telegraf
+# check influxdb connectivity
+curl -s "http://192.168.21.220:8086/ping" && echo "InfluxDB reachable" || echo "InfluxDB unreachable"
 ```
 
-### cadvisor
+### beszel
 
 ```bash
-# check cadvisor resource usage
-docker stats cadvisor --no-stream
+# check beszel hub
+curl -s -o /dev/null -w "%{http_code}" http://localhost:8090
 
-# verify metrics endpoint
-curl -s http://localhost:9099/metrics | head -20
+# check beszel-agent
+docker ps --format "{{.Names}}\t{{.Status}}" | grep beszel-agent
 
-# if cadvisor errors about stale overlay2 paths, these are harmless
-# they occur when containers are removed but cadvisor still references old paths
-docker logs cadvisor 2>&1 | grep -c "no such file"
+# verify bender's agent is reporting (check beszel web UI)
 ```
 
-### postgres-backup
+### mealie
 
 ```bash
-# check last backup status
-docker logs postgres-backup --tail 10
+# check mealie
+docker ps --format "{{.Names}}\t{{.Status}}" | grep mealie
 
-# list backups by database
-ls -la /docker/postgres-backup/
+# verify database connection
+docker exec postgres psql -U postgres -d mealie -c "SELECT 1;"
 
-# manually trigger a backup
-docker exec postgres-backup /backup.sh
+# check logs
+docker logs mealie --tail 20
 ```
 
-### keepalived
+### spendspentspent
 
 ```bash
-# check VIP status
-ip addr show | grep 192.168.21.100
+# check service
+docker ps --format "{{.Names}}\t{{.Status}}" | grep spendspentspent
 
-# check keepalived logs
-docker logs keepalived --tail 20
+# verify database
+docker exec postgres psql -U postgres -d sss -c "SELECT 1;"
 
-# force failover test (on amy — will release VIP to bender if bender is healthy)
-docker stop keepalived
-sleep 10
-# verify bender took over VIP: dig @192.168.21.100 google.com
-docker start keepalived
+# check playwright-chrome (needed for bank scraping)
+docker ps --format "{{.Names}}\t{{.Status}}" | grep playwright-chrome
+```
+
+---
+
+## system maintenance
+
+### cron jobs
+
+verify cron jobs are configured:
+
+```bash
+crontab -l | grep -E "secure-container|retry"
+```
+
+expected:
+
+| schedule | command |
+|----------|---------|
+| `30 4 * * 3` | `bash /docker-compose/scripts/secure-container-update.sh weekly` |
+| `30 4 * * 0-2,4-6` | `bash /docker-compose/scripts/secure-container-update.sh retry` |
+
+### debian system updates
+
+```bash
+# check for updates
+apt update
+apt list --upgradable
+
+# apply updates
+apt upgrade -y
+
+# reboot if kernel was updated
+[ -f /var/run/reboot-required ] && reboot
+```
+
+### docker updates
+
+```bash
+# check docker version
+docker --version
+docker compose version
+
+# update docker (if using docker's official repo)
+apt update && apt upgrade docker-ce docker-ce-cli containerd.io docker-compose-plugin -y
+```
+
+### SSH key for bender access
+
+bender's pihole-dns-update.sh connects to amy as user `kube` via SSH. if amy is reinstalled or SSH keys are regenerated:
+
+```bash
+# on bender, verify SSH access works
+ssh -o ConnectTimeout=5 -o BatchMode=yes kube@192.168.21.130 "docker ps -q | wc -l"
+
+# if it fails, re-copy bender's public key to amy
+ssh-copy-id kube@192.168.21.130
 ```
 
 ---

@@ -2,8 +2,8 @@
 
 ## complete file system layout
 
-**document version:** 2.0
-**infrastructure version:** 105
+**document version:** 3.0
+**infrastructure version:** 109
 **last updated:** february 2026
 
 ---
@@ -13,14 +13,16 @@
 1. [overview](#overview)
 2. [docker-compose directory](#docker-compose-directory)
 3. [container configurations — configs/](#container-configurations--configs)
-4. [media libraries](#media-libraries)
-5. [immich data](#immich-data)
-6. [download data](#download-data)
-7. [backup data](#backup-data)
-8. [volume mount reference](#volume-mount-reference)
-9. [network mode reference](#network-mode-reference)
-10. [path conventions](#path-conventions)
-11. [TrueNAS-specific notes](#truenas-specific-notes)
+4. [build contexts](#build-contexts)
+5. [media libraries](#media-libraries)
+6. [immich data](#immich-data)
+7. [text-to-speech data](#text-to-speech-data)
+8. [download data](#download-data)
+9. [backup data](#backup-data)
+10. [volume mount reference](#volume-mount-reference)
+11. [network mode reference](#network-mode-reference)
+12. [path conventions](#path-conventions)
+13. [TrueNAS-specific notes](#truenas-specific-notes)
 
 ---
 
@@ -37,8 +39,14 @@ all of bender's container data lives under a single ZFS path: `/mnt/BIG/filme/`.
 | `/mnt/BIG/filme/seriale/` | TV show library |
 | `/mnt/BIG/filme/music/` | music library |
 | `/mnt/BIG/filme/books/` | ebook library |
+| `/mnt/BIG/filme/audiobookshelf/` | audiobooks, podcasts, metadata |
+| `/mnt/BIG/filme/tts/` | TTS input directories (4 voice folders) |
 | `/mnt/BIG/filme/transmission/` | torrent downloads |
 | `/mnt/BIG/filme/backups/` | database backups |
+| `/mnt/BIG/filme/syncthing/` | syncthing data + config |
+| `/mnt/BIG/filme/metube/` | youtube downloads |
+| `/mnt/BIG/filme/jdownloader/` | jdownloader output |
+| `/mnt/BIG/filme/spotdl/` | spotify downloads |
 
 the naming convention (`/mnt/BIG/filme/filme/` for movies) is historical — `filme` is the Romanian word for "films/movies". the outer `filme` is the ZFS dataset name, the inner `filme` is the movie library directory.
 
@@ -48,13 +56,13 @@ the naming convention (`/mnt/BIG/filme/filme/` for movies) is historical — `fi
 
 ```
 /mnt/BIG/filme/docker-compose/
-├── docker-compose.yaml             # v105 — main compose file (33 services)
+├── docker-compose.yaml             # v109 — main compose file (36 services)
 ├── .env                            # environment variables (28 variables)
 └── scripts/
-    ├── secure-container-update.sh  # automated update orchestration
-    ├── health-checks.sh            # post-update health verification
-    ├── rollback.sh                 # rollback helper
-    └── pihole-dns-update.sh        # reference copy (executable at /root/)
+    ├── secure-container-update.sh  # v1.2 — automated update orchestration
+    ├── health-checks.sh            # v1.2 — post-update health verification
+    ├── rollback.sh                 # v1.1 — rollback helper
+    └── pihole-dns-update.sh        # v3.0 — reference copy (executable at /root/)
 ```
 
 > **note:** on TrueNAS, scripts under `/mnt/` cannot be executed directly due to filesystem restrictions. the secure-container-update.sh cron job copies the script to `/tmp/` before execution. the pihole-dns-update.sh executable lives at `/root/pihole-dns-update.sh`.
@@ -63,103 +71,126 @@ the naming convention (`/mnt/BIG/filme/filme/` for movies) is historical — `fi
 
 ## container configurations — configs/
 
-each service that needs persistent configuration gets a subdirectory under `/mnt/BIG/filme/configs/`:
-
 ```
 /mnt/BIG/filme/configs/
-├── audiobookshelf/          # audiobookshelf config, library database
-├── bazarr/                  # bazarr settings, subtitle profiles
-├── diun/                    # image update tracking database
-├── dockwatch/               # dockwatch configuration
-├── gluetun/                 # VPN connection state and wireguard keys
+├── audiobookshelf/             # audiobookshelf config
+├── bazarr/                     # subtitle manager config
+├── diun/                       # image update notifier data
+├── dockwatch/                  # container management config
+├── epub2tts-edge/              # v108: epub2tts-edge build context
+│   └── Dockerfile
+├── gluetun/                    # VPN client state
 ├── hedgedoc/
-│   └── uploads/             # user-uploaded images and attachments
-├── jdownloader/             # jdownloader settings, link grabber config
-├── jellyfin/                # jellyfin server config, metadata cache, plugins
+│   └── uploads/                # hedgedoc uploaded files
+├── jdownloader/                # jdownloader config
+├── jellyfin/                   # media server config + cache
 ├── keepalived/
-│   └── keepalived.conf      # VRRP configuration (read-only mount)
-├── lidarr/                  # lidarr settings, music database
+│   └── keepalived.conf         # VRRP master config (bond0, priority 200)
+├── lidarr/                     # music automation config
 ├── pihole/
-│   ├── etc-pihole/          # pihole configuration, gravity database
-│   └── etc-dnsmasq.d/       # dnsmasq overrides
+│   ├── etc-pihole/             # pihole config (includes pihole.toml)
+│   └── etc-dnsmasq.d/         # dnsmasq config
 ├── postgres/
-│   └── init/                # database initialization scripts (read-only)
-├── prowlarr/                # prowlarr settings, indexer database
-├── qbittorrent/             # qbittorrent config (commented service — preserved)
-├── radarr/                  # radarr settings, movie database
-├── readarr/                 # readarr settings, book database
-├── sonarr/                  # sonarr settings, TV database
-├── trivy/                   # vulnerability database cache
+│   └── init/                   # init scripts (read-only mount)
+├── prowlarr/                   # indexer manager config
+├── radarr/                     # movie automation config
+├── readarr/                    # ebook automation config
+├── sonarr/                     # tv automation config
+├── transmission/               # v108: custom build context
+│   ├── Dockerfile              # pre-baked Flood UI build
+│   └── ...                     # transmission config files
+├── trivy/                      # vulnerability scanner cache
 ├── tsdproxy/
-│   ├── data/
-│   │   └── tailscale/       # tailscale node state and certificates
-│   └── config/              # tsdproxy configuration
-└── vaultwarden/             # vaultwarden data (sqlite database, attachments, keys)
+│   ├── data/tailscale/         # tailscale state
+│   └── config/                 # tsdproxy config
+├── tts-pipeline/               # v108: tts-pipeline build context
+│   ├── Dockerfile              # Flask web UI + pipeline.sh
+│   ├── pipeline.sh             # filesystem watcher script
+│   ├── webapp.py               # v109: Flask web interface
+│   └── start.sh                # v109: entrypoint (starts both watcher + web)
+└── vaultwarden/                # password manager data
+```
+
+---
+
+## build contexts
+
+three containers use `build:` directives instead of pre-built images. their Dockerfiles and supporting files live under `/mnt/BIG/filme/configs/`:
+
+| container | build context | key files |
+|-----------|--------------|-----------|
+| transmission | `/mnt/BIG/filme/configs/transmission/` | Dockerfile (base: lscr.io/linuxserver/transmission:4.0.5, adds Flood UI) |
+| tts-pipeline | `/mnt/BIG/filme/configs/tts-pipeline/` | Dockerfile, pipeline.sh, webapp.py, start.sh |
+| epub2tts-edge | `/mnt/BIG/filme/configs/epub2tts-edge/` | Dockerfile (profiles: tools, on-demand only) |
+
+to rebuild after changes:
+
+```bash
+cd /mnt/BIG/filme/docker-compose
+docker compose build --no-cache <service_name>
+docker compose up -d <service_name>
 ```
 
 ---
 
 ## media libraries
 
-these directories contain the actual media files served by jellyfin, audiobookshelf, and the ARR stack:
-
 ```
-/mnt/BIG/filme/
-├── filme/                   # movie library (1200+ films)
-│                            # mounted as /data/movies in jellyfin
-│                            # mounted as /movies in radarr, bazarr
-│
-├── seriale/                 # TV show library (180+ series)
-│                            # mounted as /data/tvshows in jellyfin
-│                            # mounted as /tv in sonarr, bazarr
-│
-├── music/                   # music library (240+ artists)
-│                            # mounted as /data/music in jellyfin
-│                            # mounted as /music in lidarr
-│
-├── books/                   # ebook library
-│                            # mounted as /books in readarr
-│
-├── audiobookshelf/
-│   ├── audiobooks/          # audiobook files
-│   ├── podcasts/            # podcast episodes
-│   └── metadata/            # audiobookshelf metadata cache
-│
-├── metube/                  # youtube downloads (metube output)
-├── spotdl/                  # spotify downloads (spotdl output)
-├── jdownloader/             # jdownloader output directory
-│
-└── syncthing/               # syncthing data + config (single volume)
+/mnt/BIG/filme/filme/               # movie library
+                                    # consumers: jellyfin (/data/movies), radarr (/movies), bazarr (/movies)
+
+/mnt/BIG/filme/seriale/             # TV show library
+                                    # consumers: jellyfin (/data/tvshows), sonarr (/tv), bazarr (/tv)
+
+/mnt/BIG/filme/music/               # music library
+                                    # consumers: jellyfin (/data/music), lidarr (/music)
+
+/mnt/BIG/filme/books/               # ebook library
+                                    # consumers: readarr (/books)
 ```
-
-### jellyfin volume mapping
-
-| jellyfin internal path | host path | used by |
-|-----------------------|-----------|---------|
-| `/data/movies` | `/mnt/BIG/filme/filme` | movie library |
-| `/data/tvshows` | `/mnt/BIG/filme/seriale` | TV show library (v105 fix) |
-| `/data/music` | `/mnt/BIG/filme/music` | music library |
-| `/config` | `/mnt/BIG/filme/configs/jellyfin` | server configuration |
-
-> **note:** jellyfin's TV library was configured to use `/data/tvshows` internally. in v105, the volume mount was updated from `/data/tv` to `/data/tvshows` to match the library configuration, fixing "access denied" errors and missing metadata.
 
 ---
 
 ## immich data
 
-immich stores its data separately from the configs directory due to the volume of photo/video files:
-
 ```
 /mnt/BIG/filme/immich/
-├── photos/                  # uploaded photos and videos (/usr/src/app/upload)
-├── postgresql/              # ⚠️ CRITICAL — immich + hedgedoc database
-│                            # contains vectorchord/pgvectors extensions
-│                            # DO NOT MOVE — actively used by postgres container
-├── redis/                   # redis persistence files
-└── ml-cache/                # machine learning model cache
+├── photos/                         # original uploaded photos
+│                                   # consumer: immich_server (/usr/src/app/upload)
+├── postgresql/                     # CRITICAL — immich database
+│                                   # consumer: postgres (/var/lib/postgresql/data)
+├── redis/                          # redis persistent data
+│                                   # consumer: immich_redis (/data)
+└── ml-cache/                       # machine learning model cache
+                                    # consumer: immich_machine_learning (/cache)
 ```
 
-> **⚠️ CRITICAL:** the postgresql directory at `/mnt/BIG/filme/immich/postgresql` contains the production database for both immich and hedgedoc. this path is mounted directly as postgres's data directory. moving or corrupting this directory will result in total data loss for both services. always backup before any postgres operations.
+> **CRITICAL:** `/mnt/BIG/filme/immich/postgresql` contains the actual immich database with all photo metadata. this path is the most critical data on bender. it is backed up daily by postgres-backup and receives pre-upgrade dumps before any postgres updates.
+
+---
+
+## text-to-speech data
+
+```
+/mnt/BIG/filme/tts/
+└── input/                          # TTS input directories (v109)
+    ├── ro-emil/                    # → ro-RO-EmilNeural (Romanian male)
+    ├── ro-alina/                   # → ro-RO-AlinaNeural (Romanian female)
+    ├── en-ryan/                    # → en-GB-RyanNeural (British male)
+    └── en-sonia/                   # → en-GB-SoniaNeural (British female)
+                                    # consumer: tts-pipeline (/input)
+
+/mnt/BIG/filme/audiobookshelf/
+├── audiobooks/                     # audiobook library
+│   └── cărți/                      # TTS output goes here for automatic pickup
+│                                   # consumers: audiobookshelf (/audiobooks), tts-pipeline (/audiobooks)
+├── podcasts/                       # podcast library
+│                                   # consumer: audiobookshelf (/podcasts)
+└── metadata/                       # audiobookshelf metadata
+                                    # consumer: audiobookshelf (/metadata)
+```
+
+the tts-pipeline watches all 4 input directories and auto-selects the voice based on which directory the file is placed in. output M4B files go to `/audiobooks/cărți/` where audiobookshelf picks them up automatically.
 
 ---
 
@@ -167,14 +198,24 @@ immich stores its data separately from the configs directory due to the volume o
 
 ```
 /mnt/BIG/filme/transmission/
-├── completed/               # finished downloads
-├── incomplete/              # in-progress downloads
-├── watch/                   # .torrent file watch directory
+├── completed/                      # finished downloads
+├── incomplete/                     # in-progress downloads
+├── watch/                          # torrent file watch directory
 └── config/
-    └── transmission-home/   # transmission configuration
-```
+    └── transmission-home/          # transmission config (/config mount)
+                                    # consumers: transmission (/data), sonarr (/downloads),
+                                    #            radarr (/downloads), lidarr (/downloads),
+                                    #            readarr (/downloads), unpackerr (/downloads)
 
-the entire `/mnt/BIG/filme/transmission/` directory is mounted into transmission, sonarr, radarr, lidarr, readarr, and unpackerr so they can all access downloaded files for import and post-processing.
+/mnt/BIG/filme/metube/              # youtube downloads
+                                    # consumer: metube (/downloads)
+
+/mnt/BIG/filme/jdownloader/         # jdownloader output
+                                    # consumer: jdownloader (/output)
+
+/mnt/BIG/filme/spotdl/              # spotify downloads
+                                    # consumer: spotdl (/music)
+```
 
 ---
 
@@ -182,176 +223,154 @@ the entire `/mnt/BIG/filme/transmission/` directory is mounted into transmission
 
 ```
 /mnt/BIG/filme/backups/
-└── postgres/                # automated daily postgresql backups
-                             # databases: immich, hedgedoc
-                             # retention: 7 daily, 4 weekly, 6 monthly
+└── postgres/                       # postgresql backups
+    ├── pre-upgrade/                # pre-upgrade dumps (created by secure-container-update.sh)
+    └── ...                         # daily/weekly/monthly from postgres-backup container
+                                    # consumer: postgres-backup (/backups)
 ```
+
+retention policy: 7 daily, 4 weekly, 6 monthly backups.
 
 ---
 
 ## volume mount reference
 
-### services on media-network (bridge)
+### bridge network services (media-network)
 
-| service | container path | host path | mode |
-|---------|---------------|-----------|------|
-| tsdproxy | /data | /mnt/BIG/filme/configs/tsdproxy/data/tailscale | rw |
-| tsdproxy | /config | /mnt/BIG/filme/configs/tsdproxy/config | rw |
-| dockwatch | /config | /mnt/BIG/filme/configs/dockwatch | rw |
+| container | host path | container path | mode |
+|-----------|-----------|---------------|------|
+| tsdproxy | /var/run/docker.sock | /var/run/docker.sock | rw |
+| tsdproxy | configs/tsdproxy/data/tailscale | /data | rw |
+| tsdproxy | configs/tsdproxy/config | /config | rw |
+| dockwatch | configs/dockwatch | /config | rw |
+| dockwatch | /var/run/docker.sock | /var/run/docker.sock | rw |
 | dockerproxy | /var/run/docker.sock | /var/run/docker.sock | ro |
-| diun | /data | /mnt/BIG/filme/configs/diun | rw |
+| diun | configs/diun | /data | rw |
 | diun | /var/run/docker.sock | /var/run/docker.sock | ro |
-| trivy | /root/.cache/trivy | /mnt/BIG/filme/configs/trivy | rw |
+| trivy | configs/trivy | /root/.cache/trivy | rw |
 | trivy | /var/run/docker.sock | /var/run/docker.sock | ro |
-| gluetun | /gluetun | /mnt/BIG/filme/configs/gluetun | rw |
-| pihole | /etc/pihole | /mnt/BIG/filme/configs/pihole/etc-pihole | rw |
-| pihole | /etc/dnsmasq.d | /mnt/BIG/filme/configs/pihole/etc-dnsmasq.d | rw |
-| nebula-sync | (no volumes) | — | — |
-| postgres | /var/lib/postgresql/data | /mnt/BIG/filme/immich/postgresql | rw |
-| postgres | /docker-entrypoint-initdb.d | /mnt/BIG/filme/configs/postgres/init | ro |
-| postgres-backup | /backups | /mnt/BIG/filme/backups/postgres | rw |
-| immich_redis | /data | /mnt/BIG/filme/immich/redis | rw |
-| immich_server | /usr/src/app/upload | /mnt/BIG/filme/immich/photos | rw |
-| immich_machine_learning | /cache | /mnt/BIG/filme/immich/ml-cache | rw |
-| jellyfin | /config | /mnt/BIG/filme/configs/jellyfin | rw |
-| jellyfin | /data/movies | /mnt/BIG/filme/filme | rw |
-| jellyfin | /data/tvshows | /mnt/BIG/filme/seriale | rw |
-| jellyfin | /data/music | /mnt/BIG/filme/music | rw |
-| audiobookshelf | /config | /mnt/BIG/filme/configs/audiobookshelf | rw |
-| audiobookshelf | /audiobooks | /mnt/BIG/filme/audiobookshelf/audiobooks | rw |
-| audiobookshelf | /podcasts | /mnt/BIG/filme/audiobookshelf/podcasts | rw |
-| audiobookshelf | /metadata | /mnt/BIG/filme/audiobookshelf/metadata | rw |
-| metube | /downloads | /mnt/BIG/filme/metube | rw |
-| spotdl | /music | /mnt/BIG/filme/spotdl | rw |
-| hedgedoc | /hedgedoc/public/uploads | /mnt/BIG/filme/configs/hedgedoc/uploads | rw |
-| vaultwarden | /data | /mnt/BIG/filme/configs/vaultwarden | rw |
-| unpackerr | /downloads | /mnt/BIG/filme/transmission | rw |
-| flaresolverr | (no volumes) | — | — |
-| cadvisor | /rootfs | / | ro |
+| gluetun | configs/gluetun | /gluetun | rw |
+| pihole | configs/pihole/etc-pihole | /etc/pihole | rw |
+| pihole | configs/pihole/etc-dnsmasq.d | /etc/dnsmasq.d | rw |
+| postgres | immich/postgresql | /var/lib/postgresql/data | rw |
+| postgres | configs/postgres/init | /docker-entrypoint-initdb.d | ro |
+| postgres-backup | backups/postgres | /backups | rw |
+| immich_redis | immich/redis | /data | rw |
+| immich_server | immich/photos | /usr/src/app/upload | rw |
+| immich_machine_learning | immich/ml-cache | /cache | rw |
+| jellyfin | configs/jellyfin | /config | rw |
+| jellyfin | filme | /data/movies | rw |
+| jellyfin | seriale | /data/tvshows | rw |
+| jellyfin | music | /data/music | rw |
+| audiobookshelf | configs/audiobookshelf | /config | rw |
+| audiobookshelf | audiobookshelf/audiobooks | /audiobooks | rw |
+| audiobookshelf | audiobookshelf/podcasts | /podcasts | rw |
+| audiobookshelf | audiobookshelf/metadata | /metadata | rw |
+| metube | metube | /downloads | rw |
+| spotdl | spotdl | /music | rw |
+| hedgedoc | configs/hedgedoc/uploads | /hedgedoc/public/uploads | rw |
+| vaultwarden | configs/vaultwarden | /data | rw |
+| unpackerr | transmission | /downloads | rw |
+| flaresolverr | (none) | | |
+| edge-tts | (none) | | |
+| tts-pipeline | tts/input | /input | rw |
+| tts-pipeline | audiobookshelf/audiobooks | /audiobooks | rw |
+| cadvisor | / | /rootfs | ro |
 | cadvisor | /var/run | /var/run | ro |
 | cadvisor | /sys | /sys | ro |
-| cadvisor | /var/lib/docker | /var/lib/docker | ro |
+| cadvisor | /var/lib/docker/ | /var/lib/docker | ro |
 
-### services using gluetun network (no direct volumes to host ports)
+### gluetun network services (service:gluetun)
 
-| service | container path | host path | mode |
-|---------|---------------|-----------|------|
-| transmission | /config | /mnt/BIG/filme/transmission/config/transmission-home | rw |
-| transmission | /data | /mnt/BIG/filme/transmission | rw |
-| jdownloader | /config | /mnt/BIG/filme/configs/jdownloader | rw |
-| jdownloader | /output | /mnt/BIG/filme/jdownloader | rw |
-| prowlarr | /config | /mnt/BIG/filme/configs/prowlarr | rw |
-| sonarr | /config | /mnt/BIG/filme/configs/sonarr | rw |
-| sonarr | /tv | /mnt/BIG/filme/seriale | rw |
-| sonarr | /downloads | /mnt/BIG/filme/transmission | rw |
-| radarr | /config | /mnt/BIG/filme/configs/radarr | rw |
-| radarr | /movies | /mnt/BIG/filme/filme | rw |
-| radarr | /downloads | /mnt/BIG/filme/transmission | rw |
-| lidarr | /config | /mnt/BIG/filme/configs/lidarr | rw |
-| lidarr | /music | /mnt/BIG/filme/music | rw |
-| lidarr | /downloads | /mnt/BIG/filme/transmission | rw |
-| readarr | /config | /mnt/BIG/filme/configs/readarr | rw |
-| readarr | /books | /mnt/BIG/filme/books | rw |
-| readarr | /downloads | /mnt/BIG/filme/transmission | rw |
-| bazarr | /config | /mnt/BIG/filme/configs/bazarr | rw |
-| bazarr | /movies | /mnt/BIG/filme/filme | rw |
-| bazarr | /tv | /mnt/BIG/filme/seriale | rw |
+| container | host path | container path | mode |
+|-----------|-----------|---------------|------|
+| transmission | transmission/config/transmission-home | /config | rw |
+| transmission | transmission | /data | rw |
+| jdownloader | configs/jdownloader | /config | rw |
+| jdownloader | jdownloader | /output | rw |
+| prowlarr | configs/prowlarr | /config | rw |
+| sonarr | configs/sonarr | /config | rw |
+| sonarr | seriale | /tv | rw |
+| sonarr | transmission | /downloads | rw |
+| radarr | configs/radarr | /config | rw |
+| radarr | filme | /movies | rw |
+| radarr | transmission | /downloads | rw |
+| lidarr | configs/lidarr | /config | rw |
+| lidarr | music | /music | rw |
+| lidarr | transmission | /downloads | rw |
+| readarr | configs/readarr | /config | rw |
+| readarr | books | /books | rw |
+| readarr | transmission | /downloads | rw |
+| bazarr | configs/bazarr | /config | rw |
+| bazarr | filme | /movies | rw |
+| bazarr | seriale | /tv | rw |
 
-### services with host network
+### host network services
 
-| service | container path | host path | mode |
-|---------|---------------|-----------|------|
-| keepalived | /container/service/keepalived/assets/keepalived.conf | /mnt/BIG/filme/configs/keepalived/keepalived.conf | ro |
-| syncthing | /var/syncthing | /mnt/BIG/filme/syncthing | rw |
+| container | host path | container path | mode |
+|-----------|-----------|---------------|------|
+| keepalived | configs/keepalived/keepalived.conf | /container/service/keepalived/assets/keepalived.conf | ro |
+| syncthing | syncthing | /var/syncthing | rw |
 | beszel-agent | /var/run/docker.sock | /var/run/docker.sock | ro |
+
+### standalone services
+
+| container | host path | container path | mode |
+|-----------|-----------|---------------|------|
+| autoheal | /var/run/docker.sock | /var/run/docker.sock | rw |
+
+### services with no volumes
+
+nebula-sync, flaresolverr, edge-tts — no persistent volumes.
 
 ---
 
 ## network mode reference
 
-| service | network mode | reason |
-|---------|-------------|--------|
-| keepalived | host | direct access to network interfaces for VRRP |
-| syncthing | host | peer discovery and direct connections |
-| beszel-agent | host | access to host system metrics |
-| transmission | service:gluetun | VPN tunnel for torrent traffic |
-| jdownloader | service:gluetun | VPN tunnel for direct downloads |
-| prowlarr | service:gluetun | VPN tunnel for indexer queries |
-| sonarr | service:gluetun | VPN tunnel for API traffic |
-| radarr | service:gluetun | VPN tunnel for API traffic |
-| lidarr | service:gluetun | VPN tunnel for API traffic |
-| readarr | service:gluetun | VPN tunnel for API traffic |
-| bazarr | service:gluetun | VPN tunnel for subtitle downloads |
-| all others | media-network (bridge) | standard isolation with DNS anchor |
-
-the DNS anchor (`x-dns-config: &default-dns`) points bridge-networked services to `192.168.21.100` (keepalived VIP). host-networked services use the host's DNS. gluetun-networked services use gluetun's DNS (configured with `DOT=off` for plain DNS).
+| mode | services |
+|------|----------|
+| bridge (media-network) | tsdproxy, dockwatch, dockerproxy, diun, trivy, gluetun, pihole, nebula-sync, postgres, postgres-backup, immich_redis, immich_server, immich_machine_learning, jellyfin, audiobookshelf, metube, spotdl, hedgedoc, vaultwarden, unpackerr, flaresolverr, edge-tts, tts-pipeline, cadvisor |
+| host | keepalived, syncthing, beszel-agent |
+| service:gluetun | transmission, jdownloader, prowlarr, sonarr, radarr, lidarr, readarr, bazarr |
+| standalone | autoheal |
 
 ---
 
 ## path conventions
 
-### naming rules
-
-- all container configurations live under `/mnt/BIG/filme/configs/<service-name>/`
-- media libraries live directly under `/mnt/BIG/filme/` (filme, seriale, music, books)
-- immich has its own directory `/mnt/BIG/filme/immich/` due to the volume of photo data
-- download data lives under `/mnt/BIG/filme/transmission/` (shared across ARR stack)
-
-### shared volume mounts
-
-several host directories are mounted into multiple containers:
-
-| host path | mounted by | purpose |
-|-----------|-----------|---------|
-| `/mnt/BIG/filme/filme` | jellyfin, radarr, bazarr | movie library |
-| `/mnt/BIG/filme/seriale` | jellyfin, sonarr, bazarr | TV show library |
-| `/mnt/BIG/filme/music` | jellyfin, lidarr | music library |
-| `/mnt/BIG/filme/transmission` | transmission, sonarr, radarr, lidarr, readarr, unpackerr | download processing pipeline |
-| `/var/run/docker.sock` | tsdproxy, dockwatch, dockerproxy, diun, trivy, beszel-agent | docker API access |
-
-### backup considerations
-
-| path | backup method | frequency |
-|------|--------------|-----------|
-| `/mnt/BIG/filme/docker-compose/` | git repository (futurama-docker) | on change |
-| `/mnt/BIG/filme/backups/postgres/` | automated by postgres-backup container | daily |
-| `/mnt/BIG/filme/immich/postgresql/` | backed up via postgres-backup container | daily |
-| `/mnt/BIG/filme/immich/photos/` | ZFS snapshots recommended | as needed |
-| `/mnt/BIG/filme/configs/` | manual or scheduled backup | as needed |
-| media libraries (filme, seriale, music, books) | ZFS snapshots | as needed |
-
-### disk usage notes
-
-the largest consumers of disk space on bender are:
-- `/mnt/BIG/filme/filme/` — movie library (largest by far)
-- `/mnt/BIG/filme/seriale/` — TV show library
-- `/mnt/BIG/filme/immich/photos/` — uploaded photos and videos
-- `/mnt/BIG/filme/transmission/` — active and completed downloads
-- `/mnt/BIG/filme/immich/ml-cache/` — ML model files (can be regenerated)
-- `/mnt/BIG/filme/configs/trivy/` — vulnerability database cache (can be cleared)
+| convention | example |
+|------------|---------|
+| all host paths are relative to `/mnt/BIG/filme/` | `configs/jellyfin` → `/mnt/BIG/filme/configs/jellyfin` |
+| config volumes go under `configs/<service>/` | `/mnt/BIG/filme/configs/sonarr` |
+| data volumes have their own top-level directories | `/mnt/BIG/filme/filme/`, `/mnt/BIG/filme/music/` |
+| build contexts go under `configs/<service>/` | `/mnt/BIG/filme/configs/tts-pipeline/` |
+| backup data goes under `backups/` | `/mnt/BIG/filme/backups/postgres/` |
 
 ---
 
 ## TrueNAS-specific notes
 
-### script execution restriction
+### script execution
 
-TrueNAS does not allow executing scripts from `/mnt/` paths. the cron job for secure-container-update.sh works around this:
+TrueNAS does not allow executing scripts from `/mnt/` paths. workarounds:
+
+- **secure-container-update.sh**: cron copies to `/tmp/` before execution
+- **pihole-dns-update.sh**: executable copy lives at `/root/pihole-dns-update.sh`
+- **health-checks.sh and rollback.sh**: copy to `/tmp/` for manual use
 
 ```bash
-# cron copies script to /tmp before execution
-cp /mnt/BIG/filme/docker-compose/scripts/secure-container-update.sh /tmp/
-bash /tmp/secure-container-update.sh weekly
-rm /tmp/secure-container-update.sh
+# example: run health checks
+cp /mnt/BIG/filme/docker-compose/scripts/health-checks.sh /tmp/
+bash /tmp/health-checks.sh postgres
+rm /tmp/health-checks.sh
 ```
-
-the pihole-dns-update.sh script lives at `/root/pihole-dns-update.sh` for direct execution.
 
 ### ZFS considerations
 
 - **snapshots**: ZFS snapshots provide point-in-time recovery for the entire `/mnt/BIG/filme/` dataset. this is the recommended backup strategy for media libraries
-- **I/O patterns**: aggressive random I/O (such as qBittorrent hash checking) can overwhelm ZFS on the HP MicroServer Gen8. transmission with conservative settings is used instead
+- **I/O patterns**: aggressive random I/O (such as qBittorrent hash checking) can overwhelm ZFS on the HP MicroServer Gen8. transmission with conservative settings is used instead (v107)
 - **pool monitoring**: monitor ZFS pool health with `zpool status BIG`
+- **intel_iommu**: set to `off` in GRUB to prevent DMAR faults from escalating I/O stalls into hard freezes (v107)
 
 ---
 

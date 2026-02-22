@@ -2,8 +2,8 @@
 
 ## complete service reference
 
-**document version:** 2.0
-**infrastructure version:** 105
+**document version:** 3.0
+**infrastructure version:** 109
 **last updated:** february 2026
 
 ---
@@ -20,33 +20,36 @@
 8. [download clients](#download-clients)
 9. [ARR stack — media automation](#arr-stack--media-automation)
 10. [collaboration](#collaboration)
-11. [utilities](#utilities)
-12. [monitoring](#monitoring)
-13. [commented services](#commented-services)
-14. [port reference](#port-reference)
-15. [tailscale URL reference](#tailscale-url-reference)
-16. [service dependencies](#service-dependencies)
+11. [text-to-speech](#text-to-speech)
+12. [utilities](#utilities)
+13. [monitoring](#monitoring)
+14. [commented and profiles services](#commented-and-profiles-services)
+15. [port reference](#port-reference)
+16. [tailscale URL reference](#tailscale-url-reference)
+17. [service dependencies](#service-dependencies)
 
 ---
 
 ## services overview
 
-bender runs 33 active services. 22 use the bridge network (media-network), 3 use host networking, and 8 route through gluetun's VPN tunnel.
+bender runs 36 active services. 24 use the bridge network (media-network), 3 use host networking, 8 route through gluetun's VPN tunnel, and 1 uses docker.sock only (autoheal).
 
 | category | count | services |
 |----------|-------|----------|
-| infrastructure | 5 | tsdproxy, dockwatch, dockerproxy, diun, trivy |
+| infrastructure | 4 | tsdproxy, dockwatch, dockerproxy, autoheal |
 | VPN | 1 | gluetun |
-| DNS and HA | 3 | pihole, keepalived, nebula-sync |
-| databases and cache | 4 | postgres, postgres-backup, immich_redis, flaresolverr |
+| DNS & HA | 3 | pihole, keepalived, nebula-sync |
+| databases & cache | 3 | postgres, postgres-backup, immich_redis |
 | photo management | 2 | immich_server, immich_machine_learning |
 | media servers | 2 | jellyfin, audiobookshelf |
 | download clients | 4 | transmission, metube, jdownloader, spotdl |
 | ARR stack | 7 | prowlarr, sonarr, radarr, lidarr, readarr, bazarr, unpackerr |
-| collaboration | 2 | hedgedoc, vaultwarden |
-| utilities | 1 | syncthing |
+| collaboration | 3 | hedgedoc, vaultwarden, syncthing |
+| text-to-speech | 2 | edge-tts, tts-pipeline |
 | monitoring | 2 | beszel-agent, cadvisor |
-| **total** | **33** | |
+| updates | 2 | diun, trivy |
+| support | 1 | flaresolverr |
+| **total** | **36** | |
 
 ---
 
@@ -54,69 +57,48 @@ bender runs 33 active services. 22 use the bridge network (media-network), 3 use
 
 ### tsdproxy
 
-| property | value |
-|----------|-------|
-| **image** | `almeidapaulopt/tsdproxy:latest` |
-| **container** | tsdproxy |
-| **host port** | 8085 |
-| **internal port** | 8080 |
-| **tsdproxy.name** | `bender-proxy` (LOCKED) |
-| **network** | media-network |
-| **purpose** | tailscale reverse proxy — automatically creates tailscale nodes for services with `tsdproxy.enable: "true"` labels |
-| **volumes** | docker.sock (rw), tsdproxy data + config |
-| **depends on** | docker socket |
+| setting | value |
+|---------|-------|
+| image | `almeidapaulopt/tsdproxy:latest` |
+| container | tsdproxy |
+| port | 8085:8080 |
+| network | media-network |
+| tsdproxy.name | `bender-proxy` (LOCKED) |
+| purpose | tailscale reverse proxy — provides `*.bunny-enigmatic.ts.net` URLs for all tsdproxy-enabled services |
 
 ### dockwatch
 
-| property | value |
-|----------|-------|
-| **image** | `ghcr.io/notifiarr/dockwatch:main` |
-| **container** | dockwatch |
-| **host port** | 9999 |
-| **internal port** | 80 |
-| **tsdproxy.name** | `bender-dockwatch` (LOCKED) |
-| **network** | media-network |
-| **purpose** | container management web UI |
-| **healthcheck** | curl http://localhost:80 |
+| setting | value |
+|---------|-------|
+| image | `ghcr.io/notifiarr/dockwatch:main` |
+| container | dockwatch |
+| port | 9999:80 |
+| network | media-network |
+| tsdproxy.name | `bender-dockwatch` (LOCKED) |
+| healthcheck | curl http://localhost:80 |
+| purpose | container management web UI |
 
 ### dockerproxy
 
-| property | value |
-|----------|-------|
-| **image** | `ghcr.io/tecnativa/docker-socket-proxy:latest` |
-| **container** | dockerproxy |
-| **host port** | 2375 |
-| **internal port** | 2375 |
-| **tsdproxy.enable** | false |
-| **network** | media-network |
-| **purpose** | read-only docker socket proxy for homepage on amy — exposes container/image/network info without full docker access |
-| **⚠️ warning** | do not remove — required for homepage widget on amy |
+| setting | value |
+|---------|-------|
+| image | `ghcr.io/tecnativa/docker-socket-proxy:latest` |
+| container | dockerproxy |
+| port | 2375:2375 |
+| network | media-network |
+| tsdproxy | disabled |
+| purpose | read-only docker socket proxy for homepage on amy — DO NOT REMOVE |
 
-### diun
+### autoheal (v106)
 
-| property | value |
-|----------|-------|
-| **image** | `crazymax/diun:latest` |
-| **container** | diun |
-| **tsdproxy.enable** | false |
-| **network** | media-network |
-| **purpose** | monitors all container images for available updates, sends notifications to ntfy on amy |
-| **schedule** | `0 6 * * *` (daily 06:00) |
-| **ntfy endpoint** | `${NTFY_ADDRESS}` (remote — amy's ntfy) |
-| **ntfy topic** | `${DIUN_NTFY_TOPIC}` |
-
-### trivy
-
-| property | value |
-|----------|-------|
-| **image** | `aquasec/trivy:latest` |
-| **container** | trivy |
-| **host port** | 8083 |
-| **internal port** | 8080 |
-| **tsdproxy.enable** | false |
-| **network** | media-network |
-| **purpose** | vulnerability scanner for container images — used by secure-container-update.sh |
-| **cache** | `/mnt/BIG/filme/configs/trivy` |
+| setting | value |
+|---------|-------|
+| image | `willfarrell/autoheal:latest` |
+| container | autoheal |
+| port | none |
+| network | none (docker.sock only) |
+| tsdproxy | disabled |
+| purpose | auto-restarts containers with `autoheal: "true"` label when Docker reports them unhealthy. currently targets gluetun for stale VPN session recovery |
 
 ---
 
@@ -124,33 +106,32 @@ bender runs 33 active services. 22 use the bridge network (media-network), 3 use
 
 ### gluetun
 
-| property | value |
-|----------|-------|
-| **image** | `qmcgaw/gluetun:latest` |
-| **container** | gluetun |
-| **tsdproxy.enable** | false |
-| **network** | media-network |
-| **VPN provider** | surfshark |
-| **VPN type** | OpenVPN (v104 — WireGuard blocked peer connections) |
-| **DNS-over-TLS** | off (`DOT=off`) |
-| **server selection** | `${GLUETUN_SERVER_COUNTRY}` |
-| **capabilities** | NET_ADMIN |
-| **devices** | /dev/net/tun |
-| **healthcheck** | wget http://ipinfo.io |
+| setting | value |
+|---------|-------|
+| image | `qmcgaw/gluetun:latest` |
+| container | gluetun |
+| network | media-network |
+| tsdproxy | disabled |
+| labels | `autoheal: "true"` (v106) |
+| VPN provider | Surfshark |
+| VPN type | OpenVPN (v104: switched from WireGuard) |
+| server country | Romania (`${GLUETUN_SERVER_COUNTRY}`) |
+| DOT | off (plain DNS) |
+| healthcheck | `wget http://1.1.1.1/cdn-cgi/trace` — IP-based, avoids DNS (v106) |
 
-gluetun exposes ports for all VPN-routed services:
+**ports exposed through gluetun:**
 
 | port | service |
 |------|---------|
-| 9091 | transmission |
-| 51413/tcp+udp | transmission peer port |
-| 9696 | prowlarr |
-| 8989 | sonarr |
-| 7878 | radarr |
-| 8686 | lidarr |
-| 8787 | readarr |
-| 6767 | bazarr |
-| 5800 | jdownloader |
+| 9091:9091 | transmission |
+| 51413:51413 TCP+UDP | transmission peer |
+| 9696:9696 | prowlarr |
+| 8989:8989 | sonarr |
+| 7878:7878 | radarr |
+| 8686:8686 | lidarr |
+| 8787:8787 | readarr |
+| 6767:6767 | bazarr |
+| 5800:5800 | jdownloader |
 
 ---
 
@@ -158,46 +139,42 @@ gluetun exposes ports for all VPN-routed services:
 
 ### pihole
 
-| property | value |
-|----------|-------|
-| **image** | `pihole/pihole:latest` |
-| **container** | pihole |
-| **host ports** | 53/tcp, 53/udp, 8053 |
-| **tsdproxy.name** | `pihole-bender` (LOCKED) |
-| **network** | media-network |
-| **purpose** | primary DNS server with ad-blocking |
-| **upstream DNS** | 1.1.1.1, 8.8.8.8 |
-| **healthcheck** | `dig +norecurse +retry=0 @127.0.0.1 pi.hole` |
-| **capabilities** | NET_ADMIN |
+| setting | value |
+|---------|-------|
+| image | `pihole/pihole:latest` |
+| container | pihole |
+| ports | 53:53 (TCP+UDP), 8053:80 |
+| network | media-network (no DNS anchor — it IS the DNS) |
+| tsdproxy.name | `pihole-bender` (LOCKED) |
+| upstream DNS | 1.1.1.1, 8.8.8.8 |
+| healthcheck | `dig +norecurse +retry=0 @127.0.0.1 pi.hole` |
 
 ### keepalived
 
-| property | value |
-|----------|-------|
-| **image** | `osixia/keepalived:2.0.20` (pinned) |
-| **container** | keepalived |
-| **network** | host |
-| **role** | MASTER (priority 150) |
-| **VIP** | 192.168.21.100 |
-| **interface** | enp4s0 |
-| **purpose** | VRRP failover — bender holds VIP under normal operation, amy takes over if bender fails |
-| **config mount** | `/mnt/BIG/filme/configs/keepalived/keepalived.conf` (read-only) |
-| **command** | `--copy-service` |
+| setting | value |
+|---------|-------|
+| image | `osixia/keepalived:2.0.20` (pinned) |
+| container | keepalived |
+| network | host |
+| interface | bond0 |
+| role | MASTER (priority 200) |
+| VIP | 192.168.21.100 |
+| VRRP ID | 53 |
+| mode | unicast (peer: 192.168.21.130) |
+| health check | wget pihole admin (:8053) every 2s |
+| purpose | pihole DNS failover with amy |
 
 ### nebula-sync
 
-| property | value |
-|----------|-------|
-| **image** | `ghcr.io/lovelaze/nebula-sync:latest` |
-| **container** | nebula-sync |
-| **tsdproxy.enable** | false |
-| **network** | media-network |
-| **purpose** | synchronizes pihole configuration from bender (primary) to amy (replica) |
-| **schedule** | `0 * * * *` (hourly) |
-| **primary** | `http://192.168.21.121:8053` |
-| **replica** | `http://192.168.21.130:8053` |
-| **sync mode** | full sync with gravity rebuild |
-| **healthcheck** | disabled (minimal container — no binaries available) |
+| setting | value |
+|---------|-------|
+| image | `ghcr.io/lovelaze/nebula-sync:latest` |
+| container | nebula-sync |
+| network | media-network |
+| tsdproxy | disabled |
+| schedule | hourly (`0 * * * *`) |
+| healthcheck | disabled (minimal container has no binaries) |
+| purpose | replicates pihole config from bender to amy (FULL_SYNC + RUN_GRAVITY) |
 
 ---
 
@@ -205,58 +182,42 @@ gluetun exposes ports for all VPN-routed services:
 
 ### postgres
 
-| property | value |
-|----------|-------|
-| **image** | `ghcr.io/immich-app/postgres:14-vectorchord0.4.3-pgvectors0.2.0` |
-| **container** | postgres |
-| **host port** | 5432 |
-| **tsdproxy.enable** | false |
-| **network** | media-network |
-| **purpose** | shared postgresql with vector extensions for immich and hedgedoc |
-| **databases** | immich (default), hedgedoc |
-| **data path** | `/mnt/BIG/filme/immich/postgresql` (⚠️ CRITICAL — do not move) |
-| **healthcheck** | `pg_isready -U postgres -d immich` |
-| **extensions** | vchord.so, vectors.so (loaded via `shared_preload_libraries`) |
-| **tuning** | max_wal_size=2GB, shared_buffers=512MB, wal_compression=on |
+| setting | value |
+|---------|-------|
+| image | `ghcr.io/immich-app/postgres:14-vectorchord0.4.3-pgvectors0.2.0` |
+| container | postgres |
+| port | 5432:5432 |
+| network | media-network |
+| databases | immich, hedgedoc |
+| data path | `/mnt/BIG/filme/immich/postgresql` (CRITICAL) |
+| init scripts | `/mnt/BIG/filme/configs/postgres/init` (read-only) |
+| healthcheck | `pg_isready -U postgres -d immich` |
+| extensions | vchord.so, vectors.so (shared_preload_libraries) |
+| tuning | max_wal_size=2GB, shared_buffers=512MB, wal_compression=on |
 
 ### postgres-backup
 
-| property | value |
-|----------|-------|
-| **image** | `prodrigestivill/postgres-backup-local:latest` |
-| **container** | postgres-backup |
-| **tsdproxy.enable** | false |
-| **network** | media-network |
-| **purpose** | daily automated postgresql backups |
-| **databases** | immich, hedgedoc |
-| **schedule** | daily |
-| **retention** | 7 daily, 4 weekly, 6 monthly |
-| **backup path** | `/mnt/BIG/filme/backups/postgres` |
-| **healthcheck** | curl http://localhost:8080 |
+| setting | value |
+|---------|-------|
+| image | `prodrigestivill/postgres-backup-local:latest` |
+| container | postgres-backup |
+| network | media-network |
+| databases backed up | immich, hedgedoc |
+| schedule | daily |
+| retention | 7 days, 4 weeks, 6 months |
+| backup path | `/mnt/BIG/filme/backups/postgres` |
+| healthcheck | curl http://localhost:8080 |
+| depends on | postgres |
 
 ### immich_redis
 
-| property | value |
-|----------|-------|
-| **image** | `redis:7-alpine` |
-| **container** | immich_redis |
-| **tsdproxy.enable** | false |
-| **network** | media-network |
-| **purpose** | redis cache for immich job queue and sessions |
-| **data path** | `/mnt/BIG/filme/immich/redis` |
-| **healthcheck** | `redis-cli ping` |
-| **note** | upgraded from redis:6.2-alpine in v94 — fixes "Can't handle RDB format version 11" error |
-
-### flaresolverr
-
-| property | value |
-|----------|-------|
-| **image** | `ghcr.io/flaresolverr/flaresolverr:latest` |
-| **container** | flaresolverr |
-| **host port** | 8191 |
-| **tsdproxy.enable** | false |
-| **network** | media-network |
-| **purpose** | CAPTCHA/cloudflare challenge solver for prowlarr indexer requests |
+| setting | value |
+|---------|-------|
+| image | `redis:7-alpine` (v94: upgraded from 6.2) |
+| container | immich_redis |
+| network | media-network |
+| data path | `/mnt/BIG/filme/immich/redis` |
+| healthcheck | `redis-cli ping` |
 
 ---
 
@@ -264,29 +225,25 @@ gluetun exposes ports for all VPN-routed services:
 
 ### immich_server
 
-| property | value |
-|----------|-------|
-| **image** | `ghcr.io/immich-app/immich-server:release` |
-| **container** | immich_server |
-| **host port** | 2283 |
-| **tsdproxy.name** | `photo` (LOCKED) |
-| **network** | media-network |
-| **purpose** | photo and video management with face/object recognition |
-| **photos path** | `/mnt/BIG/filme/immich/photos` |
-| **depends on** | postgres, immich_redis |
-| **ML connection** | `http://immich_machine_learning:3003` |
+| setting | value |
+|---------|-------|
+| image | `ghcr.io/immich-app/immich-server:release` |
+| container | immich_server |
+| port | 2283:2283 |
+| network | media-network |
+| tsdproxy.name | `photo` (LOCKED) |
+| photo path | `/mnt/BIG/filme/immich/photos` |
+| depends on | postgres, immich_redis |
 
 ### immich_machine_learning
 
-| property | value |
-|----------|-------|
-| **image** | `ghcr.io/immich-app/immich-machine-learning:release` |
-| **container** | immich_machine_learning |
-| **tsdproxy.enable** | false |
-| **network** | media-network |
-| **purpose** | ML model inference for face detection, object classification, and smart search |
-| **cache path** | `/mnt/BIG/filme/immich/ml-cache` |
-| **healthcheck** | python3 HTTP check on port 3003 (v104 fix — curl not available) |
+| setting | value |
+|---------|-------|
+| image | `ghcr.io/immich-app/immich-machine-learning:release` |
+| container | immich_machine_learning |
+| network | media-network |
+| cache path | `/mnt/BIG/filme/immich/ml-cache` |
+| healthcheck | python3 HTTP GET to localhost:3003/ping (v104) |
 
 ---
 
@@ -294,166 +251,176 @@ gluetun exposes ports for all VPN-routed services:
 
 ### jellyfin
 
-| property | value |
-|----------|-------|
-| **image** | `lscr.io/linuxserver/jellyfin:latest` |
-| **container** | jellyfin |
-| **host port** | 8096 |
-| **tsdproxy.name** | `media` (LOCKED) |
-| **network** | media-network |
-| **purpose** | media server for movies, TV shows, and music |
-| **media volumes** | movies (`/data/movies`), TV shows (`/data/tvshows`), music (`/data/music`) |
-| **GPU** | not available (HP BIOS disables iGPU) — CPU-only transcoding |
-| **note** | v96 corrected image from `jellyfin/jellyfin` to `lscr.io/linuxserver/jellyfin`. v105 added `/data/tvshows` volume mount to fix library path mismatch |
+| setting | value |
+|---------|-------|
+| image | `lscr.io/linuxserver/jellyfin:latest` (v96: corrected) |
+| container | jellyfin |
+| port | 8096:8096 |
+| network | media-network |
+| tsdproxy.name | `media` (LOCKED) |
+| libraries | movies (`/data/movies`), tvshows (`/data/tvshows`), music (`/data/music`) |
+| GPU | disabled (HP BIOS limitation — commented out for future use) |
 
 ### audiobookshelf
 
-| property | value |
-|----------|-------|
-| **image** | `ghcr.io/advplyr/audiobookshelf:latest` |
-| **container** | audiobookshelf |
-| **host port** | 8081 |
-| **tsdproxy.name** | `books` (LOCKED) |
-| **network** | media-network |
-| **purpose** | audiobook and podcast server with progress tracking |
-| **config path** | `/mnt/BIG/filme/configs/audiobookshelf` |
+| setting | value |
+|---------|-------|
+| image | `ghcr.io/advplyr/audiobookshelf:latest` |
+| container | audiobookshelf |
+| port | 8081:80 |
+| network | media-network |
+| tsdproxy.name | `books` (LOCKED) |
+| libraries | audiobooks, podcasts, metadata |
+| integration | tts-pipeline outputs to `/audiobooks/cărți/` for automatic pickup |
 
 ---
 
 ## download clients
 
-### transmission
+### transmission (v108: custom build)
 
-| property | value |
-|----------|-------|
-| **image** | `lscr.io/linuxserver/transmission:4.0.5` (⚠️ PINNED — do not upgrade) |
-| **container** | transmission |
-| **host port** | 9091 (via gluetun), 51413 tcp+udp (via gluetun) |
-| **tsdproxy.name** | `transmission` (LOCKED) |
-| **network** | service:gluetun |
-| **purpose** | torrent client — FileList whitelist requires version 4.0.5 |
-| **mods** | flood UI, env-var-settings |
-| **data path** | `/mnt/BIG/filme/transmission` (completed, incomplete, watch subdirs) |
-| **⚠️ warning** | transmission 4.0.6+ is NOT on the FileList whitelist — do not upgrade |
+| setting | value |
+|---------|-------|
+| build | `/mnt/BIG/filme/configs/transmission/Dockerfile` |
+| base image | `lscr.io/linuxserver/transmission:4.0.5` (PINNED — FileList whitelist) |
+| container | transmission |
+| port | 9091:9091, 51413 TCP+UDP (via gluetun) |
+| network | service:gluetun |
+| tsdproxy.name | `transmission` (LOCKED) |
+| web UI | Flood (pre-baked in custom image, v108) |
+| download queue | 10 concurrent (v107) |
+| seed queue | 50 concurrent (v107) |
+| cache | 64 MB (v107) |
+| peer limits | 300 global, 30 per torrent (v107) |
+| depends on | gluetun |
+
+**DO NOT UPGRADE** past 4.0.5 — FileList whitelist requirement.
 
 ### metube
 
-| property | value |
-|----------|-------|
-| **image** | `ghcr.io/alexta69/metube:latest` |
-| **container** | metube |
-| **host port** | 8383 |
-| **internal port** | 8081 |
-| **tsdproxy.name** | `metube` (LOCKED) |
-| **network** | media-network |
-| **purpose** | youtube video/audio downloader web UI |
+| setting | value |
+|---------|-------|
+| image | `ghcr.io/alexta69/metube:latest` |
+| container | metube |
+| port | 8383:8081 |
+| network | media-network |
+| tsdproxy.name | `metube` (LOCKED) |
 
 ### jdownloader
 
-| property | value |
-|----------|-------|
-| **image** | `jlesage/jdownloader-2:latest` |
-| **container** | jdownloader |
-| **host port** | 5800 (via gluetun) |
-| **tsdproxy.name** | `jdown` (LOCKED) |
-| **network** | service:gluetun |
-| **purpose** | direct download manager with browser-based UI |
+| setting | value |
+|---------|-------|
+| image | `jlesage/jdownloader-2:latest` |
+| container | jdownloader |
+| port | 5800:5800 (via gluetun) |
+| network | service:gluetun |
+| tsdproxy.name | `jdown` (LOCKED) |
+| depends on | gluetun |
 
 ### spotdl
 
-| property | value |
-|----------|-------|
-| **image** | `spotdl/spotify-downloader:latest` |
-| **container** | spotdl |
-| **host port** | 8800 |
-| **tsdproxy.name** | `spotdl` (LOCKED) |
-| **network** | media-network |
-| **purpose** | spotify playlist/track downloader — web UI, saves as MP3 |
-| **command** | `web --host 0.0.0.0 --port 8800 --web-use-output-dir --keep-alive --format mp3` |
+| setting | value |
+|---------|-------|
+| image | `spotdl/spotify-downloader:latest` (v94: corrected) |
+| container | spotdl |
+| port | 8800:8800 |
+| network | media-network |
+| tsdproxy.name | `spotdl` (LOCKED) |
+| command | `web --host 0.0.0.0 --port 8800 --web-use-output-dir --keep-alive --format mp3` |
 
 ---
 
 ## ARR stack — media automation
 
-all ARR services route through gluetun VPN (network_mode: service:gluetun). unpackerr is the exception — it connects to the ARR APIs via the gluetun container's internal address.
+all ARR services route through gluetun VPN and depend on it.
 
 ### prowlarr
 
-| property | value |
-|----------|-------|
-| **image** | `lscr.io/linuxserver/prowlarr:latest` |
-| **container** | prowlarr |
-| **host port** | 9696 (via gluetun) |
-| **tsdproxy.name** | `prowlarr` (LOCKED) |
-| **purpose** | indexer manager — provides search results to sonarr, radarr, lidarr, readarr |
+| setting | value |
+|---------|-------|
+| image | `lscr.io/linuxserver/prowlarr:latest` |
+| container | prowlarr |
+| port | 9696:9696 (via gluetun) |
+| network | service:gluetun |
+| tsdproxy.name | `prowlarr` (LOCKED) |
+| purpose | indexer manager for all ARR apps |
 
 ### sonarr
 
-| property | value |
-|----------|-------|
-| **image** | `lscr.io/linuxserver/sonarr:latest` |
-| **container** | sonarr |
-| **host port** | 8989 (via gluetun) |
-| **tsdproxy.name** | `sonarr` (LOCKED) |
-| **purpose** | TV show automation — monitors, downloads, and organizes episodes |
-| **media path** | `/mnt/BIG/filme/seriale` → `/tv` |
+| setting | value |
+|---------|-------|
+| image | `lscr.io/linuxserver/sonarr:latest` |
+| container | sonarr |
+| port | 8989:8989 (via gluetun) |
+| network | service:gluetun |
+| tsdproxy.name | `sonarr` (LOCKED) |
+| volumes | /tv → seriale, /downloads → transmission |
 
 ### radarr
 
-| property | value |
-|----------|-------|
-| **image** | `lscr.io/linuxserver/radarr:latest` |
-| **container** | radarr |
-| **host port** | 7878 (via gluetun) |
-| **tsdproxy.name** | `radarr` (LOCKED) |
-| **purpose** | movie automation — monitors, downloads, and organizes films |
-| **media path** | `/mnt/BIG/filme/filme` → `/movies` |
+| setting | value |
+|---------|-------|
+| image | `lscr.io/linuxserver/radarr:latest` |
+| container | radarr |
+| port | 7878:7878 (via gluetun) |
+| network | service:gluetun |
+| tsdproxy.name | `radarr` (LOCKED) |
+| volumes | /movies → filme, /downloads → transmission |
 
 ### lidarr
 
-| property | value |
-|----------|-------|
-| **image** | `lscr.io/linuxserver/lidarr:latest` |
-| **container** | lidarr |
-| **host port** | 8686 (via gluetun) |
-| **tsdproxy.name** | `lidarr` (LOCKED) |
-| **purpose** | music automation — monitors, downloads, and organizes albums |
-| **media path** | `/mnt/BIG/filme/music` → `/music` |
+| setting | value |
+|---------|-------|
+| image | `lscr.io/linuxserver/lidarr:latest` |
+| container | lidarr |
+| port | 8686:8686 (via gluetun) |
+| network | service:gluetun |
+| tsdproxy.name | `lidarr` (LOCKED) |
+| volumes | /music → music, /downloads → transmission |
 
 ### readarr
 
-| property | value |
-|----------|-------|
-| **image** | `linuxserver/readarr:0.4.19-nightly` |
-| **container** | readarr |
-| **host port** | 8787 (via gluetun) |
-| **tsdproxy.name** | `readarr` (LOCKED) |
-| **purpose** | ebook automation — monitors, downloads, and organizes books |
-| **media path** | `/mnt/BIG/filme/books` → `/books` |
-| **note** | image pinned to `0.4.19-nightly` — fixed in v94 |
+| setting | value |
+|---------|-------|
+| image | `linuxserver/readarr:0.4.19-nightly` (v94: pinned) |
+| container | readarr |
+| port | 8787:8787 (via gluetun) |
+| network | service:gluetun |
+| tsdproxy.name | `readarr` (LOCKED) |
+| volumes | /books → books, /downloads → transmission |
 
 ### bazarr
 
-| property | value |
-|----------|-------|
-| **image** | `lscr.io/linuxserver/bazarr:latest` |
-| **container** | bazarr |
-| **host port** | 6767 (via gluetun) |
-| **tsdproxy.name** | `bazarr` (LOCKED) |
-| **purpose** | subtitle automation — downloads subtitles for sonarr and radarr media |
-| **media paths** | movies (`/mnt/BIG/filme/filme`), TV (`/mnt/BIG/filme/seriale`) |
+| setting | value |
+|---------|-------|
+| image | `lscr.io/linuxserver/bazarr:latest` |
+| container | bazarr |
+| port | 6767:6767 (via gluetun) |
+| network | service:gluetun |
+| tsdproxy.name | `bazarr` (LOCKED) |
+| volumes | /movies → filme, /tv → seriale |
 
 ### unpackerr
 
-| property | value |
-|----------|-------|
-| **image** | `golift/unpackerr:latest` |
-| **container** | unpackerr |
-| **tsdproxy.enable** | false |
-| **network** | media-network |
-| **purpose** | automatically extracts downloaded archives for sonarr, radarr, lidarr, readarr |
-| **ARR connections** | connects to ARR APIs via `http://gluetun:<port>` |
-| **API keys** | `${SONARR_API_KEY}`, `${RADARR_API_KEY}`, `${LIDARR_API_KEY}`, `${READARR_API_KEY}` |
+| setting | value |
+|---------|-------|
+| image | `golift/unpackerr:latest` |
+| container | unpackerr |
+| network | media-network |
+| tsdproxy | disabled |
+| purpose | auto-extracts downloaded archives for sonarr, radarr, lidarr, readarr |
+| note | connects to ARR apps via `http://gluetun:<port>` using API keys |
+
+### flaresolverr
+
+| setting | value |
+|---------|-------|
+| image | `ghcr.io/flaresolverr/flaresolverr:latest` |
+| container | flaresolverr |
+| port | 8191:8191 |
+| network | media-network |
+| tsdproxy | disabled |
+| purpose | Cloudflare challenge solver for prowlarr |
 
 ---
 
@@ -461,31 +428,78 @@ all ARR services route through gluetun VPN (network_mode: service:gluetun). unpa
 
 ### hedgedoc
 
-| property | value |
-|----------|-------|
-| **image** | `quay.io/hedgedoc/hedgedoc:latest` |
-| **container** | hedgedoc |
-| **host port** | 3000 |
-| **tsdproxy.name** | `pad` (LOCKED) |
-| **network** | media-network |
-| **purpose** | collaborative markdown editor with real-time editing |
-| **database** | hedgedoc (on shared postgres) |
-| **depends on** | postgres |
-| **healthcheck** | image built-in Node.js check (v94 — curl/wget not available) |
+| setting | value |
+|---------|-------|
+| image | `quay.io/hedgedoc/hedgedoc:latest` |
+| container | hedgedoc |
+| port | 3000:3000 |
+| network | media-network |
+| tsdproxy.name | `pad` (LOCKED) |
+| database | postgres (hedgedoc DB) |
+| depends on | postgres |
 
-### vaultwarden
+### vaultwarden (migrated from amy in v92)
 
-| property | value |
-|----------|-------|
-| **image** | `vaultwarden/server:latest` |
-| **container** | vaultwarden |
-| **host port** | 8484 |
-| **tsdproxy.name** | `vault` (LOCKED) |
-| **network** | media-network |
-| **purpose** | bitwarden-compatible password manager |
-| **data path** | `/mnt/BIG/filme/configs/vaultwarden` |
-| **healthcheck** | curl http://localhost:80/alive |
-| **note** | migrated from amy to bender in v92 |
+| setting | value |
+|---------|-------|
+| image | `vaultwarden/server:latest` |
+| container | vaultwarden |
+| port | 8484:80 |
+| network | media-network |
+| tsdproxy.name | `vault` (LOCKED) |
+| healthcheck | curl http://localhost:80/alive |
+
+### syncthing
+
+| setting | value |
+|---------|-------|
+| image | `syncthing/syncthing:latest` |
+| container | syncthing |
+| network | host |
+| tsdproxy.name | `sync` (LOCKED) |
+| tsdproxy.container_port | 8384 |
+| data path | `/mnt/BIG/filme/syncthing` |
+| healthcheck | curl 127.0.0.1:8384/rest/noauth/health |
+
+---
+
+## text-to-speech
+
+### edge-tts (v108)
+
+| setting | value |
+|---------|-------|
+| image | `travisvn/openai-edge-tts:latest` |
+| container | edge-tts |
+| port | 5050:5050 |
+| network | media-network |
+| tsdproxy | disabled |
+| default voice | ro-RO-AlinaNeural |
+| API | OpenAI-compatible TTS endpoint |
+| resource limits | 512 MB memory, 0.6 CPU |
+
+### tts-pipeline (v108, v109)
+
+| setting | value |
+|---------|-------|
+| build | `/mnt/BIG/filme/configs/tts-pipeline/Dockerfile` |
+| container | tts-pipeline |
+| port | 5051:5051 |
+| network | media-network |
+| tsdproxy.name | `tts` (LOCKED) |
+| resource limits | 4 GB memory, 0.6 CPU |
+| input directories | /input/ro-emil, /input/ro-alina, /input/en-ryan, /input/en-sonia |
+| output | `/audiobooks/cărți/` (audiobookshelf library) |
+| web UI | Flask app on port 5051 (file upload + URL pasting) |
+
+voice mapping:
+
+| directory | voice | language |
+|-----------|-------|----------|
+| ro-emil | ro-RO-EmilNeural | Romanian male |
+| ro-alina | ro-RO-AlinaNeural | Romanian female |
+| en-ryan | en-GB-RyanNeural | British male |
+| en-sonia | en-GB-SoniaNeural | British female |
 
 ---
 
@@ -493,17 +507,7 @@ all ARR services route through gluetun VPN (network_mode: service:gluetun). unpa
 
 ### syncthing
 
-| property | value |
-|----------|-------|
-| **image** | `syncthing/syncthing:latest` |
-| **container** | syncthing |
-| **network** | host |
-| **tsdproxy.name** | `sync` (LOCKED) |
-| **tsdproxy.container_port** | 8384 |
-| **purpose** | peer-to-peer file synchronization across devices |
-| **data path** | `/mnt/BIG/filme/syncthing` (single volume — config + data together) |
-| **healthcheck** | curl http://127.0.0.1:8384/rest/noauth/health |
-| **note** | v83 reverted to official syncthing image with correct volume structure |
+documented under [collaboration](#collaboration) above (uses host networking for peer discovery).
 
 ---
 
@@ -511,84 +515,86 @@ all ARR services route through gluetun VPN (network_mode: service:gluetun). unpa
 
 ### beszel-agent
 
-| property | value |
-|----------|-------|
-| **image** | `henrygd/beszel-agent:latest` |
-| **container** | beszel-agent |
-| **network** | host |
-| **tsdproxy.enable** | false |
-| **purpose** | reports system metrics (CPU, memory, disk, network) to beszel hub on amy |
-| **authentication** | `${BESZEL_KEY}` |
+| setting | value |
+|---------|-------|
+| image | `henrygd/beszel-agent:latest` |
+| container | beszel-agent |
+| network | host |
+| tsdproxy | disabled |
+| purpose | reports system metrics to beszel hub on amy |
 
-### cadvisor
+### cadvisor (v105)
 
-| property | value |
-|----------|-------|
-| **image** | `gcr.io/cadvisor/cadvisor:latest` |
-| **container** | cadvisor |
-| **host port** | 9099 |
-| **internal port** | 8080 |
-| **tsdproxy.name** | `bender-cadvisor` (LOCKED) |
-| **network** | media-network |
-| **purpose** | container resource metrics — scraped by prometheus on HA VM for grafana dashboards |
-| **resource flags** | `--housekeeping_interval=30s`, `--docker_only=true`, `--disable_metrics=percpu,sched,tcp,udp,disk,diskIO,hugetlb,referenced_memory,cpu_topology,resctrl` |
+| setting | value |
+|---------|-------|
+| image | `gcr.io/cadvisor/cadvisor:latest` |
+| container | cadvisor |
+| port | 9099:8080 |
+| network | media-network |
+| tsdproxy.name | `bender-cadvisor` (LOCKED) |
+| flags | `--docker_only`, `--housekeeping_interval=30s`, disabled unused metrics |
+| purpose | container resource metrics → prometheus → grafana |
 
 ---
 
-## commented services
+## commented and profiles services
 
-these services are commented out in the compose file but preserved for future use:
+### qbittorrent (commented — v103)
 
-### qbittorrent (v103 — disabled)
+removed in v103 after causing repeated system crashes due to ZFS I/O patterns on HP MicroServer Gen8. kept commented for potential future use.
 
-disabled after repeated system crashes on the HP MicroServer Gen8. aggressive I/O patterns during torrent hash checking overwhelmed ZFS. do not re-enable without testing on different hardware.
+### playwright-chrome (commented)
 
-### playwright-chrome (disabled)
+kept for future ARR stack browser automation. not currently needed.
 
-reserved for future ARR stack CAPTCHA solving or browser automation. not currently needed — flaresolverr handles cloudflare challenges.
+### epub2tts-edge (profiles: tools — v108)
 
-### watchtower (disabled — on amy)
+on-demand manual EPUB/TXT → M4B converter. not part of the regular active stack. run with:
 
-not present on bender's compose file. amy has watchtower commented out as emergency fallback.
+```bash
+docker compose run --rm epub2tts-edge
+```
 
 ---
 
 ## port reference
 
-### direct host ports (media-network)
+### direct ports (host:container)
 
-| port | service | internal port |
-|------|---------|---------------|
-| 53/tcp+udp | pihole | 53 |
-| 2283 | immich_server | 2283 |
-| 2375 | dockerproxy | 2375 |
-| 3000 | hedgedoc | 3000 |
-| 5432 | postgres | 5432 |
-| 8053 | pihole web | 80 |
-| 8081 | audiobookshelf | 80 |
-| 8083 | trivy | 8080 |
-| 8085 | tsdproxy | 8080 |
-| 8096 | jellyfin | 8096 |
-| 8191 | flaresolverr | 8191 |
-| 8383 | metube | 8081 |
-| 8484 | vaultwarden | 80 |
-| 8800 | spotdl | 8800 |
-| 9099 | cadvisor | 8080 |
-| 9999 | dockwatch | 80 |
+| host port | container port | service |
+|-----------|---------------|---------|
+| 53 | 53 | pihole (TCP+UDP) |
+| 2283 | 2283 | immich_server |
+| 2375 | 2375 | dockerproxy |
+| 3000 | 3000 | hedgedoc |
+| 5050 | 5050 | edge-tts |
+| 5051 | 5051 | tts-pipeline |
+| 5432 | 5432 | postgres |
+| 8053 | 80 | pihole web |
+| 8081 | 80 | audiobookshelf |
+| 8083 | 8080 | trivy |
+| 8085 | 8080 | tsdproxy |
+| 8096 | 8096 | jellyfin |
+| 8191 | 8191 | flaresolverr |
+| 8383 | 8081 | metube |
+| 8484 | 80 | vaultwarden |
+| 8800 | 8800 | spotdl |
+| 9099 | 8080 | cadvisor |
+| 9999 | 80 | dockwatch |
 
-### gluetun-exposed ports
+### ports exposed via gluetun
 
-| port | service | internal port |
-|------|---------|---------------|
-| 5800 | jdownloader | 5800 |
-| 6767 | bazarr | 6767 |
-| 7878 | radarr | 7878 |
-| 8686 | lidarr | 8686 |
-| 8787 | readarr | 8787 |
-| 8989 | sonarr | 8989 |
-| 9091 | transmission | 9091 |
-| 9696 | prowlarr | 9696 |
-| 51413/tcp+udp | transmission peer | 51413 |
+| host port | container port | service |
+|-----------|---------------|---------|
+| 5800 | 5800 | jdownloader |
+| 6767 | 6767 | bazarr |
+| 7878 | 7878 | radarr |
+| 8686 | 8686 | lidarr |
+| 8787 | 8787 | readarr |
+| 8989 | 8989 | sonarr |
+| 9091 | 9091 | transmission |
+| 9696 | 9696 | prowlarr |
+| 51413 | 51413 | transmission peer (TCP+UDP) |
 
 ---
 
@@ -598,25 +604,26 @@ all services with `tsdproxy.enable: "true"` are accessible via tailscale:
 
 | tsdproxy.name | URL | service |
 |---------------|-----|---------|
-| bender-proxy | https://bender-proxy.bunny-enigmatic.ts.net | tsdproxy dashboard |
+| bender-proxy | https://bender-proxy.bunny-enigmatic.ts.net | tsdproxy |
 | bender-dockwatch | https://bender-dockwatch.bunny-enigmatic.ts.net | dockwatch |
-| pihole-bender | https://pihole-bender.bunny-enigmatic.ts.net | pihole admin |
-| photo | https://photo.bunny-enigmatic.ts.net | immich |
+| pihole-bender | https://pihole-bender.bunny-enigmatic.ts.net | pihole |
+| photo | https://photo.bunny-enigmatic.ts.net | immich_server |
 | media | https://media.bunny-enigmatic.ts.net | jellyfin |
 | books | https://books.bunny-enigmatic.ts.net | audiobookshelf |
 | transmission | https://transmission.bunny-enigmatic.ts.net | transmission |
 | metube | https://metube.bunny-enigmatic.ts.net | metube |
 | jdown | https://jdown.bunny-enigmatic.ts.net | jdownloader |
 | spotdl | https://spotdl.bunny-enigmatic.ts.net | spotdl |
+| pad | https://pad.bunny-enigmatic.ts.net | hedgedoc |
+| vault | https://vault.bunny-enigmatic.ts.net | vaultwarden |
+| sync | https://sync.bunny-enigmatic.ts.net | syncthing |
 | prowlarr | https://prowlarr.bunny-enigmatic.ts.net | prowlarr |
 | sonarr | https://sonarr.bunny-enigmatic.ts.net | sonarr |
 | radarr | https://radarr.bunny-enigmatic.ts.net | radarr |
 | lidarr | https://lidarr.bunny-enigmatic.ts.net | lidarr |
 | readarr | https://readarr.bunny-enigmatic.ts.net | readarr |
 | bazarr | https://bazarr.bunny-enigmatic.ts.net | bazarr |
-| pad | https://pad.bunny-enigmatic.ts.net | hedgedoc |
-| vault | https://vault.bunny-enigmatic.ts.net | vaultwarden |
-| sync | https://sync.bunny-enigmatic.ts.net | syncthing |
+| tts | https://tts.bunny-enigmatic.ts.net | tts-pipeline |
 | bender-cadvisor | https://bender-cadvisor.bunny-enigmatic.ts.net | cadvisor |
 
 ---
@@ -634,7 +641,7 @@ postgres (healthcheck: pg_isready)
 immich_redis (healthcheck: redis-cli ping)
 └── immich_server
 
-gluetun (healthcheck: wget ipinfo.io)
+gluetun (healthcheck: wget http://1.1.1.1/cdn-cgi/trace)
 ├── transmission
 ├── jdownloader
 ├── prowlarr
@@ -653,11 +660,12 @@ gluetun (healthcheck: wget ipinfo.io)
 | secure-container-update.sh | ntfy (for notifications) |
 | nebula-sync | pihole on amy (as replica target) |
 | beszel-agent | beszel hub on amy (metrics collection) |
+| pihole-dns-update.sh | docker API on amy via SSH (label scanning) |
 
 | amy service | depends on (bender) |
 |------------|---------------------|
-| homepage | dockerproxy on bender (container status widget) |
-| pihole-dns-update.sh | docker API on bender (label scanning) |
+| homepage | dockerproxy on bender (:2375) |
+| pihole-dns-update.sh | tsdproxy labels on bender |
 
 ---
 

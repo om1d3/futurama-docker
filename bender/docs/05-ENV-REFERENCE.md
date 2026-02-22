@@ -2,8 +2,8 @@
 
 ## complete .env documentation
 
-**document version:** 2.0
-**infrastructure version:** 105
+**document version:** 3.0
+**infrastructure version:** 109
 **last updated:** february 2026
 
 ---
@@ -24,130 +24,150 @@
 
 the `.env` file at `/mnt/BIG/filme/docker-compose/.env` contains all configuration values and secrets for bender's docker compose deployment. it is loaded automatically by `docker compose` and also sourced by the secure-container-update.sh script.
 
-| property | value |
-|----------|-------|
-| **location** | `/mnt/BIG/filme/docker-compose/.env` |
-| **total variables** | 28 |
-| **referenced in yaml** | 22 |
-| **used outside yaml** | 6 |
-| **secret values** | 16 |
-| **non-secret values** | 12 |
+the file contains 28 variables across 12 categories. of these, 13 contain secrets and 15 are non-sensitive configuration values.
+
+the TTS services (edge-tts, tts-pipeline, epub2tts-edge) added in v108–v109 do not require any additional .env variables — they only use `${TIMEZONE}` which was already present.
 
 ---
 
 ## variable categories
 
-### system configuration (3 variables)
+| category | count | secrets |
+|----------|-------|---------|
+| system | 5 | 0 |
+| paths | 2 | 0 |
+| tailscale | 2 | 1 |
+| syncthing | 1 | 0 |
+| surfshark VPN | 3 | 2 |
+| postgresql | 1 | 1 |
+| hedgedoc | 2 | 1 |
+| vaultwarden | 1 | 1 |
+| beszel | 2 | 2 |
+| pihole | 1 | 1 |
+| ntfy/diun | 2 | 0 |
+| ARR stack | 4 | 4 |
+| keepalived | 2 | 1 |
+| **total** | **28** | **13** |
 
-| variable | example value | used by | purpose |
-|----------|--------------|---------|---------|
-| `TIMEZONE` | `America/Toronto` | most services via `TZ=${TIMEZONE}` | container timezone |
-| `PUID` | `1000` | dockwatch, jellyfin, transmission, sonarr, radarr, lidarr, readarr, bazarr, jdownloader, spotdl (as USER_ID) | container user id for file permissions |
-| `PGID` | `1000` | dockwatch, jellyfin, transmission, sonarr, radarr, lidarr, readarr, bazarr, jdownloader, spotdl (as GROUP_ID) | container group id for file permissions |
+---
 
-### network configuration (3 variables)
+## complete variable reference
 
-| variable | example value | used by | purpose |
-|----------|--------------|---------|---------|
-| `LOCAL_NETWORK` | `192.168.21.0/24` | (available for future use) | local network CIDR |
-| `BENDER_HOST_IP` | `192.168.21.121` | tsdproxy (`TSDPROXY_HOSTNAME`), pihole (`FTLCONF_LOCAL_IPV4`) | host ip for tailscale proxy routing and pihole binding |
-| `BASE_PATH` | `/mnt/BIG/filme` | (documentation reference) | base path for all bender data |
+### system
 
-### path configuration (1 variable)
+| variable | example value | secret | consumers |
+|----------|--------------|--------|-----------|
+| `TIMEZONE` | `America/Toronto` | no | nearly all containers |
+| `PUID` | `1000` | no | linuxserver containers (jellyfin, transmission, sonarr, radarr, lidarr, readarr, bazarr, dockwatch) |
+| `PGID` | `1000` | no | same as PUID |
+| `LOCAL_NETWORK` | `192.168.21.0/24` | no | reference only (not used in docker-compose) |
+| `BENDER_HOST_IP` | `192.168.21.121` | no | tsdproxy (TSDPROXY_HOSTNAME), pihole (FTLCONF_LOCAL_IPV4) |
 
-| variable | example value | used by | purpose |
-|----------|--------------|---------|---------|
-| `CONFIG_PATH` | `/mnt/BIG/filme/configs` | (documentation reference) | base path for container configurations |
+### paths (reference only — not used by docker-compose)
 
-### tailscale (2 variables)
+| variable | example value | secret | consumers |
+|----------|--------------|--------|-----------|
+| `BASE_PATH` | `/mnt/BIG/filme` | no | documentation reference |
+| `CONFIG_PATH` | `/mnt/BIG/filme/configs` | no | documentation reference |
 
-| variable | example value | used by | purpose |
-|----------|--------------|---------|---------|
-| `TAILSCALE_DOMAIN` | `bunny-enigmatic.ts.net` | (documentation reference) | tailscale magicDNS domain suffix |
-| `TSDPROXY_AUTHKEY` | `tskey-auth-...` | tsdproxy | tailscale authentication key for automatic node registration |
+### tailscale
 
-### VPN (3 variables)
+| variable | example value | secret | consumers |
+|----------|--------------|--------|-----------|
+| `TAILSCALE_DOMAIN` | `bunny-enigmatic.ts.net` | no | hedgedoc (CMD_DOMAIN) |
+| `TSDPROXY_AUTHKEY` | `tskey-auth-...` | **yes** | tsdproxy |
 
-| variable | example value | used by | purpose |
-|----------|--------------|---------|---------|
-| `SURFSHARK_OPENVPN_USER` | (from surfshark) | gluetun (`OPENVPN_USER`) | surfshark OpenVPN username |
-| `SURFSHARK_OPENVPN_PASSWORD` | (from surfshark) | gluetun (`OPENVPN_PASSWORD`) | surfshark OpenVPN password |
-| `GLUETUN_SERVER_COUNTRY` | `Romania` | gluetun (`SERVER_COUNTRIES`) | VPN server country selection |
+### syncthing
 
-### database (1 variable)
+| variable | example value | secret | consumers |
+|----------|--------------|--------|-----------|
+| `SYNCTHING_HOSTNAME` | `bender` | no | syncthing (hostname) |
 
-| variable | example value | used by | purpose |
-|----------|--------------|---------|---------|
-| `POSTGRES_PASSWORD` | (generated) | postgres, postgres-backup, immich_server, hedgedoc | shared postgresql password |
+### surfshark VPN (gluetun)
 
-### collaboration (2 variables)
+| variable | example value | secret | consumers |
+|----------|--------------|--------|-----------|
+| `SURFSHARK_OPENVPN_USER` | (from Surfshark dashboard) | **yes** | gluetun (OPENVPN_USER) |
+| `SURFSHARK_OPENVPN_PASSWORD` | (from Surfshark dashboard) | **yes** | gluetun (OPENVPN_PASSWORD) |
+| `GLUETUN_SERVER_COUNTRY` | `Romania` | no | gluetun (SERVER_COUNTRIES) |
 
-| variable | example value | used by | purpose |
-|----------|--------------|---------|---------|
-| `HEDGEDOC_SESSION_SECRET` | (generated) | hedgedoc (`CMD_SESSION_SECRET`) | session cookie encryption secret |
-| `HEDGEDOC_DOMAIN` | `pad.bunny-enigmatic.ts.net` | hedgedoc (`CMD_DOMAIN`) | hedgedoc public domain for link generation |
+get OpenVPN credentials from: Surfshark → Manual setup → Router/Other → OpenVPN.
 
-### security (1 variable)
+### postgresql
 
-| variable | example value | used by | purpose |
-|----------|--------------|---------|---------|
-| `VAULTWARDEN_ADMIN_TOKEN` | (generated) | vaultwarden (`ADMIN_TOKEN`) | admin panel authentication token |
+| variable | example value | secret | consumers |
+|----------|--------------|--------|-----------|
+| `POSTGRES_PASSWORD` | (random string) | **yes** | postgres, postgres-backup, immich_server, hedgedoc |
 
-### DNS (2 variables)
+### hedgedoc
 
-| variable | example value | used by | purpose |
-|----------|--------------|---------|---------|
-| `PIHOLE_PASSWORD` | (generated) | pihole (`WEBPASSWORD`), nebula-sync (PRIMARY and REPLICAS URLs) | pihole admin web interface password |
-| `KEEPALIVED_PASSWORD` | (generated) | keepalived configuration | vrrp authentication between bender and amy |
+| variable | example value | secret | consumers |
+|----------|--------------|--------|-----------|
+| `HEDGEDOC_SESSION_SECRET` | (hex string) | **yes** | hedgedoc (CMD_SESSION_SECRET) |
+| `HEDGEDOC_DOMAIN` | `pad.bunny-enigmatic.ts.net` | no | hedgedoc (CMD_DOMAIN) |
 
-### monitoring (2 variables)
+### vaultwarden
 
-| variable | example value | used by | purpose |
-|----------|--------------|---------|---------|
-| `BESZEL_KEY` | (generated) | beszel-agent (`KEY`) | authentication key for beszel agent → hub communication |
-| `BESZEL_TOKEN` | (generated) | beszel hub on amy (web ui setup) | api token — used during initial agent registration, not in compose yaml |
+| variable | example value | secret | consumers |
+|----------|--------------|--------|-----------|
+| `VAULTWARDEN_ADMIN_TOKEN` | (base64 or argon2 hash) | **yes** | vaultwarden (ADMIN_TOKEN) |
 
-### notifications (2 variables)
+### beszel
 
-| variable | example value | used by | purpose |
-|----------|--------------|---------|---------|
-| `NTFY_ADDRESS` | `192.168.21.130:8888` | diun (`DIUN_NOTIF_NTFY_ENDPOINT`), secure-container-update.sh | remote ntfy server address on amy |
-| `DIUN_NTFY_TOPIC` | `container-updates-bender` | diun, secure-container-update.sh | ntfy topic for container update notifications |
+| variable | example value | secret | consumers |
+|----------|--------------|--------|-----------|
+| `BESZEL_KEY` | `ssh-ed25519 AAAA...` | **yes** | beszel-agent (KEY) |
+| `BESZEL_TOKEN` | (random string) | **yes** | not used in docker-compose (agent registration) |
 
-### ARR stack API keys (4 variables)
+### pihole
 
-| variable | example value | used by | purpose |
-|----------|--------------|---------|---------|
-| `SONARR_API_KEY` | (from sonarr ui) | unpackerr (`UN_SONARR_0_API_KEY`) | sonarr API authentication for unpackerr |
-| `RADARR_API_KEY` | (from radarr ui) | unpackerr (`UN_RADARR_0_API_KEY`) | radarr API authentication for unpackerr |
-| `LIDARR_API_KEY` | (from lidarr ui) | unpackerr (`UN_LIDARR_0_API_KEY`) | lidarr API authentication for unpackerr |
-| `READARR_API_KEY` | (from readarr ui) | unpackerr (`UN_READARR_0_API_KEY`) | readarr API authentication for unpackerr |
+| variable | example value | secret | consumers |
+|----------|--------------|--------|-----------|
+| `PIHOLE_PASSWORD` | (random string) | **yes** | pihole (WEBPASSWORD), nebula-sync (PRIMARY/REPLICAS URLs) |
 
-### high availability (1 variable)
+### ntfy/diun notifications
 
-| variable | example value | used by | purpose |
-|----------|--------------|---------|---------|
-| `KEEPALIVED_VIP` | `192.168.21.100` | keepalived configuration | virtual ip shared between bender (master) and amy (backup) |
+| variable | example value | secret | consumers |
+|----------|--------------|--------|-----------|
+| `NTFY_ADDRESS` | `http://192.168.21.130:8080` | no | diun (DIUN_NOTIF_NTFY_ENDPOINT) |
+| `DIUN_NTFY_TOPIC` | `container-updates-bender` | no | diun (DIUN_NOTIF_NTFY_TOPIC) |
 
-### syncthing (1 variable)
+note: `NTFY_ADDRESS` points to amy's ntfy on port 8080 (the ntfy internal port mapped to host 8888 on amy, but accessed directly via container port from bender's network).
 
-| variable | example value | used by | purpose |
-|----------|--------------|---------|---------|
-| `SYNCTHING_HOSTNAME` | `bender` | syncthing (`hostname:`) | device hostname for syncthing peer identification |
+### ARR stack API keys
+
+| variable | example value | secret | consumers |
+|----------|--------------|--------|-----------|
+| `SONARR_API_KEY` | (from Sonarr UI) | **yes** | unpackerr |
+| `RADARR_API_KEY` | (from Radarr UI) | **yes** | unpackerr |
+| `LIDARR_API_KEY` | (from Lidarr UI) | **yes** | unpackerr |
+| `READARR_API_KEY` | (from Readarr UI) | **yes** | unpackerr |
+
+get each key from the respective app's Settings → General → API Key. these are used by unpackerr to connect to the ARR apps through gluetun.
+
+### keepalived
+
+| variable | example value | secret | consumers |
+|----------|--------------|--------|-----------|
+| `KEEPALIVED_PASSWORD` | (shared secret) | **yes** | keepalived (KEEPALIVED_PASSWORD) |
+| `KEEPALIVED_VIP` | `192.168.21.100` | no | not used in docker-compose (keepalived.conf uses hardcoded VIP) |
+
+note: `KEEPALIVED_PASSWORD` must be identical on both bender and amy. `KEEPALIVED_VIP` is defined in the .env for documentation purposes but the actual keepalived.conf uses the hardcoded IP.
 
 ---
 
 ## variables referenced in docker-compose.yaml
 
-these 22 variables are directly interpolated in the v105 docker-compose.yaml using `${VARIABLE}` syntax:
+these variables are directly interpolated by `docker compose`:
 
-| variable | services that reference it |
-|----------|---------------------------|
-| `TIMEZONE` | dockwatch, gluetun, pihole, nebula-sync, immich_server, immich_machine_learning, jellyfin, audiobookshelf, transmission, metube, jdownloader, spotdl, hedgedoc, sonarr, radarr, lidarr, readarr, bazarr, unpackerr, diun |
-| `PUID` | dockwatch, jellyfin, transmission, sonarr, radarr, lidarr, readarr, bazarr |
-| `PGID` | dockwatch, jellyfin, transmission, sonarr, radarr, lidarr, readarr, bazarr |
+| variable | services using it |
+|----------|-------------------|
+| `TIMEZONE` | dockwatch, gluetun, pihole, diun, transmission, jdownloader, spotdl, hedgedoc, vaultwarden, metube, edge-tts, tts-pipeline |
+| `PUID` | dockwatch, transmission, jellyfin, jdownloader, sonarr, radarr, lidarr, readarr, bazarr |
+| `PGID` | same as PUID |
 | `BENDER_HOST_IP` | tsdproxy, pihole |
 | `TSDPROXY_AUTHKEY` | tsdproxy |
+| `SYNCTHING_HOSTNAME` | syncthing |
 | `SURFSHARK_OPENVPN_USER` | gluetun |
 | `SURFSHARK_OPENVPN_PASSWORD` | gluetun |
 | `GLUETUN_SERVER_COUNTRY` | gluetun |
@@ -155,140 +175,82 @@ these 22 variables are directly interpolated in the v105 docker-compose.yaml usi
 | `HEDGEDOC_SESSION_SECRET` | hedgedoc |
 | `HEDGEDOC_DOMAIN` | hedgedoc |
 | `VAULTWARDEN_ADMIN_TOKEN` | vaultwarden |
-| `PIHOLE_PASSWORD` | pihole, nebula-sync (in PRIMARY and REPLICAS URLs) |
 | `BESZEL_KEY` | beszel-agent |
+| `PIHOLE_PASSWORD` | pihole, nebula-sync |
 | `NTFY_ADDRESS` | diun |
 | `DIUN_NTFY_TOPIC` | diun |
 | `SONARR_API_KEY` | unpackerr |
 | `RADARR_API_KEY` | unpackerr |
 | `LIDARR_API_KEY` | unpackerr |
 | `READARR_API_KEY` | unpackerr |
-| `SYNCTHING_HOSTNAME` | syncthing |
-| `KEEPALIVED_PASSWORD` | keepalived (via environment variable) |
-
-> **note on PUID/PGID:** jdownloader uses `USER_ID=${PUID}` and `GROUP_ID=${PGID}` instead of `PUID`/`PGID` directly, but it still references the same .env variables.
+| `KEEPALIVED_PASSWORD` | keepalived |
 
 ---
 
 ## variables used outside docker-compose
 
-these 6 variables exist in the `.env` file but are **not** directly referenced in docker-compose.yaml:
+| variable | used by | purpose |
+|----------|---------|---------|
+| `WATCHTOWER_NOTIFICATION_URL` | secure-container-update.sh | ntfy notification URL (legacy variable name, sourced from .env) |
+| `BESZEL_TOKEN` | agent registration | used during initial beszel agent setup, not in docker-compose |
+| `LOCAL_NETWORK` | reference | documentation only |
+| `BASE_PATH` | reference | documentation only |
+| `CONFIG_PATH` | reference | documentation only |
+| `KEEPALIVED_VIP` | reference | documentation only (keepalived.conf has hardcoded VIP) |
 
-| variable | where it's used | notes |
-|----------|----------------|-------|
-| `LOCAL_NETWORK` | available for future use | local network CIDR, not currently referenced |
-| `BASE_PATH` | documentation and scripts | base path reference for bender data |
-| `CONFIG_PATH` | documentation and scripts | base path reference for container configs |
-| `TAILSCALE_DOMAIN` | documentation reference | the tailnet domain name, not used in compose |
-| `BESZEL_TOKEN` | beszel hub web ui on amy | used once during agent registration |
-| `KEEPALIVED_VIP` | `/mnt/BIG/filme/configs/keepalived/keepalived.conf` | virtual ip — must match amy's keepalived config |
-
-these are stored in `.env` for documentation and backup purposes, ensuring all configuration values are in one place.
+note: `WATCHTOWER_NOTIFICATION_URL` is a legacy variable name from when watchtower was the update system. the secure-container-update.sh script sources the .env and reads this variable. if it's not set (which is the current state), notifications use the `NTFY_ADDRESS` variable through diun instead.
 
 ---
 
 ## security classification
 
-### secret values (do not commit to git)
+### secrets (13 variables) — never commit to git
 
-| variable | generation method | rotation frequency |
-|----------|------------------|--------------------|
-| `TSDPROXY_AUTHKEY` | tailscale admin console | when key expires |
-| `SURFSHARK_OPENVPN_USER` | surfshark account dashboard | when credentials change |
-| `SURFSHARK_OPENVPN_PASSWORD` | surfshark account dashboard | when credentials change |
-| `POSTGRES_PASSWORD` | random generation | rarely (requires all dependent services restart) |
-| `HEDGEDOC_SESSION_SECRET` | random generation | rarely (invalidates all active sessions) |
-| `VAULTWARDEN_ADMIN_TOKEN` | random generation | as needed |
-| `PIHOLE_PASSWORD` | random generation | as needed (must match amy + nebula-sync) |
-| `KEEPALIVED_PASSWORD` | random generation | rarely (must match amy) |
-| `KEEPALIVED_VIP` | network planning | rarely (requires both hosts + all clients update) |
-| `BESZEL_KEY` | beszel hub ui (add agent) | when re-adding agent |
-| `BESZEL_TOKEN` | beszel hub ui | when regenerating api access |
-| `SONARR_API_KEY` | sonarr web ui → settings → general | when regenerated |
-| `RADARR_API_KEY` | radarr web ui → settings → general | when regenerated |
-| `LIDARR_API_KEY` | lidarr web ui → settings → general | when regenerated |
-| `READARR_API_KEY` | readarr web ui → settings → general | when regenerated |
-| `NTFY_ADDRESS` | infrastructure configuration | when amy's ntfy changes |
+| variable | generation method |
+|----------|-------------------|
+| `TSDPROXY_AUTHKEY` | Tailscale admin console → Auth Keys |
+| `SURFSHARK_OPENVPN_USER` | Surfshark dashboard → Manual setup → OpenVPN |
+| `SURFSHARK_OPENVPN_PASSWORD` | Surfshark dashboard → Manual setup → OpenVPN |
+| `POSTGRES_PASSWORD` | `openssl rand -base64 32` |
+| `HEDGEDOC_SESSION_SECRET` | `openssl rand -hex 32` |
+| `VAULTWARDEN_ADMIN_TOKEN` | `openssl rand -base64 48` or argon2 hash |
+| `BESZEL_KEY` | generated by beszel hub during agent registration |
+| `BESZEL_TOKEN` | generated by beszel hub during agent registration |
+| `PIHOLE_PASSWORD` | user-chosen password |
+| `KEEPALIVED_PASSWORD` | `openssl rand -base64 16` (same on both hosts) |
+| `SONARR_API_KEY` | auto-generated by Sonarr (Settings → General) |
+| `RADARR_API_KEY` | auto-generated by Radarr (Settings → General) |
+| `LIDARR_API_KEY` | auto-generated by Lidarr (Settings → General) |
+| `READARR_API_KEY` | auto-generated by Readarr (Settings → General) |
 
-### non-secret values (safe for .env.template)
+### non-sensitive (15 variables) — safe to include in examples
 
-| variable | typical value |
-|----------|--------------|
-| `TIMEZONE` | `America/Toronto` |
-| `PUID` | `1000` |
-| `PGID` | `1000` |
-| `LOCAL_NETWORK` | `192.168.21.0/24` |
-| `BENDER_HOST_IP` | `192.168.21.121` |
-| `BASE_PATH` | `/mnt/BIG/filme` |
-| `CONFIG_PATH` | `/mnt/BIG/filme/configs` |
-| `TAILSCALE_DOMAIN` | `bunny-enigmatic.ts.net` |
-| `GLUETUN_SERVER_COUNTRY` | `Romania` |
-| `HEDGEDOC_DOMAIN` | `pad.bunny-enigmatic.ts.net` |
-| `DIUN_NTFY_TOPIC` | `container-updates-bender` |
-| `SYNCTHING_HOSTNAME` | `bender` |
+TIMEZONE, PUID, PGID, LOCAL_NETWORK, BENDER_HOST_IP, BASE_PATH, CONFIG_PATH, TAILSCALE_DOMAIN, SYNCTHING_HOSTNAME, GLUETUN_SERVER_COUNTRY, HEDGEDOC_DOMAIN, NTFY_ADDRESS, DIUN_NTFY_TOPIC, KEEPALIVED_VIP
 
 ---
 
 ## generating secure values
 
-### random passwords (32 characters, alphanumeric)
-
 ```bash
-openssl rand -base64 32 | tr -dc 'a-zA-Z0-9' | head -c 32
-```
+# postgres password
+openssl rand -base64 32
 
-### hedgedoc session secret
-
-```bash
+# hedgedoc session secret
 openssl rand -hex 32
-```
 
-### vaultwarden admin token
-
-vaultwarden recommends using argon2 hashed tokens:
-
-```bash
-# generate a plain token first
+# vaultwarden admin token (simple)
 openssl rand -base64 48
 
-# or use the vaultwarden wiki recommendation for argon2
-# https://github.com/dani-garcia/vaultwarden/wiki/Enabling-admin-page
+# vaultwarden admin token (argon2 — more secure)
+# install argon2: apt install argon2
+echo -n "YourAdminPassword" | argon2 "$(openssl rand -base64 32)" -e -id -k 65540 -t 3 -p 4
+
+# keepalived password (must match on both hosts)
+openssl rand -base64 16
+
+# tailscale auth key
+# generate at: https://login.tailscale.com/admin/settings/keys
 ```
-
-### tailscale auth key
-
-1. go to https://login.tailscale.com/admin/settings/keys
-2. generate a new auth key (reusable recommended for container recreation)
-3. copy the `tskey-auth-...` value
-
-### surfshark OpenVPN credentials
-
-1. log in to https://my.surfshark.com
-2. go to VPN → manual setup → OpenVPN
-3. copy the username and password (these are NOT your account credentials)
-
-### ARR stack API keys
-
-each ARR application generates its own API key:
-
-1. open the service web UI (e.g., https://sonarr.bunny-enigmatic.ts.net)
-2. go to settings → general
-3. copy the "API Key" value
-
-### beszel key
-
-1. open beszel hub web ui (https://beszel.bunny-enigmatic.ts.net)
-2. click "add system"
-3. copy the generated key value
-
-### keepalived password
-
-```bash
-# must be 8 characters or fewer for vrrp compatibility
-openssl rand -base64 6 | tr -dc 'a-zA-Z0-9' | head -c 8
-```
-
-> **important:** keepalived password and pihole password must be identical on both bender and amy. after changing either, update both hosts and restart the affected services on both.
 
 ---
 

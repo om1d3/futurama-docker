@@ -2,331 +2,263 @@
 
 ## design decisions analysis
 
-**document version:** 2.0
-**infrastructure version:** 98
+**document version:** 3.0
+**infrastructure version:** 99
 **last updated:** february 2026
 
 ---
 
 ## table of contents
 
-1. [overview](#overview)
-2. [two-host architecture](#two-host-architecture)
-3. [single docker-compose file](#single-docker-compose-file)
-4. [shared postgresql instance](#shared-postgresql-instance)
-5. [pihole high availability](#pihole-high-availability)
-6. [security-first updates](#security-first-updates)
-7. [tailscale with tsdproxy](#tailscale-with-tsdproxy)
-8. [local ntfy instance](#local-ntfy-instance)
-9. [dns anchor pattern](#dns-anchor-pattern)
-10. [telegraf consolidation](#telegraf-consolidation)
-11. [cadvisor with resource limits](#cadvisor-with-resource-limits)
-12. [legacy path preservation](#legacy-path-preservation)
+1. [amy's role in the two-host architecture](#amys-role-in-the-two-host-architecture)
+2. [debian vs TrueNAS](#debian-vs-truenas)
+3. [shared postgresql](#shared-postgresql)
+4. [keepalived BACKUP role](#keepalived-backup-role)
+5. [local ntfy](#local-ntfy)
+6. [telegraf for SNMP monitoring](#telegraf-for-snmp-monitoring)
+7. [cadvisor resource optimization](#cadvisor-resource-optimization)
+8. [legacy portainer paths](#legacy-portainer-paths)
+9. [valkey instead of redis](#valkey-instead-of-redis)
+10. [python-based limdius](#python-based-limdius)
 
 ---
 
-## overview
-
-every architectural decision in the amy infrastructure was made with specific goals: reliability, security, maintainability, and resource efficiency. this document explains the reasoning behind each choice, what alternatives were considered, and what tradeoffs were accepted.
-
----
-
-## two-host architecture
+## amy's role in the two-host architecture
 
 ### decision
 
-split the infrastructure across two physical hosts — bender (media/downloads) and amy (utilities/monitoring) — rather than running everything on a single machine.
+amy handles lightweight utilities, monitoring, and notifications while bender handles media and downloads.
 
 ### benefits
 
-- **failure isolation**: a crash or failed update on bender does not take down DNS, notifications, monitoring, or productivity tools on amy (and vice versa)
-- **TrueNAS upgrade immunity**: bender runs TrueNAS Scale which can have breaking updates. amy runs on a standard debian-based system that is more predictable
-- **resource separation**: media transcoding and download I/O on bender don't compete with database queries and notification delivery on amy
-- **independent update cycles**: amy updates on wednesday, bender on saturday — if an update breaks one host, the other remains functional
+- **failure isolation**: amy stays running when bender is down for TrueNAS upgrades or ZFS issues
+- **DNS continuity**: pihole on amy takes over via keepalived when bender is unavailable
+- **notification independence**: ntfy on amy can still receive notifications even if bender is completely down
+- **monitoring continuity**: beszel hub on amy continues collecting metrics from amy itself during bender outages
 
 ### tradeoffs
 
-- **increased complexity**: two compose files, two .env files, two sets of documentation, two cron schedules
-- **cross-host dependencies**: homepage on amy needs dockerproxy on bender for container status. diun and secure-update on bender need ntfy on amy for notifications
-- **NFS dependency**: amy mounts bender's storage via NFS for some services (filebrowser can browse both `/docker` and `/portainer`)
-
-### alternatives considered
-
-- **single host**: simpler management but single point of failure for all services
-- **kubernetes**: more resilient but vastly more complex for a home lab with 2 physical machines
-- **proxmox/VM split**: similar isolation benefits but adds hypervisor overhead on already modest hardware
+- **limited hardware**: the i3-2310M is significantly less powerful than bender's Xeon E3-1265L V2
+- **no ZFS**: single SSD with no data redundancy (mitigated by daily postgres backups)
+- **cross-host dependencies**: homepage needs bender's dockerproxy, beszel-agent on bender needs amy's beszel hub
 
 ---
 
-## single docker-compose file
+## debian vs TrueNAS
 
 ### decision
 
-consolidate all amy services into one `docker-compose.yaml` (v98, 29 active services) rather than multiple stacks or individual containers.
+run amy on stock Debian 13 rather than TrueNAS Scale.
 
 ### benefits
 
-- **atomic operations**: `docker compose up -d` brings up everything with correct ordering and dependencies
-- **shared networking**: all services on `utility-network` can reach each other by container name without exposing ports to the host
-- **single source of truth**: one file to version, backup, and review — no hunting for scattered stack definitions
-- **dependency management**: `depends_on` with health checks ensures postgres is ready before atuin, miniflux, mealie, or spendspentspent start
-- **consistent DNS**: the `x-dns` YAML anchor applies the dns configuration to all bridge-networked services in one place
+- **direct script execution**: no TrueNAS `/mnt` execution restrictions — scripts run from their actual paths
+- **simpler storage**: single SSD, no ZFS pool management overhead
+- **standard package management**: `apt` for system updates, no TrueNAS middleware layer
+- **lighter resource usage**: no ZFS ARC cache consuming RAM
 
 ### tradeoffs
 
-- **all-or-nothing restarts**: running `docker compose up -d` after a change may recreate containers that didn't need it (docker is generally smart about this, but not always)
-- **large file**: v98 is ~500 lines, which requires careful version tracking
-- **version coupling**: all services share the same compose file version number, making changelog tracking essential
-
-### alternatives considered
-
-- **portainer stacks**: the original approach — each service as its own stack. abandoned because it was harder to manage dependencies, networking, and bulk operations
-- **multiple compose files**: grouping services (e.g., databases.yaml, monitoring.yaml). adds complexity with cross-file networking and no clear benefit at this scale
-
-### migration history
-
-amy originally used portainer for service management. the legacy `/portainer/` paths for postgresql and telegraf are remnants of this era. the consolidation into a single compose file happened progressively from v68 through v98.
+- **no ZFS protection**: single SSD means no checksumming, no redundancy, no snapshots
+- **manual Docker installation**: Docker isn't pre-installed like on TrueNAS Scale
+- **no web UI for system management**: server management via SSH only (no TrueNAS dashboard)
 
 ---
 
-## shared postgresql instance
+## shared postgresql
 
 ### decision
 
-run a single postgresql 17 instance serving multiple databases (atuin, miniflux, sss, mealie, stirling) rather than one database container per application.
+one postgres:17-alpine instance shared by atuin, miniflux, spendspentspent, mealie, and stirling.
 
 ### benefits
 
-- **RAM efficiency**: one postgresql process uses ~50-100MB RAM instead of 5 separate instances using ~250-500MB total
-- **centralized backup**: one postgres-backup container backs up all databases with a single cron job
-- **simplified management**: one container to monitor, update, and maintain
-- **consistent versioning**: all applications use the same postgresql version
+- **RAM savings**: ~400 MB saved vs running 5 separate postgres instances
+- **centralized backup**: postgres-backup backs up all 5 databases in one container
+- **simplified management**: one database to monitor and upgrade
+- **version consistency**: all apps use the same postgres 17 release
 
 ### tradeoffs
 
-- **single point of failure**: if postgresql goes down, atuin, miniflux, mealie, spendspentspent, and stirling all lose database access simultaneously
-- **shared resource contention**: a heavy query from one application could slow all others (unlikely at this scale)
-- **update risk**: a postgresql major version upgrade affects all databases at once
-- **password sharing**: all applications use the same `POSTGRES_PASSWORD` — a compromise of one application's config exposes all databases
+- **single point of failure**: if postgres crashes, 5 services go down simultaneously
+- **upgrade risk**: postgres 17 → 18 upgrade affects all applications at once
+- **mixed workloads**: atuin (append-heavy shell history) and mealie (recipe CRUD) have different I/O patterns
 
-### mitigations
+### mitigation
 
-- postgres is listed as a **critical container** with pre-upgrade backups, extended health checks, and automatic rollback
-- postgres-backup runs daily with 7-day, 4-week, and 6-month retention
-- dependent services use `depends_on` with `condition: service_healthy` to avoid connecting before postgres is ready
-
-### alternatives considered
-
-- **per-app sqlite**: some applications support sqlite (wallos uses it). but miniflux and mealie require postgresql, so a shared instance is needed regardless
-- **per-app postgresql**: maximum isolation but wasteful on a 16GB RAM machine running 29 containers
+- postgres is classified as critical in the update system (4 critical services total on amy)
+- pre-upgrade backups mandatory before any postgres update
+- health checks verify all 5 databases are accessible after updates
+- automatic rollback if any dependent service fails
 
 ---
 
-## pihole high availability
+## keepalived BACKUP role
 
 ### decision
 
-run pihole on both bender (master, priority 150) and amy (backup, priority 100) with keepalived providing a floating VIP at 192.168.21.100.
+amy runs keepalived as BACKUP (priority 100) while bender runs as MASTER (priority 200).
 
 ### benefits
 
-- **zero-downtime DNS**: if bender's pihole fails or bender reboots, amy's pihole takes over the VIP within seconds
-- **maintenance windows**: either host can be updated or rebooted without losing DNS for the network
-- **configuration sync**: nebula-sync on bender replicates pihole configuration to amy hourly
+- **automatic failover**: if bender's pihole fails, amy takes the VIP within ~5 seconds
+- **automatic recovery**: when bender recovers, the VIP returns automatically (higher priority wins)
+- **no manual intervention**: the entire failover/recovery cycle is automated
 
 ### tradeoffs
 
-- **resource usage**: two pihole instances running simultaneously (minimal — pihole is lightweight)
-- **sync lag**: nebula-sync runs hourly, so manual changes on bender take up to 60 minutes to replicate to amy
-- **keepalived complexity**: vrrp requires matching configuration on both hosts, shared password, and network_mode: host
-- **split-brain risk**: if the network between bender and amy fails, both may claim the VIP. keepalived's vrrp protocol handles this, but edge cases exist
+- **amy's pihole may have stale config**: nebula-sync runs hourly, so amy's pihole could be up to 1 hour behind bender's after a config change
+- **different upstream DNS**: bender uses 1.1.1.1 + 8.8.8.8 while amy uses 9.9.9.9 + 1.1.1.1 — clients may see different DNS behavior during failover
+- **keepalived image not pinned**: amy uses `osixia/keepalived:latest` while bender uses `:2.0.20` — a breaking update could affect amy's keepalived
 
-### alternatives considered
+### configuration differences from bender
 
-- **single pihole with external DNS fallback**: simpler but means ad-blocking fails during pihole host downtime
-- **coredns/unbound**: more lightweight but lacks the pihole ad-blocking and web management features
+| setting | bender | amy |
+|---------|--------|-----|
+| role | MASTER | BACKUP |
+| interface | bond0 | enp4s0 |
+| priority | 200 | 100 |
+| image | osixia/keepalived:2.0.20 (pinned) | osixia/keepalived:latest |
+| volume mount | single file (read-only) | directory mount |
+| KEEPALIVED_INTERFACE env | set in compose | not set (uses config file) |
+| --copy-service flag | yes | no |
 
 ---
 
-## security-first updates
+## local ntfy
 
 ### decision
 
-scan every container image with trivy before deployment, blocking any image with critical or high severity CVEs.
+run ntfy on amy rather than using a cloud notification service.
 
 ### benefits
 
-- **proactive vulnerability management**: known vulnerabilities are caught before they reach production
-- **automated workflow**: the weekly scan + daily retry cycle requires no manual intervention for clean images
-- **audit trail**: every scan result is logged, providing a history of what was deployed and when
-- **automatic rollback**: failed deployments are automatically reverted, minimizing downtime
+- **works without internet**: notifications still flow during internet outages (both hosts are on LAN)
+- **no external dependency**: no reliance on pushover, discord, or other cloud services
+- **privacy**: notification content stays on the local network
+- **used by both hosts**: bender's diun and secure-container-update.sh send notifications to amy's ntfy
 
 ### tradeoffs
 
-- **delayed updates**: legitimate updates with upstream vulnerabilities (often in base images) are blocked until the maintainer fixes them
-- **false positives**: some CVEs in base images are not exploitable in the container's context but still block deployment
-- **retry queue growth**: containers with persistent vulnerabilities accumulate in the retry queue and require manual review
-- **trivy resource usage**: the trivy cache can grow to several hundred MB on disk
-
-### alternatives considered
-
-- **watchtower auto-update**: simpler but no vulnerability scanning — blindly deploys whatever is latest. kept commented out in compose file as emergency fallback
-- **manual updates**: most control but requires regular human attention and is easy to neglect
-- **renovate/dependabot**: designed for code dependencies, not docker image lifecycle
+- **single point of failure**: if amy is down, both hosts lose notifications
+- **no mobile push without tailscale**: ntfy mobile app needs tailscale or internet exposure to receive notifications remotely
+- **LAN-only by default**: remote notification access requires tailscale URL (https://ntfy.bunny-enigmatic.ts.net)
 
 ---
 
-## tailscale with tsdproxy
+## telegraf for SNMP monitoring
 
 ### decision
 
-use tsdproxy to expose services via tailscale with automatic HTTPS certificates, rather than running a reverse proxy with manual certificates.
+use telegraf on amy to monitor the Cisco 3750X switch and Brother printer via SNMP, rather than monitoring from Home Assistant directly.
 
 ### benefits
 
-- **zero certificate management**: tailscale handles HTTPS certificates automatically for each service
-- **label-based configuration**: services are exposed by adding `tsdproxy.enable: "true"` labels — no separate proxy config files
-- **secure remote access**: all traffic is encrypted through tailscale's WireGuard-based mesh network
-- **per-service DNS**: each service gets its own `*.bunny-enigmatic.ts.net` domain name
+- **SNMP expertise**: telegraf's SNMP input plugin handles table walks, OID translation, and retry logic
+- **custom processing**: starlark processor parses Brother's proprietary hex-encoded page counts and drum percentages
+- **decoupled from HA**: if Home Assistant restarts, telegraf continues collecting data — no gaps in metrics
+- **host networking**: telegraf runs with network_mode: host for reliable SNMP access
 
 ### tradeoffs
 
-- **tailscale dependency**: if tailscale's coordination server has issues, new connections may fail (existing connections continue)
-- **ephemeral nodes**: tsdproxy creates tailscale nodes per service, which appear in the admin console and may need cleanup
-- **no local HTTPS**: tsdproxy only provides HTTPS through tailscale — local network access uses HTTP on host ports
-- **auth key management**: the `TSDPROXY_AUTHKEY` must be refreshed when it expires
+- **extra hop**: data flows telegraf → influxdb → grafana instead of directly into Home Assistant
+- **influxdb dependency**: requires influxdb on the HA VM (192.168.21.220)
+- **legacy config path**: telegraf config lives at `/portainer/telegraf/config/` (historical)
 
-### alternatives considered
+### consolidation history
 
-- **traefik/caddy reverse proxy**: more traditional, supports local HTTPS with let's encrypt, but requires port 80/443 exposure and DNS challenge setup
-- **tailscale sidecar per container**: each container gets its own tailscale instance — more isolation but much higher resource usage
+telegraf was originally deployed as a standalone docker-compose at `/portainer/telegraf/docker-compose.yml`. in v98, it was consolidated into amy's main docker-compose.yaml to simplify management while keeping the config at its original path.
 
 ---
 
-## local ntfy instance
+## cadvisor resource optimization
 
 ### decision
 
-run ntfy on amy as the central notification hub for the entire infrastructure, rather than using an external notification service.
+deploy cadvisor with aggressive resource-saving flags, matching bender's configuration.
 
-### benefits
+### results (measured during v98 deployment)
 
-- **offline capability**: notifications work even when the internet is down (useful for local infrastructure alerts)
-- **no external dependency**: no reliance on third-party services (pushover, telegram, etc.)
-- **docker network access**: services on amy reach ntfy via docker network name (`ntfy:80`) — no DNS or routing needed
-- **central hub**: both amy (local) and bender (remote via `${NTFY_ADDRESS}`) send notifications to the same place
+| metric | before optimization | after optimization | reduction |
+|--------|--------------------|--------------------|-----------|
+| CPU usage | 9.90% | 0.32% | 97% |
+| memory usage | 118 MiB | 18 MiB | 85% |
 
-### tradeoffs
+### flags used
 
-- **amy dependency**: if amy is down, no notifications can be delivered from either host
-- **no push fallback**: if ntfy is down, update failures on bender go unnoticed until someone checks manually
-- **self-hosted maintenance**: ntfy itself needs to be updated and monitored
+- `--docker_only=true` — skips host-level metrics
+- `--housekeeping_interval=30s` — reduces internal polling
+- `--disable_metrics=percpu,sched,tcp,udp,disk,diskIO,hugetlb,referenced_memory,cpu_topology,resctrl`
 
-### alternatives considered
-
-- **pushover**: reliable push notification service but costs money and requires internet
-- **telegram bot**: free but requires internet and telegram account
-- **gotify**: similar self-hosted alternative to ntfy — ntfy was chosen for its simpler API and mobile app support
+particularly important on amy given the limited i3-2310M CPU — every percent of saved CPU matters.
 
 ---
 
-## dns anchor pattern
+## legacy portainer paths
 
 ### decision
 
-use a YAML anchor (`x-dns: &default-dns`) to set `dns: 192.168.21.100` on all bridge-networked services, pointing them to the keepalived VIP.
+keep postgresql data at `/portainer/postgresql/data/` and telegraf config at `/portainer/telegraf/config/` rather than migrating to `/docker/` paths.
 
 ### benefits
 
-- **consistent DNS**: all containers resolve DNS through pihole, getting ad-blocking and local `.home.arpa` domain resolution
-- **single change point**: updating the DNS server means changing one anchor, not 25+ service definitions
-- **ha-aware**: the VIP floats between bender and amy, so containers always reach a working pihole
+- **zero migration risk**: no chance of data loss from moving the database
+- **no downtime**: migration would require stopping all dependent services
+- **works correctly**: the path doesn't affect functionality
 
 ### tradeoffs
 
-- **pihole dependency for containers**: if both pihole instances fail, all bridge-networked containers lose DNS resolution
-- **host-networked exceptions**: services with `network_mode: host` (keepalived, beszel-agent, netalertx, telegraf) use the host's DNS, not the anchor
-- **pihole bootstrap**: pihole itself cannot use the anchor (it IS the DNS server), so it's excluded
+- **inconsistent naming**: most services use `/docker/<service>/` but postgres and telegraf use `/portainer/`
+- **confusion potential**: new operators might look in `/docker/postgres/` and not find data
+- **documentation overhead**: must document the legacy paths clearly
 
-### alternatives considered
+### when to migrate
 
-- **docker daemon DNS config**: set DNS globally in `/etc/docker/daemon.json` — affects all containers on the host, not just this compose stack
-- **no custom DNS**: let containers use docker's default DNS — works but misses pihole ad-blocking and local domain resolution
+migration would be justified if: the `/portainer/` partition runs out of space, or if a major postgres version upgrade already requires data recreation. until then, the current paths are correct and stable.
 
 ---
 
-## telegraf consolidation
+## valkey instead of redis
 
 ### decision
 
-in v98, moved telegraf from a separate docker-compose stack at `/portainer/telegraf/` into the main docker-compose.yaml.
+use valkey (redis-compatible fork) instead of redis for amy's key-value caching needs.
 
 ### benefits
 
-- **single management point**: telegraf is now updated, started, and stopped with all other services
-- **version tracking**: telegraf changes are captured in the docker-compose changelog alongside everything else
-- **consistent configuration**: uses `${TIMEZONE}` from `.env` instead of a hardcoded `TZ=America/Toronto`
+- **open source**: valkey is a truly open-source redis fork (BSD license) after Redis Ltd changed redis's license
+- **drop-in compatible**: all redis clients and commands work with valkey
+- **active development**: maintained by the Linux Foundation with broad industry support
 
 ### tradeoffs
 
-- **network_mode: host required**: telegraf needs host networking for SNMP polling, so it doesn't benefit from the utility-network bridge or the dns anchor
-- **config file location unchanged**: the config still lives at `/portainer/telegraf/config/telegraf.conf` (mounted read-only) — this legacy path is preserved to avoid breaking the working SNMP monitoring
+- **less battle-tested**: valkey is newer than redis, though based on the same codebase
+- **currently unused**: no service on amy explicitly depends on valkey yet (it's available for future use)
 
-### alternatives considered
-
-- **keep as separate stack**: simpler to manage independently but creates a management blind spot outside the main compose file
-- **move config to `/docker/telegraf/`**: cleaner path structure but unnecessary risk of breaking a working SNMP configuration
+note: bender uses redis:7-alpine for immich_redis because immich specifically requires redis. amy uses valkey because there's no specific redis requirement.
 
 ---
 
-## cadvisor with resource limits
+## python-based limdius
 
 ### decision
 
-run cadvisor with resource-saving flags (`--docker_only`, `--housekeeping_interval=30s`, `--disable_metrics=...`) to reduce CPU and memory consumption.
+run limdius using a `python:3.11-slim` base image with runtime dependency installation via `pip install` in the command.
 
 ### benefits
 
-- **97% CPU reduction on bender**: from 9.90% to 0.32%
-- **85% memory reduction on bender**: from 118 MiB to 18 MiB
-- **significant reduction on amy**: from ~21% CPU / 81 MiB to 1.58% CPU / 39 MiB
-- **still provides all needed metrics**: the disabled metrics (percpu, sched, tcp, udp, etc.) are not used by the grafana dashboards
+- **simple deployment**: no custom Dockerfile needed — just mount the Python script and let the command install dependencies
+- **easy updates**: modify `/docker/limdius/limdius.py` directly, restart the container
 
 ### tradeoffs
 
-- **reduced metric granularity**: per-CPU, TCP/UDP, and disk I/O metrics are disabled — if these are ever needed, the flags must be updated
-- **30-second housekeeping interval**: slightly less responsive than the default (reduces update frequency)
+- **slow startup**: `pip install` runs on every container start (~15–30 seconds)
+- **internet dependency at startup**: if pypi.org is unreachable, the container fails to start
+- **no dependency pinning**: `pip install requests flask playwright` always gets latest versions
 
-### alternatives considered
+### potential improvement
 
-- **default cadvisor**: simpler but uses too much CPU on the HP MicroServer Gen8 and the Intel i3
-- **no cadvisor**: lose container-level metrics in grafana — not acceptable for monitoring goals
-- **docker daemon metrics**: lightweight but provides much less per-container detail than cadvisor
-
----
-
-## legacy path preservation
-
-### decision
-
-keep postgresql data at `/portainer/postgresql/data` and telegraf config at `/portainer/telegraf/config/telegraf.conf` rather than relocating to `/docker/`.
-
-### benefits
-
-- **zero downtime**: no database migration needed, no risk of data loss
-- **proven working**: these paths have been production-stable since the portainer era
-- **no service interruption**: telegraf's SNMP monitoring continues uninterrupted
-
-### tradeoffs
-
-- **inconsistent naming**: most services use `/docker/<service>/` while postgres and telegraf use `/portainer/`
-- **documentation overhead**: the split requires explicit documentation (see [03-DIRECTORY-STRUCTURE.md](./03-DIRECTORY-STRUCTURE.md))
-- **potential confusion**: new services should use `/docker/` — the `/portainer/` paths are frozen exceptions
-
-### alternatives considered
-
-- **relocate to /docker/**: cleaner structure but requires postgresql dump+restore and telegraf reconfiguration — high risk for zero functional benefit
-- **symlinks**: create `/docker/postgresql` → `/portainer/postgresql` — adds complexity without solving the root issue
+if startup time becomes an issue, a custom Dockerfile with pre-installed dependencies (similar to bender's transmission build) would eliminate the pip install delay. currently not worth the maintenance overhead for a lightweight service.
 
 ---
 

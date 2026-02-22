@@ -2,8 +2,8 @@
 
 ## security-first container lifecycle management
 
-**document version:** 2.0
-**infrastructure version:** 105
+**document version:** 3.0
+**infrastructure version:** 109
 **last updated:** february 2026
 
 ---
@@ -14,444 +14,262 @@
 2. [components](#components)
 3. [TrueNAS execution restriction](#truenas-execution-restriction)
 4. [update workflow](#update-workflow)
-5. [critical services](#critical-services)
-6. [health checks](#health-checks)
-7. [rollback procedures](#rollback-procedures)
-8. [notifications](#notifications)
-9. [schedule](#schedule)
-10. [scripts reference](#scripts-reference)
-11. [differences from amy](#differences-from-amy)
+5. [build-based containers](#build-based-containers)
+6. [critical services](#critical-services)
+7. [health checks](#health-checks)
+8. [rollback system](#rollback-system)
+9. [throttling system](#throttling-system)
+10. [notification flow](#notification-flow)
+11. [cron schedule](#cron-schedule)
+12. [configuration files](#configuration-files)
+13. [differences from amy](#differences-from-amy)
 
 ---
 
 ## overview
 
-bender uses the same security-first approach as amy for container updates: every image is scanned with trivy for known vulnerabilities before deployment, and critical services receive additional protection. the key difference is that bender runs on TrueNAS Scale, which imposes filesystem execution restrictions requiring a copy-to-tmp workaround for script execution.
+bender uses a custom secure container update system that ensures no container is deployed with known CRITICAL or HIGH vulnerabilities. the system pulls new images, scans them with trivy, deploys only if clean, runs health checks, and automatically rolls back on failure.
 
-### key principles
+the system consists of three scripts and two JSON configuration files, managed by cron jobs that run weekly (full scan) and daily (retry blocked containers).
 
-1. **scan before deploy** — every image is scanned with trivy before deployment
-2. **block on vulnerabilities** — critical and high severity CVEs block updates
-3. **automatic rollback** — failed updates trigger automatic rollback to the previous image
-4. **critical service protection** — postgres gets pre-upgrade database dumps and extended verification
-5. **notification on all events** — ntfy alerts sent to amy's ntfy instance for all events
-6. **TrueNAS-safe execution** — scripts are copied to `/tmp/` before running
+as of v108, three containers use `build:` directives instead of pre-built images. these require special handling — see [build-based containers](#build-based-containers).
 
 ---
 
 ## components
 
-### diun (docker image update notifier)
-
-monitors all container images for available updates and sends notifications to ntfy on amy.
-
-| property | value |
-|----------|-------|
-| **container** | `diun` |
-| **schedule** | `0 6 * * *` (daily 06:00) |
-| **watch mode** | all containers by default |
-| **ntfy endpoint** | `${NTFY_ADDRESS}` (remote — amy's ntfy) |
-| **ntfy topic** | `${DIUN_NTFY_TOPIC}` |
-| **ntfy priority** | 3 (default) |
-
-note: bender's diun runs daily at 06:00 (not weekly like amy's). this is because bender has more services and benefits from earlier notification of available updates before the weekly Saturday scan.
-
-### trivy (vulnerability scanner)
-
-scans container images for known CVEs before deployment.
-
-| property | value |
-|----------|-------|
-| **container** | `trivy` |
-| **mode** | server |
-| **internal port** | 8080 |
-| **host port** | 8083 |
-| **endpoint** | `http://localhost:8083` |
-| **cache** | `/mnt/BIG/filme/configs/trivy` |
-
-### secure-container-update.sh
-
-orchestrates the entire update process — pull, scan, deploy, verify, rollback.
-
-| property | value |
-|----------|-------|
-| **version** | 1.2 |
-| **location** | `/mnt/BIG/filme/docker-compose/scripts/secure-container-update.sh` |
-| **execution** | requires `/tmp` copy (TrueNAS restriction) |
-
-### health-checks.sh
-
-verifies services are functioning correctly after updates.
-
-| property | value |
-|----------|-------|
-| **version** | 1.0 |
-| **location** | `/mnt/BIG/filme/docker-compose/scripts/health-checks.sh` |
-| **execution** | requires `/tmp` copy |
-| **targets** | postgres, immich, hedgedoc, pihole, jellyfin, transmission, vaultwarden, all |
-
-### rollback.sh
-
-provides manual rollback for containers and postgresql databases.
-
-| property | value |
-|----------|-------|
-| **version** | 1.0 |
-| **location** | `/mnt/BIG/filme/docker-compose/scripts/rollback.sh` |
-| **execution** | requires `/tmp` copy |
+| component | version | purpose |
+|-----------|---------|---------|
+| secure-container-update.sh | v1.2 | main update orchestration script |
+| health-checks.sh | v1.2 | standalone health check suite |
+| rollback.sh | v1.1 | manual rollback helper |
+| pihole-dns-update.sh | v3.0 | DNS auto-population (separate cron) |
+| diun | latest | monitors Docker Hub for new image tags |
+| trivy | latest | scans images for CVEs (server mode on port 8083:8080) |
+| critical-containers.json | — | defines critical services and their test suites |
+| retry-queue.json | — | tracks containers blocked by vulnerabilities |
 
 ---
 
 ## TrueNAS execution restriction
 
-TrueNAS Scale does not allow executing scripts from `/mnt/` paths (the ZFS-mounted filesystem). all scripts must be copied to `/tmp/` (root filesystem) before execution.
-
-### running scripts manually
+TrueNAS does not allow executing scripts from `/mnt/` paths. the cron system works around this by copying scripts to `/tmp/` before execution:
 
 ```bash
-# health checks
-cp /mnt/BIG/filme/docker-compose/scripts/health-checks.sh /tmp/ && \
-  bash /tmp/health-checks.sh all && \
-  rm /tmp/health-checks.sh
+# weekly scan (saturday 04:30)
+30 4 * * 6 cp /mnt/BIG/filme/docker-compose/scripts/secure-container-update.sh /tmp/ && bash /tmp/secure-container-update.sh weekly && rm /tmp/secure-container-update.sh
 
-# manual weekly scan
-cp /mnt/BIG/filme/docker-compose/scripts/secure-container-update.sh /tmp/ && \
-  bash /tmp/secure-container-update.sh weekly && \
-  rm /tmp/secure-container-update.sh
+# daily retry (sunday–friday 04:30, excludes saturday)
+30 4 * * 0-5 cp /mnt/BIG/filme/docker-compose/scripts/secure-container-update.sh /tmp/ && bash /tmp/secure-container-update.sh retry && rm /tmp/secure-container-update.sh
 
-# rollback
-cp /mnt/BIG/filme/docker-compose/scripts/rollback.sh /tmp/ && \
-  bash /tmp/rollback.sh list jellyfin && \
-  rm /tmp/rollback.sh
+# pihole DNS update (every 5 minutes, runs from /root/)
+*/5 * * * * /root/pihole-dns-update.sh >> /var/log/pihole-dns-export.log 2>&1
 ```
 
-### why not /root/?
+for manual use:
 
-`/root/` was tested as an alternative execution location, but TrueNAS also restricts execution there for scripts that reference `/mnt/` paths. the `/tmp/` copy approach is the reliable workaround.
+```bash
+# run health checks
+cp /mnt/BIG/filme/docker-compose/scripts/health-checks.sh /tmp/
+bash /tmp/health-checks.sh postgres
+rm /tmp/health-checks.sh
 
-the pihole-dns-update.sh is an exception — it lives at `/root/pihole-dns-update.sh` as a self-contained script that runs directly from cron without referencing `/mnt/` for execution.
+# manual rollback
+cp /mnt/BIG/filme/docker-compose/scripts/rollback.sh /tmp/
+bash /tmp/rollback.sh list jellyfin
+rm /tmp/rollback.sh
+```
 
 ---
 
 ## update workflow
 
-### standard container update
-
 ```
-1. diun detects new image available (daily 06:00)
-   └─► notification sent to ntfy on amy
-
-2. secure-container-update.sh runs (saturday 04:30)
-   ├─► pull new image
-   ├─► scan with trivy
-   │   ├─► critical/high CVE found?
-   │   │   ├─► YES: block update, add to retry queue, notify
-   │   │   └─► NO: continue
-   │   │
-   ├─► is this a critical container?
-   │   ├─► YES: run pre-upgrade backup, extended health checks
-   │   └─► NO: standard update
-   │   │
-   ├─► backup current image tag (up to 3 generations)
-   ├─► deploy new image (docker compose up -d)
-   ├─► run health checks
-   │   ├─► PASS: notify success
-   │   └─► FAIL: automatic rollback, notify failure
-   │
-   └─► generate report
-```
-
-### postgresql upgrade process
-
-postgresql on bender is critical — it holds the immich photo database and hedgedoc data. the upgrade process minimizes downtime:
-
-```
-phase 1: preparation (database still running)
-├── 1. pull new postgres image
-├── 2. scan with trivy
-└── 3. if vulnerabilities found → abort
-
-phase 2: backup (database still running)
-├── 4. pg_dumpall full backup
-├── 5. verify backup file exists and is non-empty
-└── 6. if backup fails → abort
-
-phase 3: deployment
-├── 7. stop dependent services (immich_server, immich_machine_learning, hedgedoc, postgres-backup)
-├── 8. stop postgres
-├── 9. start new postgres
-├── 10. wait for pg_isready
-└── 11. verify databases exist (immich, hedgedoc)
-
-phase 4: verification
-├── 12. run functional tests (immich database access, hedgedoc database access)
-├── 13. run integration tests (immich API ping, hedgedoc HTTP)
-├── 14. start dependent services
-├── 15. verify dependent services healthy
-└── 16. notify success
-
-phase 4-fail: recovery (if any check fails)
-├── 17. stop new postgres
-├── 18. restore backup image tag
-├── 19. start old postgres
-├── 20. start dependent services
-└── 21. notify failure with rollback details
+1. check system health (load average < 4.0, iowait < 50%)
+   |
+   v
+2. for each running container:
+   |
+   +-- pull new image
+   |   |
+   |   v
+   +-- scan with trivy (server mode, port 8082)
+   |   |
+   |   +-- CRITICAL or HIGH found → add to retry queue → skip
+   |   |
+   |   v
+   +-- pre-upgrade actions (backup for critical containers)
+   |   |
+   |   v
+   +-- stop container
+   |   |
+   |   v
+   +-- backup current image (rotate backup-1/2/3 tags)
+   |   |
+   |   v
+   +-- start with new image (docker compose up -d --force-recreate)
+   |   |
+   |   v
+   +-- wait 30 seconds
+   |   |
+   |   v
+   +-- run health checks
+   |   |
+   |   +-- FAIL → rollback to backup-1 → notify
+   |   |
+   |   v
+   +-- restart dependent services (critical containers only)
+   |   |
+   |   v
+   +-- re-run integration tests
+   |   |
+   |   +-- FAIL → rollback → notify
+   |   |
+   |   v
+   +-- SUCCESS → remove from retry queue
+   |
+   v
+3. wait THROTTLE_DELAY (60s) between containers
+   |
+   v
+4. check system health again before next container
+   |
+   +-- overloaded → wait up to 5 × 120s for recovery
+   +-- still overloaded → skip remaining containers
+   |
+   v
+5. generate report + send ntfy notification
 ```
 
-> **note:** bender's postgres uses the specialized `ghcr.io/immich-app/postgres:14-vectorchord0.4.3` image with vector extensions. do not replace with standard postgres — immich requires the vectorchord/pgvectors extensions for ML-based search.
+### containers skipped by the update system
+
+the following containers are never auto-updated:
+
+| container | reason |
+|-----------|--------|
+| diun | infrastructure — updates itself |
+| trivy | infrastructure — scanner should not scan itself |
+| transmission | build-based — requires manual `docker compose build` |
+| tts-pipeline | build-based — requires manual `docker compose build` |
+
+---
+
+## build-based containers
+
+three containers use `build:` instead of `image:` and cannot be updated by the standard pull-scan-deploy pipeline:
+
+| container | build context | update procedure |
+|-----------|--------------|------------------|
+| transmission | `/mnt/BIG/filme/configs/transmission/` | edit Dockerfile → `docker compose build --no-cache transmission` → `docker compose up -d transmission` |
+| tts-pipeline | `/mnt/BIG/filme/configs/tts-pipeline/` | edit Dockerfile/scripts → `docker compose build --no-cache tts-pipeline` → `docker compose up -d tts-pipeline` |
+| epub2tts-edge | `/mnt/BIG/filme/configs/epub2tts-edge/` | edit Dockerfile → `docker compose build --no-cache epub2tts-edge` (profiles: tools, on-demand) |
+
+these containers are effectively pinned to their Dockerfile definitions. to update the base image (e.g., linuxserver/transmission), edit the `FROM` line in the Dockerfile and rebuild.
+
+**transmission is pinned to 4.0.5** — do NOT change the base image version. FileList whitelist requirement.
 
 ---
 
 ## critical services
 
-### critical container configuration
+only postgres is classified as critical on bender:
 
-on bender, only postgres is classified as critical in `/mnt/BIG/filme/docker-compose/configs/secure-update/critical-containers.json`.
+### postgres
 
-| service | pre-upgrade action | health checks | functional tests | integration tests | dependent services |
-|---------|-------------------|---------------|------------------|-------------------|--------------------|
-| **postgres** | pg_dumpall backup | pg_isready, pg_connect, pg_databases | immich_db_access, hedgedoc_db_access | immich_api_ping, hedgedoc_http | immich_server, immich_machine_learning, hedgedoc, postgres-backup |
+| aspect | detail |
+|--------|--------|
+| pre-upgrade | full `pg_dumpall` backup to `/mnt/BIG/filme/backups/postgres/pre-upgrade/` |
+| health checks | pg_isready, pg_connect (SELECT 1), pg_databases (check immich exists) |
+| functional tests | immich_db_access (`SELECT COUNT(*) FROM "user"` — note quoted table name), hedgedoc_db_access |
+| integration tests | immich_api_ping (`/api/server/ping` → "pong"), hedgedoc_http (HTTP 200/301/302) |
+| dependent services | immich_server, immich_machine_learning, hedgedoc, postgres-backup |
+| rollback | restore backup-1 image tag → restart postgres → restart all dependents |
 
-### why only postgres is critical
+> **important:** the immich database uses a `"user"` table (quoted) because `user` is a PostgreSQL reserved keyword. health checks must use `'SELECT COUNT(*) FROM "user"'` with proper quoting.
 
-| service | reason not critical |
-|---------|---------------------|
-| pihole | redundancy via amy (keepalived failover) |
-| keepalived | follows pihole status — if pihole is redundant, keepalived failure is tolerable |
-| tsdproxy | nice-to-have for remote access, not essential for local operation |
-| immich_server | depends on postgres — if postgres is protected, immich is indirectly protected |
-| jellyfin | stateless media server — restart recovers it |
-| vaultwarden | has its own healthcheck (`curl /alive`), data is in a simple sqlite database that doesn't require special backup procedures |
+### non-critical but monitored
 
-### vaultwarden health monitoring
-
-although not classified as critical for the update system, vaultwarden is an important service (password manager). it has a built-in healthcheck:
-
-```yaml
-healthcheck:
-  test: ["CMD", "curl", "-f", "http://localhost:80/alive"]
-  interval: 30s
-  timeout: 10s
-  retries: 3
-  start_period: 10s
-```
-
-the health-checks.sh script includes a vaultwarden check target:
-
-```bash
-# run vaultwarden health check
-cp /mnt/BIG/filme/docker-compose/scripts/health-checks.sh /tmp/ && \
-  bash /tmp/health-checks.sh vaultwarden && \
-  rm /tmp/health-checks.sh
-```
-
-### vulnerability thresholds
-
-| severity | threshold | action |
-|----------|-----------|--------|
-| **critical** | 0 | blocks deployment |
-| **high** | 0 | blocks deployment |
-| **medium** | unlimited | allowed (warning logged) |
-| **low** | unlimited | allowed (informational) |
+| container | monitoring |
+|-----------|-----------|
+| pihole | DNS resolution check |
+| keepalived | VIP presence |
+| tsdproxy | tailscale connectivity |
+| immich_server | API ping |
+| immich_redis | redis-cli ping |
+| vaultwarden | HTTP /alive endpoint |
 
 ---
 
 ## health checks
 
-### available checks
-
-| target | checks performed |
-|--------|------------------|
-| **postgres** | container running, health status, pg_isready, database existence (immich, hedgedoc), query execution, immich table access (`"user"` table), hedgedoc table access |
-| **immich** | container running, API endpoint (port 2283) |
-| **hedgedoc** | container running, HTTP endpoint (port 3000) |
-| **pihole** | container running, health status, DNS resolution test |
-| **jellyfin** | container running, HTTP endpoint (port 8096) |
-| **transmission** | container running, RPC interface test (port 9091) |
-| **vaultwarden** | container running, HTTP /alive endpoint (port 8484) |
-| **all** | all container status + all individual checks above |
-
-> **note:** the postgres health check uses `SELECT COUNT(*) FROM "user"` (with quotes) for the immich table — `user` is a reserved keyword in postgresql and requires quoting.
-
-### running health checks
+### health-checks.sh capabilities
 
 ```bash
-# copy to /tmp first (TrueNAS requirement)
-cp /mnt/BIG/filme/docker-compose/scripts/health-checks.sh /tmp/
-
-# check all services
-bash /tmp/health-checks.sh all
-
-# check specific service
+# full postgresql suite (13 checks)
 bash /tmp/health-checks.sh postgres
-bash /tmp/health-checks.sh vaultwarden
 
-# cleanup
-rm /tmp/health-checks.sh
+# single container basic checks (4 checks: running, healthy, restart count, OOM)
+bash /tmp/health-checks.sh container jellyfin
+
+# all running containers
+bash /tmp/health-checks.sh all
 ```
+
+### postgresql health check suite
+
+| check | command | pass criteria |
+|-------|---------|---------------|
+| container running | docker ps filter | container exists and running |
+| docker healthcheck | docker inspect | healthy or starting |
+| restart count | docker inspect | < 3 restarts |
+| OOM kill | docker inspect | OOMKilled = false |
+| pg_isready | pg_isready -U postgres | exit code 0 |
+| pg_connect | SELECT 1 | query succeeds |
+| pg_databases | list databases | immich found |
+| immich DB access | SELECT COUNT(*) FROM "user" | query succeeds |
+| hedgedoc DB access | SELECT 1 on hedgedoc | query succeeds |
+| write test | CREATE/DROP temp table | succeeds |
+| immich API | curl /api/server/ping | returns "pong" |
+| hedgedoc HTTP | curl localhost:3000 | HTTP 200/301/302 |
 
 ---
 
-## rollback procedures
+## rollback system
 
-### container rollback
+### automatic rollback (during updates)
+
+triggered when health checks fail after deploying a new image. the system:
+
+1. stops the failed container
+2. restores the backup-1 image tag
+3. starts the container with the previous image
+4. for critical containers: restarts all dependent services
+5. sends ntfy notification
+
+### manual rollback
 
 ```bash
+# copy script to /tmp
 cp /mnt/BIG/filme/docker-compose/scripts/rollback.sh /tmp/
 
-# list available image backups
+# list available backups for a container
 bash /tmp/rollback.sh list jellyfin
 
 # rollback to most recent backup
 bash /tmp/rollback.sh rollback jellyfin
 
-# rollback to specific backup (2nd most recent)
-bash /tmp/rollback.sh rollback jellyfin 2
+# rollback to second-most-recent backup
+bash /tmp/rollback.sh rollback sonarr 2
 
-rm /tmp/rollback.sh
-```
-
-### postgresql rollback
-
-postgresql rollback is handled specially due to dependent services:
-
-```bash
-cp /mnt/BIG/filme/docker-compose/scripts/rollback.sh /tmp/
-
-# interactive postgresql rollback (stops all dependent services)
+# special postgresql rollback (handles dependents)
 bash /tmp/rollback.sh postgres
 
 rm /tmp/rollback.sh
 ```
 
-the postgresql rollback process:
-
-```
-1. confirm rollback (interactive prompt)
-2. stop dependent services:
-   ├── immich_server
-   ├── immich_machine_learning
-   ├── hedgedoc
-   └── postgres-backup
-3. stop postgres
-4. restore backup image tag
-5. start postgres
-6. wait for pg_isready
-7. start dependent services
-8. verify immich API responds
-```
-
-### manual postgresql backup and restore
-
-```bash
-# manual backup before risky changes
-docker exec postgres pg_dumpall -U postgres > /mnt/BIG/filme/backups/postgres/manual/backup-$(date +%Y%m%d-%H%M%S).sql
-
-# verify backup
-ls -la /mnt/BIG/filme/backups/postgres/manual/
-head -20 /mnt/BIG/filme/backups/postgres/manual/backup-*.sql
-
-# restore (stop dependent services first)
-cd /mnt/BIG/filme/docker-compose
-docker compose stop immich_server immich_machine_learning hedgedoc postgres-backup
-docker exec -i postgres psql -U postgres < /mnt/BIG/filme/backups/postgres/manual/backup-20260208.sql
-docker compose start immich_server immich_machine_learning hedgedoc postgres-backup
-```
-
----
-
-## notifications
-
-### notification events
-
-| event | ntfy message | priority |
-|-------|-------------|----------|
-| update started | 🔄 bender update started | default (3) |
-| container updated | ✅ [container] updated | default (3) |
-| vulnerability blocked | ⚠️ [container] blocked (CVE details) | high (4) |
-| rollback triggered | ⚠️ rollback: [container] | high (4) |
-| rollback failed | 🚨 CRITICAL: [container] rollback failed | urgent (5) |
-| update complete (success) | ✅ bender update complete | default (3) |
-| update complete (with failures) | ⚠️ bender update complete (N failures) | high (4) |
-
-### ntfy configuration
-
-| property | value |
-|----------|-------|
-| **endpoint** | `http://${NTFY_ADDRESS}` (remote — amy's ntfy at 192.168.21.130:8888) |
-| **topic** | `${DIUN_NTFY_TOPIC}` (from .env) |
-| **fallback** | `http://192.168.21.130:8888` if NTFY_ADDRESS is not set |
-
-> **important:** bender does not run its own ntfy instance. all notifications are sent to amy's ntfy. if amy is down, bender's notifications fail silently. this is an accepted tradeoff — see [06-BENEFITS-TRADEOFFS.md](./06-BENEFITS-TRADEOFFS.md).
-
----
-
-## schedule
-
-### cron configuration
-
-```bash
-# weekly container update — saturday 04:30 AM
-30 4 * * 6 cp /mnt/BIG/filme/docker-compose/scripts/secure-container-update.sh /tmp/ && bash /tmp/secure-container-update.sh weekly && rm /tmp/secure-container-update.sh >> /mnt/BIG/filme/docker-compose/configs/secure-update/logs/cron.log 2>&1
-
-# daily retry for failed containers — 04:30 AM (every day EXCEPT saturday)
-30 4 * * 0-5 cp /mnt/BIG/filme/docker-compose/scripts/secure-container-update.sh /tmp/ && bash /tmp/secure-container-update.sh retry && rm /tmp/secure-container-update.sh >> /mnt/BIG/filme/docker-compose/configs/secure-update/logs/cron.log 2>&1
-
-# pihole DNS auto-population — every 5 minutes
-*/5 * * * * /root/pihole-dns-update.sh >> /var/log/pihole-dns-export.log 2>&1
-```
-
-### why saturday?
-
-- amy updates on **wednesday** — staggering prevents simultaneous update failures across both hosts
-- weekend timing means less impact if something breaks — most services are for personal use
-- the retry job excludes saturday to avoid conflicting with the weekly scan
-
-### retry logic
-
-when a container update is blocked by vulnerabilities:
-1. container is added to the retry queue
-2. the daily retry job (sunday through friday) re-scans the image
-3. if vulnerabilities are resolved upstream, the update proceeds
-4. if still vulnerable, the container stays in the retry queue
-
----
-
-## scripts reference
-
-### file locations
-
-```
-/mnt/BIG/filme/docker-compose/scripts/
-├── secure-container-update.sh      # v1.2 — main update orchestrator
-├── health-checks.sh                # v1.0 — service health verification
-├── rollback.sh                     # v1.0 — manual rollback helper
-└── pihole-dns-update.sh            # reference copy (executable at /root/)
-```
-
-### state files
-
-```
-/mnt/BIG/filme/docker-compose/configs/secure-update/
-├── critical-containers.json        # critical service definitions (postgres only)
-├── retry-queue.json                # blocked containers waiting for retry
-├── logs/                           # daily execution logs
-│   ├── 2026-02-08.log
-│   ├── cron.log                    # cron output
-│   └── ...
-└── scan-reports/                   # trivy scan results per container
-```
-
-### report files
-
-```
-/mnt/BIG/filme/docker-compose/reports/weekly-reports/
-└── ...                             # weekly update summary reports
-```
-
 ### image backup retention
 
-the update script maintains up to **3 backup image tags** per container, allowing rollback to any of the 3 previous versions. older backups are automatically pruned.
+the system maintains 3 backup tags per container:
 
 ```
 registry/image:latest      ← currently running
@@ -460,24 +278,113 @@ registry/image:backup-2    ← older version
 registry/image:backup-3    ← oldest kept version
 ```
 
+older backups are automatically pruned during rotation.
+
+---
+
+## throttling system
+
+added in v1.2 to prevent ZFS I/O saturation on the HP MicroServer Gen8:
+
+| setting | value | purpose |
+|---------|-------|---------|
+| THROTTLE_DELAY | 60s | wait between container updates |
+| MAX_LOAD | 4.0 | skip if 1-min load average exceeds |
+| MAX_IOWAIT | 50% | skip if I/O wait percentage exceeds |
+| RECOVERY_WAIT | 120s | wait time for system recovery |
+| MAX_RECOVERY_ATTEMPTS | 5 | max recovery wait cycles (10 min total) |
+
+the system checks health before each container update. if overloaded, it waits up to 5 × 120s = 10 minutes for recovery. if recovery fails, remaining containers are skipped and listed in the report.
+
+```bash
+# check system health manually
+cp /mnt/BIG/filme/docker-compose/scripts/secure-container-update.sh /tmp/
+bash /tmp/secure-container-update.sh health
+rm /tmp/secure-container-update.sh
+```
+
+---
+
+## notification flow
+
+notifications go to ntfy on amy via the `NTFY_ADDRESS` environment variable:
+
+| event | priority | tags |
+|-------|----------|------|
+| weekly scan starting | low | hourglass |
+| weekly scan complete | default | white_check_mark |
+| daily retry starting | low | arrows_counterclockwise |
+| daily retry complete | default | arrows_counterclockwise |
+| container rolled back | high | warning, rotating_light |
+| rollback FAILED | urgent | rotating_light, skull |
+| scan aborted (overloaded) | high | warning |
+
+the ntfy endpoint is configured in `.env` as `NTFY_ADDRESS=http://192.168.21.130:8080` and loaded via `WATCHTOWER_NOTIFICATION_URL` (legacy variable name from the watchtower era).
+
+---
+
+## cron schedule
+
+| schedule | command | purpose |
+|----------|---------|---------|
+| saturday 04:30 | `secure-container-update.sh weekly` | full scan of all containers |
+| sun–fri 04:30 | `secure-container-update.sh retry` | retry previously blocked containers |
+| every 5 min | `/root/pihole-dns-update.sh` | DNS auto-population |
+
+---
+
+## configuration files
+
+### critical-containers.json
+
+location: `/mnt/BIG/filme/docker-compose/configs/secure-update/critical-containers.json`
+
+auto-created on first run. defines which containers get special treatment (pre-upgrade backups, extended health checks, dependent service restarts).
+
+### retry-queue.json
+
+location: `/mnt/BIG/filme/docker-compose/configs/secure-update/retry-queue.json`
+
+tracks containers that were blocked by vulnerability scans. the daily retry job processes this queue.
+
+### logs
+
+location: `/mnt/BIG/filme/docker-compose/configs/secure-update/logs/`
+
+one log file per day. retention: 180 days.
+
+### scan reports
+
+location: `/mnt/BIG/filme/docker-compose/configs/secure-update/scan-reports/`
+
+trivy JSON reports organized by date. retention: 180 days.
+
+### weekly reports
+
+location: `/mnt/BIG/filme/docker-compose/reports/weekly-reports/`
+
+markdown summary reports. retention: 180 days.
+
 ---
 
 ## differences from amy
 
 | aspect | bender | amy |
 |--------|--------|-----|
-| **update day** | saturday | wednesday |
-| **trivy host port** | 8083 | 8083 |
-| **trivy internal port** | 8080 | 4954 |
-| **diun schedule** | daily 06:00 | wednesday 04:00 |
-| **critical services** | 1 (postgres) | 4 (postgres, ntfy, beszel, spendspentspent) |
-| **script execution** | requires `/tmp` copy (TrueNAS) | direct execution |
-| **ntfy endpoint** | `http://${NTFY_ADDRESS}` (remote amy) | `http://localhost:8888` (local) |
-| **postgres image** | immich-app/postgres (vectorchord) | postgres:17-alpine |
-| **postgres databases** | immich, hedgedoc | atuin, miniflux, sss, mealie, stirling |
-| **base path** | `/mnt/BIG/filme/docker-compose` | `/docker-compose` |
-| **backup path** | `/mnt/BIG/filme/backups/postgres` | `/docker/backups/postgres` |
-| **additional cron** | pihole-dns-update.sh (every 5 min) | none |
+| update day | saturday | wednesday |
+| trivy host port | 8083 | 8083 |
+| trivy internal port | 8080 | 4954 |
+| trivy server URL | http://localhost:8082 | http://localhost:8083 |
+| diun schedule | daily 06:00 | wednesday 04:00 |
+| critical services | 1 (postgres) | 4 (postgres, ntfy, beszel, spendspentspent) |
+| script execution | requires `/tmp` copy (TrueNAS) | direct execution |
+| ntfy endpoint | `http://${NTFY_ADDRESS}` (remote amy) | `http://localhost:8888` (local) |
+| postgres image | immich-app/postgres (vectorchord) | postgres:17-alpine |
+| postgres databases | immich, hedgedoc | atuin, miniflux, sss, mealie, stirling |
+| base path | `/mnt/BIG/filme/docker-compose` | `/docker-compose` |
+| backup path | `/mnt/BIG/filme/backups/postgres` | `/docker/backups/postgres` |
+| additional cron | pihole-dns-update.sh (every 5 min) | none |
+| build-based containers | 3 (transmission, tts-pipeline, epub2tts-edge) | 0 |
 
 ---
 

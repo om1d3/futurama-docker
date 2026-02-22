@@ -1,6 +1,6 @@
 # ============================================
 # bender (TrueNAS Scale) - Media & Downloads
-# Version: 108 - TTS audiobook pipeline + Transmission Flood UI baked
+# Version: 109 - TTS multi-voice + web interface
 # ============================================
 # Host: TrueNAS Scale (HP MicroServer Gen8)
 # CPU: Intel Xeon E3-1265L V2 (iGPU disabled by HP BIOS)
@@ -94,19 +94,20 @@
 #   - ADDED: edge-tts container (Microsoft Edge neural TTS API, port 5050)
 #   - ADDED: epub2tts-edge container (on-demand EPUB/TXT → M4B audiobook converter)
 #   - ADDED: tts-pipeline container (watches input folder, automates full PDF/EPUB → audiobook)
-#   - tts-pipeline accepts: .pdf, .epub, .url files (filename format: "Author - Title.ext")
-#   - .url files contain a URL to a PDF on line 1 — auto-fetched and processed
-#   - Output goes directly to audiobookshelf library for automatic pickup
-#   - epub2tts-edge uses profiles:tools, only runs when invoked manually
+#   - Output goes to audiobookshelf library /audiobooks/cărți/ for automatic pickup
 #   - ADDED: Custom Transmission image with pre-baked Flood UI
 #   - CHANGED: Transmission from image: to build: (eliminates lscr.io mod download on every restart)
 #   - REMOVED: linuxserver/mods:transmission-floodui from DOCKER_MODS
 #   - ADDED: TRANSMISSION_WEB_HOME=/flood-for-transmission/
-#   - REQUIRED: Create /mnt/BIG/filme/configs/epub2tts-edge/Dockerfile + patch_epub2tts.py
-#   - REQUIRED: Create /mnt/BIG/filme/configs/tts-pipeline/Dockerfile + pipeline.sh + preprocess.py + patch_epub2tts.py
-#   - REQUIRED: Create /mnt/BIG/filme/configs/transmission/Dockerfile
-#   - REQUIRED: Create /mnt/BIG/filme/tts/input/ directory
-#   - REQUIRED: Build images: docker compose build epub2tts-edge tts-pipeline transmission
+# v109 CHANGES (2026-02-20):
+#   - ADDED: Four voice-specific input directories (ro-emil, ro-alina, en-ryan, en-sonia)
+#   - ADDED: Web interface on port 5051 for file upload and URL pasting
+#   - ADDED: tsdproxy access for tts-pipeline web UI
+#   - CHANGED: pipeline.sh watches 4 directories, auto-selects voice per directory
+#   - CHANGED: tts-pipeline Dockerfile adds Flask, webapp.py, start.sh
+#   - REQUIRED: Create /mnt/BIG/filme/tts/input/{ro-emil,ro-alina,en-ryan,en-sonia}
+#   - REQUIRED: Create webapp.py and start.sh in /mnt/BIG/filme/configs/tts-pipeline/
+#   - REQUIRED: Rebuild: docker compose build --no-cache tts-pipeline
 # ============================================
 # ✅ VERIFIED WORKING SERVICES - DO NOT MODIFY WITHOUT APPROVAL:
 #   - immich_redis (v94: upgraded to redis:7-alpine)
@@ -314,9 +315,6 @@ services:
       - "5800:5800"
     networks:
       - media-network
-    # v106: IP-based healthcheck avoids BusyBox DNS resolution failures
-    # Tests actual HTTP data transfer through VPN tunnel using Cloudflare trace
-    # If VPN session is stale, wget times out → healthcheck fails → autoheal restarts
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- --timeout=5 'http://1.1.1.1/cdn-cgi/trace' 2>/dev/null | grep -q 'warp='"]
       interval: 60s
@@ -325,8 +323,6 @@ services:
       start_period: 60s
 
   # v106: Auto-restart unhealthy containers (targets gluetun stale VPN sessions)
-  # Only restarts containers with label autoheal=true
-  # Checks every 60s, waits 300s after startup before acting
   autoheal:
     image: willfarrell/autoheal:latest
     container_name: autoheal
@@ -345,7 +341,6 @@ services:
   # DNS & HIGH AVAILABILITY
   # ============================================
 
-  # Pi-hole - Primary DNS Server (MASTER)
   # LOCKED tsdproxy.name: "pihole-bender" - DO NOT CHANGE
   # LOCKED PORTS: 53, 8053 - DO NOT CHANGE
   pihole:
@@ -382,8 +377,6 @@ services:
       start_period: 30s
 
   # Keepalived - VIP Failover (MASTER)
-  # Provides VIP 192.168.21.100 that floats between bender and amy
-  # bender is MASTER (priority 150), amy is BACKUP (priority 100)
   keepalived:
     image: osixia/keepalived:2.0.20
     container_name: keepalived
@@ -402,9 +395,6 @@ services:
 
   # ✅ VERIFIED WORKING 2026-02-01 - DO NOT MODIFY WITHOUT APPROVAL
   # v104 FIX: Healthcheck disabled (minimal container has no binaries)
-  # Nebula-sync - Pi-hole Configuration Sync
-  # Syncs from bender (primary) to amy (replica)
-  # v84 FIX: Wrapped PRIMARY/REPLICAS in quotes for pipe character
   nebula-sync:
     image: ghcr.io/lovelaze/nebula-sync:latest
     container_name: nebula-sync
@@ -428,9 +418,7 @@ services:
   # DATABASES & CACHE
   # ============================================
 
-  # PostgreSQL - Shared database for Immich and HedgeDoc
   # CRITICAL: This database contains your Immich photos metadata!
-  # v100: Added shared_preload_libraries for vchord.so
   postgres:
     image: ghcr.io/immich-app/postgres:14-vectorchord0.4.3-pgvectors0.2.0
     container_name: postgres
@@ -496,8 +484,6 @@ services:
       start_period: 30s
 
   # ✅ VERIFIED WORKING 2026-01-20 - DO NOT MODIFY WITHOUT APPROVAL
-  # v94: upgraded from redis:6.2-alpine to redis:7-alpine
-  # Fixes "Can't handle RDB format version 11" error
   immich_redis:
     image: redis:7-alpine
     container_name: immich_redis
@@ -521,7 +507,6 @@ services:
   # ============================================
 
   # ✅ VERIFIED WORKING 2026-01-20 - DO NOT MODIFY WITHOUT APPROVAL
-  # v94: removed unauthorized healthcheck (uses image built-in)
   # LOCKED tsdproxy.name: "photo" - DO NOT CHANGE
   # LOCKED PORT: 2283:2283 - DO NOT CHANGE
   immich_server:
@@ -553,7 +538,6 @@ services:
       - immich_redis
 
   # ✅ VERIFIED WORKING 2026-02-01 - DO NOT MODIFY WITHOUT APPROVAL
-  # v104 FIX: Changed healthcheck to use python3 (curl not available in this container)
   immich_machine_learning:
     image: ghcr.io/immich-app/immich-machine-learning:release
     container_name: immich_machine_learning
@@ -579,10 +563,8 @@ services:
   # ============================================
 
   # ✅ VERIFIED WORKING 2026-01-22 - DO NOT MODIFY WITHOUT APPROVAL
-  # v96 FIX: Corrected image to lscr.io/linuxserver/jellyfin:latest
   # LOCKED tsdproxy.name: "media" - DO NOT CHANGE
   # LOCKED PORT: 8096:8096 - DO NOT CHANGE
-  # GPU devices commented out - iGPU disabled in HP BIOS
   jellyfin:
     image: lscr.io/linuxserver/jellyfin:latest
     container_name: jellyfin
@@ -603,8 +585,6 @@ services:
       - /mnt/BIG/filme/seriale:/data/tvshows
       - /mnt/BIG/filme/music:/data/music
     # !! KEEP FOR FUTURE USE - GPU HARDWARE ACCELERATION !!
-    # HP MicroServer Gen8 iGPU is disabled in BIOS (no modded BIOS available)
-    # Uncomment when/if GPU becomes available:
     # devices:
     #   - /dev/dri:/dev/dri
     # group_add:
@@ -643,11 +623,8 @@ services:
   # DOWNLOAD CLIENTS
   # ============================================
 
-  # v103: RESTORED Transmission 4.0.5 (qBittorrent caused system crashes)
+  # v108: Custom build with pre-baked Flood UI
   # !! PINNED TO 4.0.5 - DO NOT UPGRADE !!
-  # Transmission 4.0.6+ is NOT on FileList whitelist!
-  # v107: Added queue limits and cache to prevent I/O storms on ZFS
-  # v108: Custom build with pre-baked Flood UI (no more lscr.io mod downloads)
   # LOCKED tsdproxy.name: "transmission" - DO NOT CHANGE
   # LOCKED PORT: 9091:9091 (exposed via gluetun) - DO NOT CHANGE
   transmission:
@@ -665,22 +642,18 @@ services:
       - PUID=${PUID}
       - PGID=${PGID}
       - TZ=${TIMEZONE}
-      # v108: Only env-var-settings mod remains; Flood UI is pre-baked in image
       - DOCKER_MODS=linuxserver/mods:transmission-env-var-settings
       - TRANSMISSION_WEB_HOME=/flood-for-transmission/
       - TRANSMISSION_DOWNLOAD_DIR=/data/completed
       - TRANSMISSION_INCOMPLETE_DIR=/data/incomplete
       - TRANSMISSION_WATCH_DIR=/data/watch
       - TRANSMISSION_BIND_ADDRESS_IPV4=0.0.0.0
-      # v107: Queue limits - prevents all 812 torrents from hammering ZFS simultaneously
       - TRANSMISSION_DOWNLOAD_QUEUE_ENABLED=true
       - TRANSMISSION_DOWNLOAD_QUEUE_SIZE=10
       - TRANSMISSION_SEED_QUEUE_ENABLED=true
       - TRANSMISSION_SEED_QUEUE_SIZE=50
       - TRANSMISSION_QUEUE_STALLED_MINUTES=1
-      # v107: Write cache - batches small writes in RAM before flushing to ZFS
       - TRANSMISSION_CACHE_SIZE_MB=64
-      # v107: Peer limits - spread connections across more torrents
       - TRANSMISSION_PEER_LIMIT_GLOBAL=300
       - TRANSMISSION_PEER_LIMIT_PER_TORRENT=30
     volumes:
@@ -691,10 +664,6 @@ services:
       - gluetun
 
   # !! DO NOT REMOVE - Keep for potential future use !!
-  # v102: Added qBittorrent (FileList whitelist requirement)
-  # v103: COMMENTED - qBittorrent caused repeated system crashes on HP MicroServer Gen8
-  #       The aggressive I/O patterns during torrent loading overwhelmed ZFS
-  #       Multiple attempts to limit hash checking failed
   # qbittorrent:
   #   image: lscr.io/linuxserver/qbittorrent:latest
   #   container_name: qbittorrent
@@ -739,7 +708,6 @@ services:
     networks:
       - media-network
 
-  # v97: Changed to use gluetun VPN
   # LOCKED tsdproxy.name: "jdown" - DO NOT CHANGE
   # LOCKED PORT: 5800:5800 (exposed via gluetun) - DO NOT CHANGE
   jdownloader:
@@ -763,7 +731,6 @@ services:
       - gluetun
 
   # ✅ VERIFIED WORKING 2026-01-20 - DO NOT MODIFY WITHOUT APPROVAL
-  # v94: fixed image to spotdl/spotify-downloader:latest
   # LOCKED tsdproxy.name: "spotdl" - DO NOT CHANGE
   # LOCKED PORT: 8800:8800 - DO NOT CHANGE
   spotdl:
@@ -791,7 +758,6 @@ services:
   # ============================================
 
   # ✅ VERIFIED WORKING 2026-01-20 - DO NOT MODIFY WITHOUT APPROVAL
-  # v94: uses image built-in Node.js healthcheck (curl/wget not available)
   # LOCKED tsdproxy.name: "pad" - DO NOT CHANGE
   # LOCKED PORT: 3000:3000 - DO NOT CHANGE
   hedgedoc:
@@ -821,7 +787,6 @@ services:
       - postgres
 
   # ✅ VERIFIED WORKING 2026-01-20 - DO NOT MODIFY WITHOUT APPROVAL
-  # v91: added (moved from amy)
   # LOCKED tsdproxy.name: "vault" - DO NOT CHANGE
   # LOCKED PORT: 8484:80 - DO NOT CHANGE
   vaultwarden:
@@ -854,7 +819,6 @@ services:
   # ARR STACK - Media Automation (via gluetun VPN)
   # ============================================
 
-  # v97: Changed to use gluetun VPN
   # LOCKED tsdproxy.name: "prowlarr" - DO NOT CHANGE
   # LOCKED PORT: 9696:9696 (exposed via gluetun) - DO NOT CHANGE
   prowlarr:
@@ -876,7 +840,6 @@ services:
     depends_on:
       - gluetun
 
-  # v97: Changed to use gluetun VPN
   # LOCKED tsdproxy.name: "sonarr" - DO NOT CHANGE
   # LOCKED PORT: 8989:8989 (exposed via gluetun) - DO NOT CHANGE
   sonarr:
@@ -900,7 +863,6 @@ services:
     depends_on:
       - gluetun
 
-  # v97: Changed to use gluetun VPN
   # LOCKED tsdproxy.name: "radarr" - DO NOT CHANGE
   # LOCKED PORT: 7878:7878 (exposed via gluetun) - DO NOT CHANGE
   radarr:
@@ -924,7 +886,6 @@ services:
     depends_on:
       - gluetun
 
-  # v97: Changed to use gluetun VPN
   # LOCKED tsdproxy.name: "lidarr" - DO NOT CHANGE
   # LOCKED PORT: 8686:8686 (exposed via gluetun) - DO NOT CHANGE
   lidarr:
@@ -949,8 +910,6 @@ services:
       - gluetun
 
   # ✅ VERIFIED WORKING 2026-01-20 - DO NOT MODIFY WITHOUT APPROVAL
-  # v94: fixed image to linuxserver/readarr:0.4.19-nightly
-  # v97: Changed to use gluetun VPN
   # LOCKED tsdproxy.name: "readarr" - DO NOT CHANGE
   # LOCKED PORT: 8787:8787 (exposed via gluetun) - DO NOT CHANGE
   readarr:
@@ -974,7 +933,6 @@ services:
     depends_on:
       - gluetun
 
-  # v97: Changed to use gluetun VPN
   # LOCKED tsdproxy.name: "bazarr" - DO NOT CHANGE
   # LOCKED PORT: 6767:6767 (exposed via gluetun) - DO NOT CHANGE
   bazarr:
@@ -1040,8 +998,6 @@ services:
   # ============================================
 
   # v108: Edge TTS API - OpenAI-compatible neural TTS endpoint
-  # Uses Microsoft Edge's free cloud-based neural TTS (no API key required)
-  # Romanian voices: ro-RO-AlinaNeural (female), ro-RO-EmilNeural (male)
   # LOCKED PORT: 5050:5050 - DO NOT CHANGE
   edge-tts:
     image: travisvn/openai-edge-tts:latest
@@ -1062,11 +1018,7 @@ services:
     mem_limit: 512M
     cpus: 0.6
 
-  # v108: epub2tts-edge - EPUB/TXT to M4B audiobook converter (on-demand)
-  # Uses profiles:tools - does NOT start with docker compose up -d
-  # Run manually: docker compose run --rm epub2tts-edge "/audiobooks/Author/Title/book.epub" --speaker ro-RO-AlinaNeural
-  # Output .m4b lands next to input file → audiobookshelf auto-detects it
-  # REQUIRED: Build first with: docker compose build epub2tts-edge
+  # v108: epub2tts-edge - on-demand manual converter (profiles:tools)
   epub2tts-edge:
     build:
       context: /mnt/BIG/filme/configs/epub2tts-edge
@@ -1085,13 +1037,15 @@ services:
     profiles:
       - tools
 
-  # v108: TTS Pipeline - Automated PDF/EPUB/URL to audiobook watcher
-  # Watches /mnt/BIG/filme/tts/input/ for new files:
-  #   "Author - Title.pdf"  → PDF → EPUB → M4B → audiobookshelf
-  #   "Author - Title.epub" → EPUB → M4B → audiobookshelf
-  #   "Author - Title.url"  → fetch PDF from URL → PDF → EPUB → M4B → audiobookshelf
-  # Failed files are renamed with FAILED_ prefix (not deleted)
-  # REQUIRED: Build first with: docker compose build tts-pipeline
+  # v108: TTS Pipeline - Automated audiobook converter with web UI
+  # v109: Four voice directories + Flask web interface on port 5051
+  # Input directories:
+  #   /input/ro-emil  → ro-RO-EmilNeural (Romanian male)
+  #   /input/ro-alina → ro-RO-AlinaNeural (Romanian female)
+  #   /input/en-ryan  → en-GB-RyanNeural (British male)
+  #   /input/en-sonia → en-GB-SoniaNeural (British female)
+  # LOCKED tsdproxy.name: "tts" - DO NOT CHANGE
+  # LOCKED PORT: 5051:5051 - DO NOT CHANGE
   tts-pipeline:
     build:
       context: /mnt/BIG/filme/configs/tts-pipeline
@@ -1100,13 +1054,17 @@ services:
     restart: unless-stopped
     <<: *default-dns
     labels:
-      tsdproxy.enable: "false"
+      tsdproxy.enable: "true"
+      tsdproxy.name: "tts"
+      tsdproxy.container_port: "5051"
+      tsdproxy.dash.icon: "sh/audiobookshelf"
     environment:
       - TZ=${TIMEZONE}
-      - TTS_SPEAKER=ro-RO-AlinaNeural
     volumes:
       - /mnt/BIG/filme/tts/input:/input
       - /mnt/BIG/filme/audiobookshelf/audiobooks:/audiobooks
+    ports:
+      - "5051:5051"
     networks:
       - media-network
     mem_limit: 4G
@@ -1117,7 +1075,6 @@ services:
   # ============================================
 
   # LOCKED tsdproxy.name: "sync" - DO NOT CHANGE
-  # v83 FIX: Reverted to official syncthing image with correct volume structure
   syncthing:
     image: syncthing/syncthing:latest
     container_name: syncthing
@@ -1174,10 +1131,7 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock:ro
     network_mode: host
 
-  # v105: Added cAdvisor for container resource monitoring
-  # Scraped by Prometheus (192.168.21.220:9090) for Grafana dashboard
-  # LOCKED PORT: 9099:8080 - DO NOT CHANGE (matches amy's cAdvisor port)
-  # Resource-saving flags: docker_only, reduced housekeeping, disabled unused metrics
+  # LOCKED PORT: 9099:8080 - DO NOT CHANGE
   cadvisor:
     image: gcr.io/cadvisor/cadvisor:latest
     container_name: cadvisor

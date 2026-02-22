@@ -2,8 +2,8 @@
 
 ## operational runbook
 
-**document version:** 2.0
-**infrastructure version:** 105
+**document version:** 3.0
+**infrastructure version:** 109
 **last updated:** february 2026
 
 ---
@@ -15,491 +15,459 @@
 3. [weekly operations](#weekly-operations)
 4. [monthly operations](#monthly-operations)
 5. [common tasks](#common-tasks)
-6. [backup procedures](#backup-procedures)
-7. [restore procedures](#restore-procedures)
-8. [emergency procedures](#emergency-procedures)
-9. [service-specific maintenance](#service-specific-maintenance)
-10. [TrueNAS maintenance](#truenas-maintenance)
+6. [build-based container maintenance](#build-based-container-maintenance)
+7. [TTS pipeline maintenance](#tts-pipeline-maintenance)
+8. [backup procedures](#backup-procedures)
+9. [restore procedures](#restore-procedures)
+10. [emergency procedures](#emergency-procedures)
+11. [service-specific maintenance](#service-specific-maintenance)
+12. [TrueNAS maintenance](#truenas-maintenance)
 
 ---
 
 ## overview
 
-bender runs 33 active services managed by a single docker-compose.yaml (v105). most maintenance is automated through cron jobs and the secure container update system. this document covers both automated and manual procedures.
+bender runs 36 active services managed by a single docker-compose.yaml (v109). most maintenance is automated through cron jobs and the secure container update system. this document covers both automated and manual procedures.
 
-### automated maintenance summary
+### automated tasks
 
-| task | schedule | mechanism |
-|------|----------|-----------|
-| container vulnerability scan + update | saturday 04:30 | secure-container-update.sh (cron, /tmp copy) |
-| blocked container retry | daily 04:30 (except saturday) | secure-container-update.sh retry (cron, /tmp copy) |
-| postgresql backup | daily (midnight) | postgres-backup container |
-| pihole config replication | hourly | nebula-sync (bender → amy) |
-| pihole DNS auto-population | every 5 minutes | /root/pihole-dns-update.sh (cron) |
+| task | schedule | system |
+|------|----------|--------|
+| container vulnerability scan | saturday 04:30 | secure-container-update.sh weekly |
+| retry blocked containers | sun–fri 04:30 | secure-container-update.sh retry |
+| DNS auto-population | every 5 min | pihole-dns-update.sh |
+| pihole config sync | hourly | nebula-sync |
+| postgresql backup | daily | postgres-backup container |
 | image update notifications | daily 06:00 | diun |
-
-### key paths
-
-| path | purpose |
-|------|---------|
-| `/mnt/BIG/filme/docker-compose/` | compose file, .env, scripts |
-| `/mnt/BIG/filme/docker-compose/scripts/` | update, health check, rollback scripts |
-| `/mnt/BIG/filme/docker-compose/configs/secure-update/logs/` | update execution logs |
-| `/mnt/BIG/filme/backups/postgres/` | automated database backups |
-| `/mnt/BIG/filme/configs/` | per-service configuration volumes |
-| `/mnt/BIG/filme/immich/postgresql/` | postgresql data directory (CRITICAL) |
-| `/root/pihole-dns-update.sh` | DNS auto-population script (executable) |
-| `/var/log/pihole-dns-export.log` | DNS auto-population log |
+| VPN health recovery | continuous | autoheal + gluetun healthcheck |
 
 ---
 
 ## daily operations
 
-### what happens automatically
-
-1. **postgres-backup** runs at midnight, backing up immich and hedgedoc databases
-2. **retry job** runs at 04:30 (except saturday), re-scanning containers blocked by vulnerabilities
-3. **pihole-dns-update.sh** runs every 5 minutes, scanning containers on both hosts and updating pihole DNS entries
-4. **diun** runs at 06:00, checking all container images for available updates and notifying via ntfy on amy
-
-### recommended daily checks
-
-these are optional but helpful for catching issues early:
+### verify all containers running
 
 ```bash
 cd /mnt/BIG/filme/docker-compose
 
-# quick health overview
-docker compose ps --format "table {{.Names}}\t{{.Status}}" | grep -v "running"
+# quick count (expect 36)
+docker compose ps --format "{{.Names}}" | wc -l
 
-# any containers restarting?
-docker ps --format "{{.Names}}\t{{.Status}}" | grep -i "restarting"
+# show any non-running containers
+docker compose ps --format "table {{.Names}}\t{{.Status}}" | grep -v "Up"
 
-# check postgres-backup last run
-docker logs postgres-backup --tail 5 2>&1 | tail -3
-
-# check gluetun VPN status
-docker logs gluetun --tail 5 2>&1 | grep -i "ip\|connect\|error"
+# check for unhealthy containers
+docker ps --format "{{.Names}}\t{{.Status}}" | grep -i "unhealthy"
 ```
+
+### check VPN connectivity
+
+```bash
+# verify gluetun is connected and healthy
+docker exec gluetun wget -qO- http://ipinfo.io 2>/dev/null | head -5
+
+# verify gluetun healthcheck passes
+docker inspect gluetun --format '{{.State.Health.Status}}'
+
+# check autoheal is running
+docker ps --format "{{.Names}}\t{{.Status}}" | grep autoheal
+```
+
+### check update notifications
+
+review ntfy for container update notifications from diun at `http://ntfy.home.arpa:8888` or `https://ntfy.bunny-enigmatic.ts.net`.
 
 ---
 
 ## weekly operations
 
-### what happens automatically (saturday)
-
-1. **secure-container-update.sh** runs at 04:30 (copied to /tmp first):
-   - pulls new images for containers with available updates
-   - scans each with trivy for critical/high CVEs
-   - deploys clean images, blocks vulnerable ones
-   - runs health checks after each update
-   - sends ntfy notifications to amy for all events
-
-### recommended weekly checks
+### review update reports
 
 ```bash
-cd /mnt/BIG/filme/docker-compose
+# list recent reports
+ls -lt /mnt/BIG/filme/docker-compose/reports/weekly-reports/ | head -5
 
-# review update logs from saturday
-cat configs/secure-update/logs/$(date -d "last saturday" +%Y-%m-%d).log
-
-# check retry queue for stuck containers
-cat configs/secure-update/retry-queue.json
-
-# verify all 33 services are running
-docker compose ps --format "table {{.Names}}\t{{.Status}}" | wc -l
-
-# check VPN is connected
-docker exec gluetun wget -qO- http://ipinfo.io 2>/dev/null | head -5
-
-# check disk usage
-df -h /mnt/BIG/
-du -sh /mnt/BIG/filme/configs/ /mnt/BIG/filme/backups/ /mnt/BIG/filme/transmission/
+# read latest report
+cat /mnt/BIG/filme/docker-compose/reports/weekly-reports/$(ls -t /mnt/BIG/filme/docker-compose/reports/weekly-reports/ | head -1)
 ```
 
-### clearing the trivy cache
+### check retry queue
 
 ```bash
-# check current size
-du -sh /mnt/BIG/filme/configs/trivy/
+cat /mnt/BIG/filme/docker-compose/configs/secure-update/retry-queue.json
+```
 
-# clear and rebuild
-docker compose stop trivy
-rm -rf /mnt/BIG/filme/configs/trivy/*
-docker compose start trivy
-sleep 30 && docker compose ps trivy
+if containers are stuck in the retry queue for more than a week, investigate manually:
+
+```bash
+# check why a container is blocked
+cp /mnt/BIG/filme/docker-compose/scripts/secure-container-update.sh /tmp/
+bash /tmp/secure-container-update.sh scan <container_name>
+rm /tmp/secure-container-update.sh
+```
+
+### check disk usage
+
+```bash
+# ZFS pool status
+zpool status BIG
+
+# dataset usage
+zfs list -o name,used,avail,refer BIG/filme
+
+# docker image disk usage
+docker system df
+
+# large directories
+du -sh /mnt/BIG/filme/transmission/completed/*/ 2>/dev/null | sort -rh | head -10
 ```
 
 ---
 
 ## monthly operations
 
-### recommended monthly checks
+### clean up unused docker resources
 
 ```bash
 cd /mnt/BIG/filme/docker-compose
 
-# review backup retention
-ls -la /mnt/BIG/filme/backups/postgres/
-
-# check docker disk usage
-docker system df
-
-# prune unused images (only dangling — safe)
+# remove unused images (keeps backup tags)
 docker image prune -f
 
-# check ZFS pool health
+# remove unused volumes (CAUTION: verify no data loss)
+docker volume ls --filter dangling=true
+
+# remove build cache
+docker builder prune -f
+```
+
+### verify backups
+
+```bash
+# check postgres backup exists and is recent
+ls -lht /mnt/BIG/filme/backups/postgres/ | head -10
+
+# verify backup file sizes are reasonable (not empty)
+find /mnt/BIG/filme/backups/postgres/ -name "*.sql*" -mtime -1 -exec ls -lh {} \;
+
+# check backup retention
+find /mnt/BIG/filme/backups/postgres/ -name "*.sql*" | wc -l
+```
+
+### review ZFS health
+
+```bash
+# pool status (look for DEGRADED or FAULTED)
 zpool status BIG
 
-# check ZFS pool usage
-zfs list BIG
+# scrub history
+zpool history BIG | grep scrub | tail -5
 
-# check system resources
-free -h
-df -h /mnt/BIG/
-uptime
-```
-
-### pruning old update logs
-
-```bash
-# remove logs older than 180 days
-find /mnt/BIG/filme/docker-compose/configs/secure-update/logs/ -name "*.log" -mtime +180 -delete
-find /mnt/BIG/filme/docker-compose/configs/secure-update/scan-reports/ -name "*.json" -mtime +180 -delete
-```
-
-### pruning DNS auto-population log
-
-```bash
-# check log size
-ls -la /var/log/pihole-dns-export.log
-
-# rotate if large (>10MB)
-> /var/log/pihole-dns-export.log
+# start manual scrub if needed
+zpool scrub BIG
 ```
 
 ---
 
 ## common tasks
 
-### deploy a compose file change
-
-```bash
-cd /mnt/BIG/filme/docker-compose
-
-# always validate before applying
-docker compose config > /dev/null && echo "✅ YAML valid" || echo "❌ YAML invalid"
-
-# apply changes (only affected containers are recreated)
-docker compose up -d
-
-# verify
-docker compose ps --format "table {{.Names}}\t{{.Status}}" | grep -v "running"
-```
-
 ### restart a single service
 
 ```bash
 cd /mnt/BIG/filme/docker-compose
-
-# graceful restart
 docker compose restart <service_name>
-
-# force recreate (picks up image or config changes)
-docker compose up -d --force-recreate <service_name>
 ```
 
-### restart a VPN-routed service
-
-VPN-routed services (transmission, prowlarr, sonarr, etc.) depend on gluetun. restarting them may require restarting gluetun first if there are network issues:
+### restart all services
 
 ```bash
-# restart just the service (usually sufficient)
-docker compose restart transmission
-
-# if service can't reach the network, restart gluetun
-docker compose restart gluetun
-# wait for VPN to reconnect
-sleep 15
-docker logs gluetun --tail 5
-
-# all VPN-routed services will automatically reconnect
+cd /mnt/BIG/filme/docker-compose
+docker compose down && docker compose up -d
 ```
 
-### update a single service manually
+### view logs
+
+```bash
+# recent logs
+docker logs <container_name> --tail 50
+
+# follow logs
+docker logs <container_name> -f
+
+# logs with timestamps
+docker logs <container_name> --tail 100 -t
+```
+
+### update a single container manually
 
 ```bash
 cd /mnt/BIG/filme/docker-compose
 
-# pull latest image
+# pull new image
 docker compose pull <service_name>
 
 # recreate with new image
+docker compose up -d <service_name>
+```
+
+### force recreate without pulling
+
+```bash
 docker compose up -d --force-recreate <service_name>
+```
+
+### check container resource usage
+
+```bash
+# live resource monitor
+docker stats --no-stream
+
+# specific container
+docker stats --no-stream <container_name>
+```
+
+---
+
+## build-based container maintenance
+
+three containers use `build:` directives and require manual rebuilds instead of `docker compose pull`:
+
+### rebuild transmission
+
+```bash
+cd /mnt/BIG/filme/docker-compose
+
+# rebuild image (after editing Dockerfile or to update base image)
+docker compose build --no-cache transmission
+
+# deploy rebuilt image
+docker compose up -d transmission
 
 # verify
-docker compose ps <service_name>
-docker logs <service_name> --tail 20
+docker ps --format "{{.Names}}\t{{.Status}}" | grep transmission
 ```
 
-> **warning:** do not manually update transmission — it is pinned to 4.0.5 for FileList whitelist compliance. `docker compose pull transmission` will not upgrade it because the tag is explicit.
+> **WARNING:** transmission is pinned to 4.0.5 (FileList whitelist). do NOT change the base image version in the Dockerfile.
 
-### view service logs
+### rebuild tts-pipeline
 
 ```bash
-# follow logs in real-time
-docker logs -f <service_name>
+cd /mnt/BIG/filme/docker-compose
 
-# last 100 lines with timestamps
-docker logs -t --tail 100 <service_name>
+# rebuild (after editing pipeline.sh, webapp.py, start.sh, or Dockerfile)
+docker compose build --no-cache tts-pipeline
 
-# search for errors
-docker logs <service_name> 2>&1 | grep -i "error\|fatal\|panic"
+# deploy
+docker compose up -d tts-pipeline
 
-# for VPN-routed services, also check gluetun if networking issues
-docker logs gluetun --tail 50 2>&1 | grep -i "error\|disconnect"
+# verify web UI
+curl -s -o /dev/null -w "%{http_code}" http://localhost:5051
 ```
 
-### run health checks
+### rebuild epub2tts-edge
 
 ```bash
-# copy to /tmp first (TrueNAS requirement)
-cp /mnt/BIG/filme/docker-compose/scripts/health-checks.sh /tmp/
+cd /mnt/BIG/filme/docker-compose
 
-# check all services
-bash /tmp/health-checks.sh all
+# rebuild (on-demand tool, profiles: tools)
+docker compose build --no-cache epub2tts-edge
 
-# check specific service
-bash /tmp/health-checks.sh postgres
-bash /tmp/health-checks.sh vaultwarden
-bash /tmp/health-checks.sh immich
-
-# cleanup
-rm /tmp/health-checks.sh
+# run manually (not a persistent service)
+docker compose run --rm epub2tts-edge
 ```
 
-### access a container shell
+### when to rebuild
+
+- base image security updates (check with `docker compose pull` for non-build services to gauge timing)
+- changes to Dockerfile, pipeline.sh, webapp.py, start.sh, or any build context files
+- after modifying Flood UI configuration in the transmission build context
+
+---
+
+## TTS pipeline maintenance
+
+### check pipeline status
 
 ```bash
-# interactive shell (most containers)
-docker exec -it <service_name> /bin/sh
+# verify tts-pipeline is running
+docker ps --format "{{.Names}}\t{{.Status}}" | grep tts-pipeline
 
-# bash if available (linuxserver images)
-docker exec -it <service_name> /bin/bash
+# check logs for conversion activity
+docker logs tts-pipeline --tail 50
 
-# for VPN-routed services (verify VPN IP)
-docker exec transmission wget -qO- http://ipinfo.io 2>/dev/null
+# verify edge-tts API is responding
+curl -s http://localhost:5050/v1/models | head -5
+
+# verify web UI is accessible
+curl -s -o /dev/null -w "%{http_code}" http://localhost:5051
 ```
+
+### submit a file for conversion
+
+via web UI: browse to `http://tts.home.arpa:5051` or `https://tts.bunny-enigmatic.ts.net` and upload a file or paste a URL.
+
+via filesystem: drop a PDF, EPUB, or TXT file into the appropriate voice directory:
+
+```bash
+# romanian male voice
+cp book.epub /mnt/BIG/filme/tts/input/ro-emil/
+
+# romanian female voice
+cp book.epub /mnt/BIG/filme/tts/input/ro-alina/
+
+# british male voice
+cp book.epub /mnt/BIG/filme/tts/input/en-ryan/
+
+# british female voice
+cp book.epub /mnt/BIG/filme/tts/input/en-sonia/
+```
+
+### check conversion output
+
+```bash
+# list recent audiobooks generated by TTS
+ls -lt /mnt/BIG/filme/audiobookshelf/audiobooks/cărți/ | head -10
+```
+
+audiobookshelf automatically picks up new M4B files from this directory.
 
 ---
 
 ## backup procedures
 
-### postgresql — automatic
+### automated postgres backup
 
-the `postgres-backup` container handles daily backups automatically.
-
-| property | value |
-|----------|-------|
-| **databases** | immich, hedgedoc |
-| **schedule** | daily at midnight |
-| **location** | `/mnt/BIG/filme/backups/postgres/` |
-| **retention** | 7 daily, 4 weekly, 6 monthly |
-
-verify backups are running:
+the postgres-backup container runs daily and backs up `immich` and `hedgedoc` databases:
 
 ```bash
-docker logs postgres-backup --tail 10 2>&1
-ls -la /mnt/BIG/filme/backups/postgres/
+# verify backup container is running
+docker ps --format "{{.Names}}\t{{.Status}}" | grep postgres-backup
+
+# check latest backups
+ls -lht /mnt/BIG/filme/backups/postgres/ | head -10
 ```
 
-### postgresql — manual
+### manual postgres backup
 
 ```bash
-# full backup of all databases
-docker exec postgres pg_dumpall -U postgres > /mnt/BIG/filme/backups/postgres/manual/backup-$(date +%Y%m%d-%H%M%S).sql
+# full dump (all databases)
+docker exec postgres pg_dumpall -U postgres > /mnt/BIG/filme/backups/postgres/manual-$(date +%Y%m%d).sql
 
-# single database backup
-docker exec postgres pg_dump -U postgres immich > /mnt/BIG/filme/backups/postgres/manual/immich-$(date +%Y%m%d).sql
-docker exec postgres pg_dump -U postgres hedgedoc > /mnt/BIG/filme/backups/postgres/manual/hedgedoc-$(date +%Y%m%d).sql
-
-# verify backup
-ls -la /mnt/BIG/filme/backups/postgres/manual/
-head -20 /mnt/BIG/filme/backups/postgres/manual/backup-*.sql
+# single database
+docker exec postgres pg_dump -U postgres immich > /mnt/BIG/filme/backups/postgres/immich-$(date +%Y%m%d).sql
 ```
-
-> **important:** bender's postgres uses the immich-specific image with vectorchord extensions. when restoring, ensure you restore to the same image version — standard postgres cannot read the vector extension data.
 
 ### configuration backup
 
-the docker-compose.yaml, .env.template, keepalived.conf, and all documentation are version-controlled in the `futurama-docker` git repository.
+the git repository at `~/code/futurama-docker` (pushed to `github.com/om1d3/futurama-docker`) contains all configuration. to update:
 
 ```bash
-# encrypt .env for offline backup
-cd /mnt/BIG/filme/docker-compose
-gpg --symmetric --cipher-algo AES256 -o .env.gpg .env
+# on laptop
+cd ~/code/futurama-docker
 
-# backup compose file
-cp docker-compose.yaml docker-compose.yaml.backup.$(date +%Y%m%d)
-```
+# pull latest configs from production
+scp root@192.168.21.121:/mnt/BIG/filme/docker-compose/docker-compose.yaml bender/docker-compose.yaml
+scp root@192.168.21.121:/mnt/BIG/filme/docker-compose/.env /tmp/bender.env
 
-### ZFS snapshots (recommended for media)
+# re-encrypt .env
+gpg --symmetric --cipher-algo AES256 -o bender/.env.gpg /tmp/bender.env
+rm /tmp/bender.env
 
-```bash
-# create a manual snapshot
-zfs snapshot BIG/filme@manual-$(date +%Y%m%d)
+# update .env.example (strip secrets)
+sed 's/=.*/=/' /tmp/bender.env > bender/.env.example
 
-# list snapshots
-zfs list -t snapshot | grep BIG
-
-# check snapshot size
-zfs list -t snapshot -o name,used,refer | grep BIG
-```
-
-### immich photos backup
-
-immich photos are stored at `/mnt/BIG/filme/immich/photos/`. the recommended backup strategy is ZFS snapshots. for offsite backup:
-
-```bash
-# compress and archive (this can be very large)
-tar -czvf /tmp/immich-photos-$(date +%Y%m%d).tar.gz /mnt/BIG/filme/immich/photos/
+# commit and push
+git add .
+git commit -m "bender v109: <description>"
+git push
 ```
 
 ---
 
 ## restore procedures
 
-### postgresql restore — full
+### restore postgres from backup
 
 ```bash
-cd /mnt/BIG/filme/docker-compose
+# copy rollback script to /tmp
+cp /mnt/BIG/filme/docker-compose/scripts/rollback.sh /tmp/
 
-# stop all dependent services
-docker compose stop immich_server immich_machine_learning hedgedoc postgres-backup
+# list available backups
+bash /tmp/rollback.sh list postgres
 
-# restore from backup
-docker exec -i postgres psql -U postgres < /mnt/BIG/filme/backups/postgres/manual/backup-20260208.sql
+# rollback postgres (handles dependent services)
+bash /tmp/rollback.sh postgres
 
-# restart dependent services
-docker compose start immich_server immich_machine_learning hedgedoc postgres-backup
-
-# verify
-cp scripts/health-checks.sh /tmp/ && bash /tmp/health-checks.sh postgres && rm /tmp/health-checks.sh
+rm /tmp/rollback.sh
 ```
 
-### postgresql restore — single database
-
-```bash
-cd /mnt/BIG/filme/docker-compose
-
-# stop only the affected service
-docker compose stop hedgedoc
-
-# drop and recreate
-docker exec postgres psql -U postgres -c "DROP DATABASE IF EXISTS hedgedoc;"
-docker exec postgres psql -U postgres -c "CREATE DATABASE hedgedoc;"
-
-# restore
-docker exec -i postgres psql -U postgres -d hedgedoc < /mnt/BIG/filme/backups/postgres/manual/hedgedoc-20260208.sql
-
-# restart
-docker compose start hedgedoc
-```
-
-### ZFS snapshot restore
-
-```bash
-# list available snapshots
-zfs list -t snapshot | grep BIG
-
-# rollback to a snapshot (WARNING: destroys all changes since the snapshot)
-zfs rollback BIG/filme@manual-20260208
-```
-
-> **warning:** ZFS rollback affects the entire dataset. all container data, media files, and configurations will revert to the snapshot point. use only for disaster recovery.
-
-### container image rollback
+### restore single container from image backup
 
 ```bash
 cp /mnt/BIG/filme/docker-compose/scripts/rollback.sh /tmp/
 
-# list available backups
+# list backups
 bash /tmp/rollback.sh list jellyfin
 
-# rollback
+# rollback to most recent backup
 bash /tmp/rollback.sh rollback jellyfin
 
+# rollback to second backup
+bash /tmp/rollback.sh rollback jellyfin 2
+
 rm /tmp/rollback.sh
+```
+
+### restore from git repository
+
+```bash
+# on laptop
+cd ~/code/futurama-docker
+
+# decrypt .env
+gpg --decrypt --output /tmp/bender.env bender/.env.gpg
+
+# deploy to bender
+scp bender/docker-compose.yaml root@192.168.21.121:/mnt/BIG/filme/docker-compose/
+scp /tmp/bender.env root@192.168.21.121:/mnt/BIG/filme/docker-compose/.env
+rm /tmp/bender.env
+
+# restart services on bender
+ssh root@192.168.21.121 'cd /mnt/BIG/filme/docker-compose && docker compose up -d'
 ```
 
 ---
 
 ## emergency procedures
 
-### all services down
+### system freeze recovery
+
+the HP MicroServer Gen8 can experience hard freezes from ZFS I/O saturation (especially with many concurrent torrents) or DMAR faults:
+
+1. access HP iLO remote console (if network stack is still responsive)
+2. if iLO is unresponsive, physical power cycle via the power button
+3. after reboot, TrueNAS will auto-import the ZFS pool and start Docker
+4. verify all containers started: `docker compose ps`
+5. check for ZFS errors: `zpool status BIG`
+
+### VPN stuck / all downloads failing
 
 ```bash
-# check docker daemon
-systemctl status docker
+# check gluetun health
+docker inspect gluetun --format '{{.State.Health.Status}}'
 
-# if docker is down
-systemctl restart docker
-
-# bring up all services
-cd /mnt/BIG/filme/docker-compose
-docker compose up -d
-
-# verify
-docker compose ps --format "table {{.Names}}\t{{.Status}}"
-```
-
-### VPN down (gluetun failure)
-
-when gluetun fails, all 8 VPN-routed services lose network access.
-
-```bash
-# check gluetun status
-docker logs gluetun --tail 20
-
-# restart gluetun
-docker compose restart gluetun
-
-# wait for VPN to establish
-sleep 30
+# if unhealthy, autoheal should restart it within 60s
+# if autoheal is not working:
+docker restart gluetun
 
 # verify VPN is connected
 docker exec gluetun wget -qO- http://ipinfo.io 2>/dev/null
 
-# if still failing, check VPN credentials
-grep SURFSHARK /mnt/BIG/filme/docker-compose/.env
-
-# emergency: restart all VPN-routed services
-docker compose restart gluetun transmission prowlarr sonarr radarr lidarr readarr bazarr jdownloader
+# if VPN won't connect, check credentials
+docker logs gluetun --tail 30
 ```
 
-### DNS failure (pihole down)
-
-```bash
-# check pihole status
-docker compose ps pihole
-docker logs pihole --tail 20
-
-# restart pihole
-docker compose restart pihole
-
-# check keepalived VIP
-ip addr show | grep 192.168.21.100
-
-# if VIP missing, restart keepalived
-docker compose restart keepalived
-
-# emergency: set fallback DNS on the host
-echo "nameserver 1.1.1.1" > /etc/resolv.conf
-```
-
-> **note:** if bender's pihole fails, amy's pihole should take over the VIP automatically via keepalived. verify by running `dig @192.168.21.100 google.com` from another device.
-
-### postgresql won't start
+### postgres won't start
 
 ```bash
 # check logs
@@ -508,243 +476,121 @@ docker logs postgres --tail 50
 # check disk space
 df -h /mnt/BIG/
 
-# check ZFS pool health
-zpool status BIG
-
-# check data directory
-ls -la /mnt/BIG/filme/immich/postgresql/
-
-# if corrupted, restore from backup (see restore section)
+# if data corruption suspected, restore from backup
+cp /mnt/BIG/filme/docker-compose/scripts/rollback.sh /tmp/
+bash /tmp/rollback.sh postgres
+rm /tmp/rollback.sh
 ```
 
-### immich not loading photos
+### pihole down / no DNS
 
 ```bash
-# check immich_server
-docker compose ps immich_server
-docker logs immich_server --tail 30
+# check pihole container
+docker ps | grep pihole
+docker logs pihole --tail 20
 
-# check ML service
-docker compose ps immich_machine_learning
-docker logs immich_machine_learning --tail 20
+# verify keepalived VIP
+ip addr show bond0 | grep 192.168.21.100
 
-# check redis
-docker exec immich_redis redis-cli ping
+# if VIP is missing, check keepalived
+docker logs keepalived --tail 20
 
-# check postgres connectivity from immich
-docker exec postgres psql -U postgres -d immich -c "SELECT COUNT(*) FROM \"user\";"
+# emergency: restart pihole
+docker restart pihole
 
-# restart immich stack
-docker compose restart immich_server immich_machine_learning immich_redis
-```
-
-### container in restart loop
-
-```bash
-# identify the container
-docker ps -a --format "table {{.Names}}\t{{.Status}}" | grep -i "restarting"
-
-# check logs
-docker logs <container_name> --tail 100
-
-# stop the loop
-docker compose stop <container_name>
-
-# investigate and fix, then restart
-docker compose start <container_name>
+# verify DNS works
+dig @192.168.21.100 google.com +short
 ```
 
 ---
 
 ## service-specific maintenance
 
-### gluetun VPN
+### immich
 
 ```bash
-# check current VPN IP
-docker exec gluetun wget -qO- http://ipinfo.io 2>/dev/null
+# check immich API
+curl -s http://localhost:2283/api/server/ping
 
-# check connection status
-docker logs gluetun --tail 10
+# check ML service
+docker logs immich_machine_learning --tail 20
 
-# force reconnect
-docker compose restart gluetun
-sleep 30
-docker exec gluetun wget -qO- http://ipinfo.io 2>/dev/null
+# force re-index (if photos not appearing)
+# use the immich web UI: Administration → Jobs → Generate thumbnails
+```
+
+### vaultwarden
+
+```bash
+# check health endpoint
+curl -s http://localhost:8484/alive
+
+# backup vaultwarden data (in addition to postgres)
+tar czf /mnt/BIG/filme/backups/vaultwarden-$(date +%Y%m%d).tar.gz /mnt/BIG/filme/configs/vaultwarden/
 ```
 
 ### transmission
 
 ```bash
-# check download stats
-docker logs transmission --tail 10
+# check VPN connectivity from transmission
+docker exec gluetun wget -qO- http://ipinfo.io 2>/dev/null
 
-# verify torrent port is open (51413)
-# use an online port checker pointing to your VPN IP
+# check active torrents
+docker exec transmission transmission-remote -l 2>/dev/null | tail -5
 
-# check disk space for downloads
-du -sh /mnt/BIG/filme/transmission/completed/
-du -sh /mnt/BIG/filme/transmission/incomplete/
+# if Flood UI not loading after rebuild
+docker logs transmission --tail 30 | grep -i flood
 ```
 
-> **reminder:** transmission is pinned to 4.0.5 — do not upgrade. FileList whitelist requirement.
-
-### jellyfin
+### autoheal monitoring
 
 ```bash
-# check transcoding cache
-du -sh /mnt/BIG/filme/configs/jellyfin/data/transcodes/
+# check autoheal is running
+docker ps --format "{{.Names}}\t{{.Status}}" | grep autoheal
 
-# clear transcoding cache if too large
-docker exec jellyfin rm -rf /config/data/transcodes/*
+# check autoheal logs for recent restarts
+docker logs autoheal --tail 20
 
-# scan libraries after media changes
-# use jellyfin web UI → dashboard → libraries → scan all libraries
-```
-
-### immich
-
-```bash
-# check ML model cache
-du -sh /mnt/BIG/filme/immich/ml-cache/
-
-# check photo storage usage
-du -sh /mnt/BIG/filme/immich/photos/
-
-# check immich server status via API
-curl -s http://localhost:2283/api/server-info/ping
-```
-
-### pihole and DNS auto-population
-
-```bash
-# check DNS entries
-docker exec pihole cat /etc/pihole/pihole.toml | grep -A50 "hosts ="
-
-# check auto-population log
-tail -20 /var/log/pihole-dns-export.log
-
-# force DNS update
-/root/pihole-dns-update.sh
-
-# verify a specific entry resolves
-dig media.home.arpa @192.168.21.100
-```
-
-### keepalived
-
-```bash
-# check VIP ownership
-ip addr show | grep 192.168.21.100
-
-# check keepalived status
-docker logs keepalived --tail 20
-
-# force failover test (releases VIP to amy)
-docker stop keepalived
-sleep 10
-# verify amy took over: dig @192.168.21.100 google.com
-docker start keepalived
-# bender reclaims VIP within seconds
-```
-
-### postgres-backup
-
-```bash
-# check last backup
-docker logs postgres-backup --tail 10
-
-# list backups
-ls -la /mnt/BIG/filme/backups/postgres/
-
-# manually trigger backup
-docker exec postgres-backup /backup.sh
-```
-
-### cadvisor
-
-```bash
-# check resource usage
-docker stats cadvisor --no-stream
-
-# verify metrics endpoint
-curl -s http://localhost:9099/metrics | head -5
-
-# stale overlay2 path errors are harmless — ignore them
-```
-
-### syncthing
-
-```bash
-# check syncthing status (uses host network)
-curl -fkLsS -m 2 http://127.0.0.1:8384/rest/noauth/health
-
-# check sync status via web UI
-# https://sync.bunny-enigmatic.ts.net
+# verify gluetun has the autoheal label
+docker inspect gluetun --format '{{index .Config.Labels "autoheal"}}'
 ```
 
 ---
 
 ## TrueNAS maintenance
 
-### before TrueNAS upgrades
+### cron jobs
 
-TrueNAS upgrades can potentially affect docker state. before upgrading:
+verify cron jobs are configured correctly in the TrueNAS web UI under System → Advanced → Cron Jobs:
 
-```bash
-# 1. backup compose file and .env
-cd /mnt/BIG/filme/docker-compose
-cp docker-compose.yaml docker-compose.yaml.pre-upgrade
-cp .env .env.pre-upgrade
+| schedule | command |
+|----------|---------|
+| `30 4 * * 6` | `cp /mnt/BIG/filme/docker-compose/scripts/secure-container-update.sh /tmp/ && bash /tmp/secure-container-update.sh weekly && rm /tmp/secure-container-update.sh` |
+| `30 4 * * 0-5` | `cp /mnt/BIG/filme/docker-compose/scripts/secure-container-update.sh /tmp/ && bash /tmp/secure-container-update.sh retry && rm /tmp/secure-container-update.sh` |
+| `*/5 * * * *` | `/root/pihole-dns-update.sh >> /var/log/pihole-dns-export.log 2>&1` |
 
-# 2. backup postgresql
-docker exec postgres pg_dumpall -U postgres > /mnt/BIG/filme/backups/postgres/manual/pre-upgrade-$(date +%Y%m%d).sql
+### TrueNAS upgrades
 
-# 3. note running container state
-docker compose ps > /tmp/container-state-pre-upgrade.txt
+before upgrading TrueNAS:
 
-# 4. create ZFS snapshot
-zfs snapshot BIG/filme@pre-upgrade-$(date +%Y%m%d)
-```
+1. verify all postgres backups are current
+2. take a ZFS snapshot: `zfs snapshot BIG/filme@pre-upgrade-$(date +%Y%m%d)`
+3. document current container versions: `docker compose ps`
+4. perform the upgrade
+5. after reboot, verify: ZFS pool imported, Docker running, all containers up
+6. re-verify cron jobs (TrueNAS upgrades sometimes reset cron)
 
-### after TrueNAS upgrades
+### GRUB configuration
 
-```bash
-# 1. verify docker is running
-systemctl status docker
-
-# 2. verify compose file is intact
-cat /mnt/BIG/filme/docker-compose/docker-compose.yaml | head -5
-
-# 3. bring up all services
-cd /mnt/BIG/filme/docker-compose
-docker compose up -d
-
-# 4. verify
-docker compose ps --format "table {{.Names}}\t{{.Status}}"
-
-# 5. verify cron jobs survived
-crontab -l
-
-# 6. verify pihole-dns-update.sh is still at /root/
-ls -la /root/pihole-dns-update.sh
-```
-
-### ZFS pool maintenance
+the GRUB config includes `intel_iommu=off` (set in v107) to prevent HP iLO DMAR faults:
 
 ```bash
-# check pool health (should say "ONLINE" with no errors)
-zpool status BIG
-
-# start a scrub (recommended monthly)
-zpool scrub BIG
-
-# check scrub progress
-zpool status BIG | grep scan
-
-# check pool usage
-zfs list BIG
+# verify current setting
+cat /proc/cmdline | grep -o 'intel_iommu=[a-z]*'
+# should show: intel_iommu=off
 ```
+
+if this gets reset after a TrueNAS upgrade, re-apply via TrueNAS UI under System → Advanced → Init/Shutdown Scripts or via the MicroSD GRUB configuration.
 
 ---
 

@@ -2,8 +2,8 @@
 
 ## complete file system layout
 
-**document version:** 2.0
-**infrastructure version:** 98
+**document version:** 3.0
+**infrastructure version:** 99
 **last updated:** february 2026
 
 ---
@@ -14,23 +14,24 @@
 2. [docker-compose directory](#docker-compose-directory)
 3. [container data — /docker/](#container-data--docker)
 4. [legacy paths — /portainer/](#legacy-paths--portainer)
-5. [volume mount reference](#volume-mount-reference)
-6. [network mode reference](#network-mode-reference)
-7. [path conventions](#path-conventions)
+5. [backup data](#backup-data)
+6. [volume mount reference](#volume-mount-reference)
+7. [network mode reference](#network-mode-reference)
+8. [path conventions](#path-conventions)
 
 ---
 
 ## overview
 
-amy uses two primary data locations for container storage:
+amy uses two base paths for container data:
 
-| path | purpose | notes |
-|------|---------|-------|
-| `/docker-compose/` | compose files, .env, scripts | working directory for `docker compose` commands |
-| `/docker/` | container persistent data | main data path for most services |
-| `/portainer/` | legacy data paths | postgres and telegraf data (historical, do not move) |
+| path | purpose | origin |
+|------|---------|--------|
+| `/docker-compose/` | compose file, .env, scripts, configs | current deployment |
+| `/docker/` | per-service container data | current deployment |
+| `/portainer/` | postgresql data, telegraf config | legacy from original portainer deployment |
 
-the split between `/docker/` and `/portainer/` is historical — postgres and telegraf data existed under `/portainer/` before the main compose file was consolidated. moving these would require database migration and downtime, so the paths are preserved as-is.
+the `/portainer/` paths are historical — the postgresql database was originally created there and moving it would require a full database migration. telegraf's config also lives there from its original standalone deployment before being consolidated into the main docker-compose.yaml in v98.
 
 ---
 
@@ -38,199 +39,215 @@ the split between `/docker/` and `/portainer/` is historical — postgres and te
 
 ```
 /docker-compose/
-├── docker-compose.yaml          # v98 — main compose file (31 services)
-├── .env                         # environment variables (16 variables)
-└── scripts/
-    ├── secure-container-update.sh   # automated update orchestration
-    ├── health-checks.sh             # post-update health verification
-    └── rollback.sh                  # rollback helper
+├── docker-compose.yaml                 # v99 — main compose file (29 services)
+├── .env                                # environment variables
+├── scripts/
+│   ├── secure-container-update.sh      # v1.2 — automated update orchestration
+│   ├── health-checks.sh               # v1.0 — health check suite
+│   └── rollback.sh                     # v1.0 — rollback helper
+└── configs/
+    ├── keepalived/
+    │   └── keepalived.conf             # VRRP backup config (enp4s0, priority 100)
+    ├── telegraf/
+    │   └── telegraf.conf               # SNMP monitoring config (cisco + brother)
+    └── secure-update/                  # created at runtime by update script
+        ├── critical-containers.json
+        ├── retry-queue.json
+        ├── logs/
+        └── scan-reports/
 ```
+
+note: unlike bender (where scripts must be copied to `/tmp/` due to TrueNAS restrictions), amy can execute scripts directly from `/docker-compose/scripts/`.
 
 ---
 
 ## container data — /docker/
 
-this is the primary data directory for amy's containers. each service gets its own subdirectory.
-
 ```
 /docker/
+├── argus/                      # release monitoring data
 ├── beszel/
-│   └── data/                    # beszel hub database and state
+│   └── data/                   # monitoring hub database
 ├── diun/
-│   └── data/                    # image update tracking database
-├── dockwatch/                   # dockwatch configuration
-├── dozzle/                      # (no persistent data — reads docker.sock only)
+│   └── data/                   # image update tracker state
+├── dockwatch/                  # container management config
 ├── filebrowser/
-│   ├── database/                # filebrowser sqlite database
-│   └── config/                  # filebrowser settings
+│   ├── database/               # filebrowser sqlite database
+│   └── config/                 # filebrowser settings
 ├── homepage/
-│   ├── config/                  # homepage dashboard configuration (services.yaml, etc.)
-│   └── images/                  # custom dashboard images
-├── keepalived/                  # keepalived vrrp configuration
+│   ├── config/                 # homepage dashboard config
+│   └── images/                 # custom dashboard images
+├── keepalived/                 # keepalived config (directory mount)
+│   └── keepalived.conf
 ├── lubelogger/
-│   ├── config/                  # application configuration
-│   ├── data/                    # vehicle and maintenance records
-│   ├── temp/                    # temporary upload files
-│   ├── log/                     # application logs
-│   ├── keys/                    # ASP.NET data protection keys
-│   └── documents/               # uploaded documents
-├── limdius/                     # limdius application code and data
-├── mealie/                      # mealie recipe data (/app/data)
+│   ├── config/                 # app configuration
+│   ├── data/                   # vehicle data
+│   ├── temp/                   # temporary files
+│   ├── log/                    # application logs
+│   ├── keys/                   # data protection keys
+│   └── documents/              # uploaded documents
+├── mealie/                     # recipe data
 ├── netalertx/
-│   └── data/                    # network device scan database
+│   └── data/                   # network scan database
 ├── ntfy/
-│   ├── cache/                   # notification message cache
-│   └── etc/                     # ntfy server configuration
+│   ├── cache/                  # notification cache
+│   └── etc/                    # ntfy server config
 ├── pihole/
-│   ├── etc-pihole/              # pihole configuration and database
-│   └── etc-dnsmasq.d/          # dnsmasq overrides
-├── postgres-backup/             # daily postgresql backup files
+│   ├── etc-pihole/             # pihole config (synced from bender via nebula-sync)
+│   └── etc-dnsmasq.d/         # dnsmasq config
+├── postgres-backup/            # daily postgresql backups
 ├── spendspentspent/
-│   ├── app-files/               # application runtime files
-│   ├── files/                   # uploaded receipt files
-│   └── config/                  # application configuration
+│   ├── app-files/              # application files
+│   ├── files/                  # user uploaded files
+│   └── config/                 # app configuration
 ├── stirling/
-│   ├── trainingData/            # tessdata OCR language files
-│   ├── configs/                 # stirling-pdf settings
-│   └── logs/                    # application logs
-├── trivy/
-│   └── cache/                   # vulnerability database cache
+│   ├── trainingData/           # OCR tessdata
+│   ├── configs/                # stirling settings
+│   └── logs/                   # application logs
 ├── tsdproxy/
-│   ├── data/                    # tailscale state and certificates
-│   └── config/                  # tsdproxy configuration
-├── valkey/                      # valkey (redis-compatible) append-only data
+│   ├── data/                   # tailscale state
+│   └── config/                 # tsdproxy config
+├── trivy/
+│   └── cache/                  # vulnerability database cache
+├── valkey/                     # redis-compatible key-value data
 └── wallos/
-    └── db/                      # wallos sqlite subscription database
+    └── db/                     # subscription tracker sqlite database
 ```
 
 ---
 
 ## legacy paths — /portainer/
 
-these paths predate the consolidated docker-compose setup. they contain production data and must not be relocated without a planned migration.
-
 ```
 /portainer/
 ├── postgresql/
-│   └── data/                    # postgresql 17 data directory
-│                                # databases: atuin, miniflux, sss, mealie, stirling
-│                                # ⚠️ DO NOT MOVE — actively used by postgres container
+│   └── data/                   # CRITICAL — all application databases
+│                               # databases: atuin, miniflux, sss, mealie, stirling
+│                               # consumer: postgres (/var/lib/postgresql/data)
 └── telegraf/
     └── config/
-        └── telegraf.conf        # telegraf SNMP configuration (read-only mount)
-                                 # monitors: cisco 3750x switch, brother mfc-l3710cw printer
-                                 # ⚠️ DO NOT MOVE — referenced by telegraf container
+        └── telegraf.conf       # SNMP monitoring config
+                                # consumer: telegraf (/etc/telegraf/telegraf.conf:ro)
 ```
 
-### why these paths exist
+> **CRITICAL:** `/portainer/postgresql/data/` contains all of amy's application databases. this is the most critical data on amy. it is backed up daily by postgres-backup.
 
-when amy was initially set up, services were managed through portainer stacks. the postgres database and telegraf configuration were created under `/portainer/`. when the infrastructure was consolidated into a single docker-compose file (v94+), these paths were preserved to avoid data loss and downtime.
+### why legacy paths exist
+
+the postgresql data directory was created at `/portainer/postgresql/data/` during the original portainer-based deployment. changing it to `/docker/postgres/data/` would require stopping all dependent services, moving the data, and updating the volume mount — with risk of data loss. the current path works correctly and is documented here for clarity.
+
+telegraf was originally deployed as a standalone compose file at `/portainer/telegraf/docker-compose.yml` before being consolidated into the main docker-compose.yaml in v98. the config file remains at its original location.
+
+---
+
+## backup data
+
+```
+/docker/postgres-backup/            # automated daily backups
+├── daily/                          # daily backups (7 day retention)
+├── weekly/                         # weekly backups (4 week retention)
+├── monthly/                        # monthly backups (6 month retention)
+└── last/                           # latest backup per database
+
+/docker/backups/                    # manual backups (created by scripts)
+└── postgres/
+    └── pre-upgrade/                # pre-upgrade dumps from secure-container-update.sh
+```
+
+databases backed up: atuin, miniflux, sss, mealie, stirling.
 
 ---
 
 ## volume mount reference
 
-### services with bridge network (utility-network)
+### bridge network services (utility-network)
 
-| service | container path | host path | mode |
-|---------|---------------|-----------|------|
-| tsdproxy | /data | /docker/tsdproxy/data | rw |
-| tsdproxy | /config | /docker/tsdproxy/config | rw |
-| dockwatch | /config | /docker/dockwatch | rw |
+| container | host path | container path | mode |
+|-----------|-----------|---------------|------|
+| tsdproxy | /var/run/docker.sock | /var/run/docker.sock | rw |
+| tsdproxy | /docker/tsdproxy/data | /data | rw |
+| tsdproxy | /docker/tsdproxy/config | /config | rw |
+| dockwatch | /docker/dockwatch | /config | rw |
+| dockwatch | /var/run/docker.sock | /var/run/docker.sock | rw |
 | dozzle | /var/run/docker.sock | /var/run/docker.sock | ro |
-| pihole | /etc/pihole | /docker/pihole/etc-pihole | rw |
-| pihole | /etc/dnsmasq.d | /docker/pihole/etc-dnsmasq.d | rw |
-| postgres | /var/lib/postgresql/data | /portainer/postgresql/data | rw |
-| postgres-backup | /backups | /docker/postgres-backup | rw |
-| valkey | /data | /docker/valkey | rw |
-| ntfy | /var/cache/ntfy | /docker/ntfy/cache | rw |
-| ntfy | /etc/ntfy | /docker/ntfy/etc | rw |
-| stirling | /usr/share/tessdata | /docker/stirling/trainingData | rw |
-| stirling | /configs | /docker/stirling/configs | rw |
-| stirling | /logs | /docker/stirling/logs | rw |
-| homepage | /app/config | /docker/homepage/config | rw |
-| homepage | /app/public/images | /docker/homepage/images | rw |
+| pihole | /docker/pihole/etc-pihole | /etc/pihole | rw |
+| pihole | /docker/pihole/etc-dnsmasq.d | /etc/dnsmasq.d | rw |
+| postgres | /portainer/postgresql/data | /var/lib/postgresql/data | rw |
+| postgres-backup | /docker/postgres-backup | /backups | rw |
+| valkey | /docker/valkey | /data | rw |
+| ntfy | /docker/ntfy/cache | /var/cache/ntfy | rw |
+| ntfy | /docker/ntfy/etc | /etc/ntfy | rw |
+| stirling | /docker/stirling/trainingData | /usr/share/tessdata | rw |
+| stirling | /docker/stirling/configs | /configs | rw |
+| stirling | /docker/stirling/logs | /logs | rw |
+| homepage | /docker/homepage/config | /app/config | rw |
+| homepage | /docker/homepage/images | /app/public/images | rw |
 | homepage | /var/run/docker.sock | /var/run/docker.sock | ro |
-| filebrowser | /database | /docker/filebrowser/database | rw |
-| filebrowser | /config | /docker/filebrowser/config | rw |
-| filebrowser | /srv/docker | /docker | rw |
-| filebrowser | /srv/portainer | /portainer | rw |
-| wallos | /var/www/html/db | /docker/wallos/db | rw |
-| mealie | /app/data | /docker/mealie | rw |
-| argus | /app/data | /docker/argus | rw |
-| lubelogger | /App/config | /docker/lubelogger/config | rw |
-| lubelogger | /App/data | /docker/lubelogger/data | rw |
-| lubelogger | /App/wwwroot/temp | /docker/lubelogger/temp | rw |
-| lubelogger | /App/log | /docker/lubelogger/log | rw |
-| lubelogger | /root/.aspnet/DataProtection-Keys | /docker/lubelogger/keys | rw |
-| lubelogger | /App/wwwroot/documents | /docker/lubelogger/documents | rw |
-| spendspentspent | /app-files | /docker/spendspentspent/app-files | rw |
-| spendspentspent | /files | /docker/spendspentspent/files | rw |
-| spendspentspent | /config | /docker/spendspentspent/config | rw |
+| miniflux | (none) | | |
+| it-tools | (none) | | |
+| filebrowser | /docker/filebrowser/database | /database | rw |
+| filebrowser | /docker/filebrowser/config | /config | rw |
+| filebrowser | /docker | /srv/docker | rw |
+| filebrowser | /portainer | /srv/portainer | rw |
+| wallos | /docker/wallos/db | /var/www/html/db | rw |
+| mealie | /docker/mealie | /app/data | rw |
+| argus | /docker/argus | /app/data | rw |
+| lubelogger | /docker/lubelogger/config | /App/config | rw |
+| lubelogger | /docker/lubelogger/data | /App/data | rw |
+| lubelogger | /docker/lubelogger/temp | /App/wwwroot/temp | rw |
+| lubelogger | /docker/lubelogger/log | /App/log | rw |
+| lubelogger | /docker/lubelogger/keys | /root/.aspnet/DataProtection-Keys | rw |
+| lubelogger | /docker/lubelogger/documents | /App/wwwroot/documents | rw |
 | spendspentspent | /etc/localtime | /etc/localtime | ro |
-| limdius | /app | /docker/limdius | rw |
-| beszel | /beszel_data | /docker/beszel/data | rw |
-| cadvisor | /rootfs | / | ro |
+| spendspentspent | /docker/spendspentspent/app-files | /app-files | rw |
+| spendspentspent | /docker/spendspentspent/files | /files | rw |
+| spendspentspent | /docker/spendspentspent/config | /config | rw |
+| limdius | /docker/limdius | /app | rw |
+| beszel | /docker/beszel/data | /beszel_data | rw |
+| cadvisor | / | /rootfs | ro |
 | cadvisor | /var/run | /var/run | ro |
 | cadvisor | /sys | /sys | ro |
-| cadvisor | /var/lib/docker | /var/lib/docker | ro |
-| diun | /data | /docker/diun/data | rw |
+| cadvisor | /var/lib/docker/ | /var/lib/docker | ro |
+| diun | /docker/diun/data | /data | rw |
 | diun | /var/run/docker.sock | /var/run/docker.sock | ro |
-| trivy | /tmp/trivy | /docker/trivy/cache | rw |
+| trivy | /docker/trivy/cache | /tmp/trivy | rw |
 | trivy | /var/run/docker.sock | /var/run/docker.sock | ro |
+| playwright-chrome | (none) | | |
 
-### services with host network
+### host network services
 
-| service | container path | host path | mode |
-|---------|---------------|-----------|------|
-| keepalived | /container/service/keepalived/assets | /docker/keepalived | rw |
+| container | host path | container path | mode |
+|-----------|-----------|---------------|------|
+| keepalived | /docker/keepalived | /container/service/keepalived/assets | rw |
 | beszel-agent | /var/run/docker.sock | /var/run/docker.sock | ro |
-| netalertx | /data | /docker/netalertx/data | rw |
-| telegraf | /etc/telegraf/telegraf.conf | /portainer/telegraf/config/telegraf.conf | ro |
+| netalertx | /docker/netalertx/data | /data | rw |
+| telegraf | /portainer/telegraf/config/telegraf.conf | /etc/telegraf/telegraf.conf | ro |
+
+### services with no volumes
+
+miniflux, it-tools, atuin, playwright-chrome — no persistent volumes (miniflux and atuin store data in postgres).
 
 ---
 
 ## network mode reference
 
-most services use the `utility-network` bridge. some require host networking for their function:
-
-| service | network mode | reason |
-|---------|-------------|--------|
-| keepalived | host | needs direct access to network interfaces for vrrp |
-| beszel-agent | host | needs access to host metrics (cpu, memory, disk) |
-| netalertx | host | needs arp scanning capability on the local network |
-| telegraf | host | needs direct network access for SNMP polling |
-| all others | utility-network (bridge) | standard container isolation with dns anchor |
-
-the dns anchor (`x-dns: &default-dns`) points all bridge-networked services to `192.168.21.100` (keepalived vip), ensuring DNS resolution works through the pihole ha pair. host-networked services use the host's own DNS configuration.
+| mode | services |
+|------|----------|
+| bridge (utility-network) | tsdproxy, dockwatch, dozzle, pihole, postgres, postgres-backup, valkey, ntfy, stirling, homepage, atuin, miniflux, it-tools, filebrowser, wallos, mealie, argus, lubelogger, spendspentspent, limdius, playwright-chrome, beszel, cadvisor, diun, trivy |
+| host | keepalived, beszel-agent, netalertx, telegraf |
 
 ---
 
 ## path conventions
 
-### naming rules
-
-- all container data lives under `/docker/<service-name>/`
-- subdirectories match the container's internal mount purpose (e.g., `/config`, `/data`)
-- legacy paths under `/portainer/` are frozen — no new services should use this location
-
-### backup considerations
-
-| path | backup method | frequency |
-|------|--------------|-----------|
-| `/docker-compose/` | git repository (futurama-docker) | on change |
-| `/docker/postgres-backup/` | automated by postgres-backup container | daily |
-| `/portainer/postgresql/data/` | backed up via postgres-backup container | daily |
-| `/docker/` (all other) | manual or scheduled backup | as needed |
-| `/portainer/telegraf/config/` | git repository (futurama-docker) | on change |
-
-### disk usage notes
-
-the largest consumers of disk space on amy are typically:
-- `/portainer/postgresql/data/` — database files (atuin history can grow significantly)
-- `/docker/trivy/cache/` — vulnerability database cache (can be safely cleared)
-- `/docker/postgres-backup/` — retained backups (7 daily, 4 weekly, 6 monthly)
-- `/docker/stirling/trainingData/` — OCR language files
+| convention | example |
+|------------|---------|
+| compose and scripts under `/docker-compose/` | `/docker-compose/docker-compose.yaml` |
+| container data under `/docker/<service>/` | `/docker/ntfy/cache/` |
+| legacy postgresql data at `/portainer/` | `/portainer/postgresql/data/` |
+| legacy telegraf config at `/portainer/` | `/portainer/telegraf/config/telegraf.conf` |
+| backups under `/docker/postgres-backup/` | `/docker/postgres-backup/daily/` |
+| configs for repo under `/docker-compose/configs/` | `/docker-compose/configs/keepalived/` |
 
 ---
 

@@ -1,314 +1,268 @@
-# amy infrastructure architecture documentation
+# amy architecture
 
-## utilities & monitoring server
+## infrastructure design and system overview
 
-**document version:** 2.0  
-**infrastructure version:** 98  
-**last updated:** february 8, 2026  
-**host:** intel core i3-2310m, 16gb ram  
-**ip address:** 192.168.21.130
+**document version:** 3.0
+**infrastructure version:** 99
+**last updated:** february 2026
 
 ---
 
 ## table of contents
 
 1. [executive summary](#executive-summary)
-2. [role in infrastructure](#role-in-infrastructure)
-3. [hardware specifications](#hardware-specifications)
-4. [network configuration](#network-configuration)
-5. [design philosophy](#design-philosophy)
-6. [technology stack](#technology-stack)
-7. [integration with bender](#integration-with-bender)
+2. [hardware specifications](#hardware-specifications)
+3. [network configuration](#network-configuration)
+4. [service architecture](#service-architecture)
+5. [storage architecture](#storage-architecture)
+6. [monitoring pipeline](#monitoring-pipeline)
+7. [high availability](#high-availability)
+8. [integration with bender](#integration-with-bender)
+9. [technology stack](#technology-stack)
 
 ---
 
 ## executive summary
 
-amy serves as the **utilities and monitoring host** in the two-host infrastructure. while bender handles media services and primary storage, amy provides:
+amy is the secondary host in a two-host home lab infrastructure. it runs on a repurposed Intel i3-2310M laptop with 16 GB RAM and provides utilities, monitoring, notifications, and DNS backup. amy complements bender (the primary host on TrueNAS Scale) by handling lightweight services that don't require ZFS storage.
 
-- **notification services** (ntfy) for the entire infrastructure
-- **monitoring and observability** (beszel, cadvisor, netalertx, telegraf)
-- **DNS high availability** (secondary pihole with keepalived)
-- **productivity tools** (mealie, lubelogger, stirling-pdf, etc.)
-- **databases** (postgresql for atuin, miniflux, spendspentspent, mealie, stirling)
-
-### key characteristics
-
-| characteristic | implementation |
-|----------------|----------------|
-| **role** | utilities, monitoring, notifications |
-| **hardware** | intel i3-2310m, 16gb ram |
-| **storage** | local ssd + nfs from bender |
-| **docker path** | `/docker-compose/` |
-| **data path** | `/docker/` |
-| **update schedule** | wednesday 04:30 |
-| **compose version** | v98 |
-| **container count** | 29 |
-| **critical services** | 7 (postgres, ntfy, beszel, pihole, keepalived, spendspentspent, diun) |
-
----
-
-## role in infrastructure
-
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                              infrastructure overview                        │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                             │
-│  ┌─────────────────────────┐              ┌─────────────────────────┐       │
-│  │   bender (TrueNAS)      │              │      amy (intel i3)     │       │
-│  │   192.168.21.121        │              │      192.168.21.130     │       │
-│  │   ─────────────────     │              │      ─────────────────  │       │
-│  │   • media services      │              │      • notifications    │       │
-│  │   • downloads (arr)     │◄────────────►│      • monitoring       │       │
-│  │   • photo management    │     nfs      │      • DNS backup       │       │
-│  │   • primary storage     │              │      • productivity     │       │
-│  │   • DNS primary         │              │      • finance tracking  │       │
-│  │   • vaultwarden         │              │      • SNMP monitoring   │       │
-│  └─────────────────────────┘              └─────────────────────────┘       │
-│              │                                        │                     │
-│              └────────────────┬───────────────────────┘                     │
-│                               │                                             │
-│                        ┌──────▼───────┐                                     │
-│                        │   VIP DNS    │                                     │
-│                        │192.168.21.100│                                     │
-│                        └──────────────┘                                     │
-└─────────────────────────────────────────────────────────────────────────────┘
-```
-
-### why amy exists
-
-1. **failure isolation**: if bender goes down for maintenance, critical services (DNS, notifications, monitoring) continue on amy
-
-2. **external monitoring**: amy can monitor bender's health from outside — if bender's monitoring fails, amy can still alert
-
-3. **resource optimization**: lightweight services don't need TrueNAS's resources; they run fine on older hardware
-
-4. **TrueNAS upgrade safety**: services on amy are unaffected by TrueNAS upgrades
-
-### critical services on amy
-
-amy hosts 7 critical services that receive special handling during updates:
-
-| service | why critical |
-|---------|--------------|
-| **postgres** | database for 5 applications (atuin, miniflux, sss, mealie, stirling) |
-| **ntfy** | notification hub for entire infrastructure |
-| **beszel** | monitoring hub — if down, no visibility |
-| **pihole** | DNS — network-wide impact if fails |
-| **keepalived** | DNS failover — HA depends on it |
-| **spendspentspent** | financial data — data integrity critical |
-| **diun** | update notifications — security visibility |
+as of v99, amy runs 29 active containers organized into infrastructure, DNS/HA, databases, notifications, productivity, finance, automation, monitoring, and update categories.
 
 ---
 
 ## hardware specifications
 
-### current hardware
-
 | component | specification |
-|-----------|---------------|
-| **cpu** | intel core i3-2310m (2 cores, 4 threads, 2.1ghz) |
-| **ram** | 16gb ddr3 |
-| **storage** | 256gb ssd (system + docker) |
-| **network** | 1gbe |
-| **os** | debian |
+|-----------|--------------|
+| **CPU** | Intel Core i3-2310M (2 cores, 4 threads, 2.1 GHz) |
+| **RAM** | 16 GB DDR3 |
+| **storage** | single SSD |
+| **network** | enp4s0 (ethernet) |
+| **OS** | Debian 13 |
+| **IP** | 192.168.21.130 |
 
-### resource allocation
+### advantages over bender
 
-| resource | allocated | typical usage |
-|----------|-----------|---------------|
-| **cpu** | 4 threads | 10-30% average |
-| **ram** | 16gb | 8-12gb used |
-| **disk** | 256gb | ~50gb used |
-| **network** | 1gbps | minimal |
-
-### limitations
-
-- **no gpu**: ml workloads run on bender
-- **older cpu**: not suitable for heavy transcoding
-- **single disk**: no raid redundancy (backups critical)
+- **no ZFS overhead**: simple filesystem means no I/O saturation risk
+- **direct script execution**: no TrueNAS restrictions — scripts run directly from their paths
+- **independent updates**: amy's debian can be upgraded without affecting bender's TrueNAS
 
 ---
 
 ## network configuration
 
-### ip addressing
+### interfaces
 
-| interface | ip address | purpose |
-|-----------|------------|---------|
-| **lan** | 192.168.21.130 | primary lan |
-| **vip** | 192.168.21.100 | shared DNS (keepalived) |
-| **tailscale** | 100.x.x.x | remote access |
+| interface | type | ip address | purpose |
+|-----------|------|------------|---------|
+| enp4s0 | ethernet | 192.168.21.130 | primary network (all services) |
+| tailscale | overlay | dynamic | remote access via tsdproxy |
 
-### DNS configuration
+### DNS
 
-amy runs as DNS backup:
-- **primary**: bender (192.168.21.121)
-- **backup**: amy (192.168.21.130)
-- **vip**: 192.168.21.100 (clients point here)
+| setting | value |
+|---------|-------|
+| pihole VIP | 192.168.21.100 (keepalived VRRP) |
+| upstream DNS | 9.9.9.9, 1.1.1.1 |
+| DNSSEC | enabled |
+| reverse DNS | enabled (192.168.21.0/24 → 192.168.21.1) |
 
-all services on utility-network use `dns: 192.168.21.100` (keepalived VIP) for local DNS resolution.
+all services on the `utility-network` bridge use the DNS anchor `192.168.21.100` (pihole VIP) via the `x-dns` YAML anchor. exceptions are pihole (it IS the DNS server), keepalived, beszel-agent, netalertx, and telegraf (all use host networking).
 
-### port mappings (key services)
+### docker networks
 
-| service | port | protocol |
-|---------|------|----------|
-| pihole DNS | 53 | tcp/udp |
-| pihole web | 8053 | http |
-| ntfy | 8888 | http |
-| postgresql | 5432 | tcp |
-| beszel | 8090 | http |
-| cadvisor | 9099 | http |
-| trivy | 8083 | http |
-| stirling-pdf | 8080 | http |
-| miniflux | 8385 | http |
-| mealie | 8456 | http |
-| homepage | 3003 | http |
+| network | driver | purpose |
+|---------|--------|---------|
+| utility-network | bridge | all bridge-mode services (with DNS anchor) |
+| host | host | keepalived, beszel-agent, netalertx, telegraf |
 
----
+### port allocation summary
 
-## design philosophy
-
-### guiding principles
-
-1. **stability over features**: amy prioritizes uptime over latest versions
-2. **resource efficiency**: maximize utility from limited hardware
-3. **failure isolation**: amy's failure shouldn't affect bender and vice versa
-4. **security first**: scan before deploy, no blind updates
-
-### service placement criteria
-
-services are placed on amy if they:
-- are lightweight (low cpu/ram requirements)
-- benefit from separation from media services
-- provide infrastructure-wide functionality
-- need to survive bender maintenance
-
-### what doesn't belong on amy
-
-- media transcoding (cpu-intensive)
-- large file storage (limited disk)
-- ml/ai workloads (no gpu, weak cpu)
-- high-bandwidth services (1gbe limit)
+| range | services |
+|-------|----------|
+| 53 | pihole DNS |
+| 3003 | homepage |
+| 3100 | playwright-chrome |
+| 5050 | limdius |
+| 5432 | postgresql |
+| 6379 | valkey |
+| 8053 | pihole web |
+| 8080 | stirling |
+| 8082 | filebrowser |
+| 8083 | trivy |
+| 8085 | tsdproxy |
+| 8090 | beszel |
+| 8181 | it-tools |
+| 8182 | dozzle |
+| 8283 | wallos |
+| 8282 | argus |
+| 8385 | miniflux |
+| 8456 | mealie |
+| 8777 | atuin |
+| 8888 | ntfy |
+| 8989 | lubelogger |
+| 9021 | spendspentspent |
+| 9099 | cadvisor |
+| 9999 | dockwatch |
+| 20211 | netalertx |
 
 ---
 
-## technology stack
+## service architecture
 
-### container runtime
+### service categories (29 active containers)
 
-| component | version | notes |
-|-----------|---------|-------|
-| **docker** | latest | native docker on debian |
-| **docker compose** | v5.x | single compose file |
-| **network driver** | bridge | utility-network |
+| category | count | services |
+|----------|-------|----------|
+| **infrastructure** | 3 | tsdproxy, dockwatch, dozzle |
+| **DNS & HA** | 2 | pihole, keepalived |
+| **databases** | 3 | postgres, postgres-backup, valkey |
+| **notifications** | 1 | ntfy |
+| **productivity** | 10 | stirling, homepage, atuin, miniflux, it-tools, filebrowser, wallos, mealie, argus, lubelogger |
+| **finance & automation** | 3 | spendspentspent, limdius, playwright-chrome |
+| **monitoring** | 5 | beszel, beszel-agent, cadvisor, netalertx, telegraf |
+| **updates** | 2 | diun, trivy |
+| **total** | **29** | |
 
-### key technologies
+### network modes
 
-| technology | purpose | why chosen |
-|------------|---------|------------|
-| **postgresql 17** | database | modern, reliable, shared instance |
-| **valkey** | cache | redis-compatible, open source |
-| **tailscale** | remote access | zero-config vpn |
-| **tsdproxy** | service proxy | automatic tailscale integration |
-| **trivy** | security scanning | cve detection before updates |
-| **diun** | update notifications | image update awareness |
-| **telegraf** | SNMP monitoring | cisco switch & brother printer metrics |
+| mode | count | services |
+|------|-------|----------|
+| bridge (utility-network) | 25 | most services |
+| host | 4 | keepalived, beszel-agent, netalertx, telegraf |
 
-### service categories
+---
 
-| category | services | count |
-|----------|----------|-------|
-| **infrastructure** | tsdproxy, postgres, postgres-backup, valkey, pihole, keepalived | 6 |
-| **monitoring** | beszel, beszel-agent, cadvisor, netalertx, telegraf, dozzle, dockwatch | 7 |
-| **notifications** | ntfy | 1 |
-| **productivity** | homepage, miniflux, mealie, it-tools, stirling-pdf, wallos, argus, filebrowser, atuin | 9 |
-| **finance & automation** | spendspentspent, lubelogger, limdius, playwright-chrome | 4 |
-| **updates** | diun, trivy | 2 |
-| **total** | | **29** |
+## storage architecture
+
+amy uses two storage paths — `/docker/` for most container data and `/portainer/` for legacy paths from the original portainer deployment:
+
+| path | purpose |
+|------|---------|
+| `/docker-compose/` | compose file, .env, scripts, configs |
+| `/docker/` | per-service container data |
+| `/portainer/postgresql/data/` | postgresql data (legacy path) |
+| `/portainer/telegraf/config/` | telegraf configuration (legacy path) |
+
+### critical data paths
+
+| path | criticality | backup method |
+|------|-------------|---------------|
+| `/portainer/postgresql/data/` | **CRITICAL** — all app databases | postgres-backup (daily) |
+| `/docker/beszel/data/` | **HIGH** — monitoring history | manual |
+| `/docker/ntfy/` | **MEDIUM** — notification cache | manual |
+
+---
+
+## monitoring pipeline
+
+amy runs three monitoring systems:
+
+### cadvisor → prometheus → grafana
+
+```
+amy cadvisor (:9099)
+   |
+   v
+prometheus (:9090, HA VM 192.168.21.220)
+   |
+   v
+grafana (HA add-on, "amy docker" dashboard)
+```
+
+the grafana dashboard uses `instance` variable set to Constant type with value `192.168.21.130:9099`.
+
+cadvisor runs with resource-saving flags (97% CPU reduction, 85% memory reduction):
+
+- `--docker_only=true`
+- `--housekeeping_interval=30s`
+- `--disable_metrics=percpu,sched,tcp,udp,disk,diskIO,hugetlb,referenced_memory,cpu_topology,resctrl`
+
+### telegraf → influxdb → grafana
+
+```
+telegraf (host network, SNMP polling)
+   |
+   +-- cisco 3750X switch (192.168.21.5:161, community "futurama")
+   +-- brother MFC-L3710CW printer (192.168.21.10:161, community "public")
+   |
+   v
+influxdb (:8086, HA VM 192.168.21.220, database "homeassistant")
+   |
+   v
+grafana (HA add-on, switch + printer dashboards)
+```
+
+telegraf uses a starlark processor to parse Brother's proprietary hex-encoded page counts (brInfoCounter) and drum percentages (brInfoMaintenance) from SNMP OIDs.
+
+### beszel
+
+beszel hub runs on amy and collects system metrics from beszel-agents on both amy and bender. provides CPU, memory, disk, and network monitoring with a web UI at port 8090.
+
+---
+
+## high availability
+
+### pihole DNS failover
+
+| setting | bender (MASTER) | amy (BACKUP) |
+|---------|-----------------|--------------|
+| VIP | 192.168.21.100 | 192.168.21.100 |
+| interface | bond0 | enp4s0 |
+| priority | 200 | 100 |
+| VRRP ID | 53 | 53 |
+| mode | unicast | unicast |
+| health check | wget pihole admin (:8053) | wget pihole admin (:8053) |
+| failover time | ~5 seconds | ~5 seconds |
+
+keepalived uses unicast mode with explicit peer addresses (192.168.21.121 ↔ 192.168.21.130). when bender's pihole health check fails 3 consecutive times, the VIP migrates to amy within ~5 seconds. when bender recovers, the VIP returns automatically due to its higher priority (200 vs 100).
+
+nebula-sync on bender replicates pihole configuration to amy hourly with `FULL_SYNC=true` and `RUN_GRAVITY=true`.
+
+note: amy's keepalived uses `osixia/keepalived:latest` (not pinned), while bender uses `osixia/keepalived:2.0.20` (pinned). the keepalived config file is mounted from `/docker/keepalived/` as a directory (not a single file like bender's read-only mount).
 
 ---
 
 ## integration with bender
 
-### services that connect to amy
+### amy → bender dependencies
 
-| bender service | connects to | purpose |
-|----------------|-------------|---------|
-| **diun** | ntfy (amy) | send update notifications |
-| **all services** | pihole vip | DNS resolution |
-| **homepage** | dockerproxy (bender) | container status |
+| amy service | depends on (bender) | purpose |
+|------------|---------------------|---------|
+| homepage | dockerproxy on bender (:2375) | container status widget |
+| pihole | nebula-sync on bender | receives replicated DNS config |
 
-### services that connect to bender
+### bender → amy dependencies
 
-| amy service | connects to | purpose |
-|-------------|-------------|---------|
-| **homepage** | dockerproxy (bender:2375) | monitor bender containers |
-| **beszel** | beszel-agent (bender) | system metrics |
+| bender service | depends on (amy) | purpose |
+|---------------|------------------|---------|
+| diun | ntfy | update notifications |
+| secure-container-update.sh | ntfy | update/rollback notifications |
+| nebula-sync | pihole on amy | DNS replication target |
+| beszel-agent | beszel hub on amy | system metrics collection |
+| pihole-dns-update.sh | docker API on amy (via SSH) | scan amy containers for DNS labels |
 
-### shared configuration
+### SSH access
 
-both hosts use synchronized configurations for:
-
-- **pihole blocklists**: synced via nebula-sync (bender → amy)
-- **keepalived vip**: coordinated vrrp with health checks
-- **tsdproxy**: same tailscale tailnet for service access
-- **timezone**: America/Toronto on both hosts
-- **dns anchor**: all services use 192.168.21.100 (keepalived VIP)
+bender connects to amy via SSH as user `kube` (docker group member) for the pihole-dns-update.sh script. this uses an ed25519 key without passphrase for automated access.
 
 ---
 
-## directory structure overview
+## technology stack
 
-```
-/docker-compose/                    # docker compose configuration
-├── docker-compose.yaml             # main compose file (v98)
-├── .env                            # environment variables
-├── scripts/                        # operational scripts
-│   ├── secure-container-update.sh  # update orchestration
-│   ├── health-checks.sh            # health verification
-│   └── rollback.sh                 # rollback helper
-├── configs/                        # service configurations
-│   └── secure-update/              # update system state
-│       ├── critical-containers.json
-│       ├── retry-queue.json
-│       ├── logs/
-│       └── scan-reports/
-└── reports/                        # generated reports
-    └── weekly-reports/
-
-/docker/                            # container data (persistent)
-├── tsdproxy/                       # tailscale proxy
-├── dockwatch/                      # container management
-├── pihole/                         # DNS server
-├── ntfy/                           # notification server
-├── stirling/                       # pdf tools
-├── homepage/                       # dashboard
-├── mealie/                         # recipe manager
-├── argus/                          # release monitor
-├── lubelogger/                     # vehicle tracker
-├── spendspentspent/                # expense tracker
-├── limdius/                        # car listing monitor
-├── beszel/                         # monitoring
-├── netalertx/                      # network monitoring
-├── filebrowser/                    # file manager
-├── wallos/                         # subscription tracker
-├── valkey/                         # cache
-├── diun/                           # update notifier
-├── trivy/                          # vulnerability scanner
-├── keepalived/                     # HA configuration
-├── postgres-backup/                # database backups
-└── backups/                        # backup storage
-    └── postgres/                   # database backups
-
-/portainer/                         # legacy path (still in use)
-├── postgresql/                     # postgresql data
-│   └── data/                       # actual database files
-└── telegraf/                       # telegraf configuration
-    └── config/
-        └── telegraf.conf           # SNMP monitoring config
-```
+| layer | technology |
+|-------|------------|
+| **host OS** | Debian 13 |
+| **container runtime** | Docker + Docker Compose |
+| **storage** | SSD (single disk) |
+| **networking** | bridge, host |
+| **DNS** | pihole v6 (DNSSEC enabled) |
+| **HA** | keepalived (VRRP unicast, BACKUP role) |
+| **remote access** | Tailscale via tsdproxy |
+| **monitoring** | cadvisor → prometheus → grafana, telegraf → influxdb → grafana, beszel |
+| **updates** | diun (notifications) + trivy (scanning) + custom script |
+| **notifications** | ntfy (local) |
+| **backup** | postgres-backup-local (daily) |
 
 ---
 

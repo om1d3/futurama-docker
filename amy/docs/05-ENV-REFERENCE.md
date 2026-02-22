@@ -2,8 +2,8 @@
 
 ## complete .env documentation
 
-**document version:** 2.0
-**infrastructure version:** 98
+**document version:** 3.0
+**infrastructure version:** 99
 **last updated:** february 2026
 
 ---
@@ -24,91 +24,109 @@
 
 the `.env` file at `/docker-compose/.env` contains all configuration values and secrets for amy's docker compose deployment. it is loaded automatically by `docker compose` and also sourced by the secure-container-update.sh script.
 
-| property | value |
-|----------|-------|
-| **location** | `/docker-compose/.env` |
-| **total variables** | 16 |
-| **referenced in yaml** | 13 |
-| **used outside yaml** | 3 |
-| **secret values** | 9 |
-| **non-secret values** | 7 |
+the file contains 16 variables across 9 categories. of these, 7 contain secrets and 9 are non-sensitive configuration values.
 
 ---
 
 ## variable categories
 
-### system configuration (3 variables)
+| category | count | secrets |
+|----------|-------|---------|
+| system | 3 | 0 |
+| network | 2 | 0 |
+| tailscale | 1 | 1 |
+| postgresql | 1 | 1 |
+| pihole | 1 | 1 |
+| miniflux | 2 | 1 |
+| spendspentspent | 1 | 1 |
+| beszel | 2 | 2 |
+| diun | 1 | 0 |
+| keepalived | 2 | 1 |
+| **total** | **16** | **7** |
 
-| variable | example value | used by | purpose |
-|----------|--------------|---------|---------|
-| `TIMEZONE` | `America/Toronto` | most services via `TZ=${TIMEZONE}` | container timezone |
-| `PUID` | `1000` | dockwatch, filebrowser, mealie, lubelogger | container user id for file permissions |
-| `PGID` | `1000` | dockwatch, filebrowser, mealie, lubelogger | container group id for file permissions |
+---
 
-### network configuration (2 variables)
+## complete variable reference
 
-| variable | example value | used by | purpose |
-|----------|--------------|---------|---------|
-| `AMY_HOST_IP` | `192.168.21.130` | tsdproxy (`TSDPROXY_HOSTNAME`) | host ip address for tailscale proxy routing |
-| `TAILSCALE_DOMAIN` | `bunny-enigmatic.ts.net` | mealie (`BASE_URL`) | tailscale magicDNS domain suffix |
+### system
 
-### tailscale (1 variable)
+| variable | example value | secret | consumers |
+|----------|--------------|--------|-----------|
+| `TIMEZONE` | `America/Toronto` | no | dockwatch, pihole, ntfy, stirling, mealie, lubelogger, spendspentspent, limdius, telegraf, diun |
+| `PUID` | `1000` | no | dockwatch, filebrowser, mealie |
+| `PGID` | `1000` | no | same as PUID |
 
-| variable | example value | used by | purpose |
-|----------|--------------|---------|---------|
-| `TSDPROXY_AUTHKEY` | `tskey-auth-...` | tsdproxy | tailscale authentication key for automatic node registration |
+### network
 
-### database (1 variable)
+| variable | example value | secret | consumers |
+|----------|--------------|--------|-----------|
+| `AMY_HOST_IP` | `192.168.21.130` | no | tsdproxy (TSDPROXY_HOSTNAME) |
+| `TAILSCALE_DOMAIN` | `bunny-enigmatic.ts.net` | no | mealie (BASE_URL) |
 
-| variable | example value | used by | purpose |
-|----------|--------------|---------|---------|
-| `POSTGRES_PASSWORD` | (generated) | postgres, postgres-backup, atuin, miniflux, mealie, spendspentspent | shared postgresql password for all databases |
+### tailscale
 
-### dns (2 variables)
+| variable | example value | secret | consumers |
+|----------|--------------|--------|-----------|
+| `TSDPROXY_AUTHKEY` | `tskey-auth-...` | **yes** | tsdproxy |
 
-| variable | example value | used by | purpose |
-|----------|--------------|---------|---------|
-| `PIHOLE_PASSWORD` | (generated) | pihole (`WEBPASSWORD`) | pihole admin web interface password |
-| `KEEPALIVED_PASSWORD` | (generated) | keepalived configuration | vrrp authentication between bender and amy |
+### postgresql
 
-### service credentials (3 variables)
+| variable | example value | secret | consumers |
+|----------|--------------|--------|-----------|
+| `POSTGRES_PASSWORD` | (random string) | **yes** | postgres, postgres-backup, atuin, miniflux, mealie, spendspentspent |
 
-| variable | example value | used by | purpose |
-|----------|--------------|---------|---------|
-| `MINIFLUX_ADMIN_USERNAME` | `admin` | miniflux (`ADMIN_USERNAME`) | miniflux admin login username |
-| `MINIFLUX_ADMIN_PASSWORD` | (generated) | miniflux (`ADMIN_PASSWORD`) | miniflux admin login password |
-| `SSS_SALT` | (generated) | spendspentspent (`SALT`) | cryptographic salt for spendspentspent password hashing |
+### pihole
 
-### monitoring (2 variables)
+| variable | example value | secret | consumers |
+|----------|--------------|--------|-----------|
+| `PIHOLE_PASSWORD` | (random string) | **yes** | pihole (WEBPASSWORD) |
 
-| variable | example value | used by | purpose |
-|----------|--------------|---------|---------|
-| `BESZEL_KEY` | (generated) | beszel-agent (`KEY`) | authentication key for beszel agent → hub communication |
-| `BESZEL_TOKEN` | (generated) | beszel hub (web ui setup) | api token for beszel hub — used during initial setup, not in compose yaml |
+### miniflux
 
-### notifications (1 variable)
+| variable | example value | secret | consumers |
+|----------|--------------|--------|-----------|
+| `MINIFLUX_ADMIN_USERNAME` | `miniflux` | no | miniflux (ADMIN_USERNAME) |
+| `MINIFLUX_ADMIN_PASSWORD` | (random string) | **yes** | miniflux (ADMIN_PASSWORD) |
 
-| variable | example value | used by | purpose |
-|----------|--------------|---------|---------|
-| `DIUN_NTFY_TOPIC` | `container-updates-amy` | diun, secure-container-update.sh | ntfy topic name for container update notifications |
+### spendspentspent
 
-### high availability (1 variable)
+| variable | example value | secret | consumers |
+|----------|--------------|--------|-----------|
+| `SSS_SALT` | (random string) | **yes** | spendspentspent (SALT) |
 
-| variable | example value | used by | purpose |
-|----------|--------------|---------|---------|
-| `KEEPALIVED_VIP` | `192.168.21.100` | keepalived configuration | virtual ip address shared between bender (master) and amy (backup) |
+### beszel
+
+| variable | example value | secret | consumers |
+|----------|--------------|--------|-----------|
+| `BESZEL_KEY` | `ssh-ed25519 AAAA...` | **yes** | beszel-agent (KEY) |
+| `BESZEL_TOKEN` | (random string) | **yes** | not used in docker-compose (agent registration) |
+
+### diun
+
+| variable | example value | secret | consumers |
+|----------|--------------|--------|-----------|
+| `DIUN_NTFY_TOPIC` | `container-updates-amy` | no | diun (DIUN_NOTIF_NTFY_TOPIC) |
+
+### keepalived
+
+| variable | example value | secret | consumers |
+|----------|--------------|--------|-----------|
+| `KEEPALIVED_PASSWORD` | (shared secret) | **yes** | keepalived (via keepalived.conf — not directly used in compose) |
+| `KEEPALIVED_VIP` | `192.168.21.100` | no | not used in docker-compose (keepalived.conf has hardcoded VIP) |
+
+note: `KEEPALIVED_PASSWORD` must be identical on both bender and amy. on amy, it's defined in .env for documentation and encryption purposes but the actual keepalived.conf uses the hardcoded password directly.
 
 ---
 
 ## variables referenced in docker-compose.yaml
 
-these 13 variables are directly interpolated in the v98 docker-compose.yaml using `${VARIABLE}` syntax:
+these variables are directly interpolated by `docker compose`:
 
-| variable | services that reference it |
-|----------|---------------------------|
-| `TIMEZONE` | dockwatch, pihole, ntfy, stirling (as `TZ`), homepage, mealie, lubelogger, spendspentspent, limdius, beszel-agent (implicit), diun, telegraf |
-| `PUID` | dockwatch, filebrowser, mealie, lubelogger |
-| `PGID` | dockwatch, filebrowser, mealie, lubelogger |
+| variable | services using it |
+|----------|-------------------|
+| `TIMEZONE` | dockwatch, pihole, ntfy, stirling, mealie, lubelogger, spendspentspent, limdius, telegraf, diun |
+| `PUID` | dockwatch, filebrowser, mealie |
+| `PGID` | same as PUID |
 | `AMY_HOST_IP` | tsdproxy |
 | `TAILSCALE_DOMAIN` | mealie |
 | `TSDPROXY_AUTHKEY` | tsdproxy |
@@ -124,83 +142,57 @@ these 13 variables are directly interpolated in the v98 docker-compose.yaml usin
 
 ## variables used outside docker-compose
 
-these 3 variables exist in the `.env` file but are **not** directly referenced in docker-compose.yaml:
-
-| variable | where it's used | notes |
-|----------|----------------|-------|
-| `BESZEL_TOKEN` | beszel hub web ui initial setup | used once during first-time configuration of beszel hub |
-| `KEEPALIVED_PASSWORD` | `/docker/keepalived/keepalived.conf` | vrrp authentication password — must match bender's keepalived |
-| `KEEPALIVED_VIP` | `/docker/keepalived/keepalived.conf` | virtual ip for dns failover — must match bender's configuration |
-
-these are stored in `.env` for documentation and backup purposes, ensuring all configuration values are in one place even if not consumed by docker compose directly.
+| variable | used by | purpose |
+|----------|---------|---------|
+| `WATCHTOWER_NOTIFICATION_URL` | secure-container-update.sh | ntfy notification URL (legacy, currently commented out in .env) |
+| `BESZEL_TOKEN` | agent registration | used during initial beszel agent setup, not in docker-compose |
+| `KEEPALIVED_PASSWORD` | keepalived.conf | hardcoded in the config file, .env copy is for documentation/encryption |
+| `KEEPALIVED_VIP` | reference | documentation only (keepalived.conf has hardcoded VIP) |
 
 ---
 
 ## security classification
 
-### secret values (do not commit to git)
+### secrets (7 variables) — never commit to git
 
-| variable | generation method | rotation frequency |
-|----------|------------------|--------------------|
-| `TSDPROXY_AUTHKEY` | tailscale admin console | when key expires |
-| `POSTGRES_PASSWORD` | random generation | rarely (requires all dependent services restart) |
-| `PIHOLE_PASSWORD` | random generation | as needed |
-| `MINIFLUX_ADMIN_PASSWORD` | random generation | as needed |
-| `SSS_SALT` | random generation | never (changing breaks existing password hashes) |
-| `BESZEL_KEY` | beszel hub ui (add agent) | when re-adding agent |
-| `BESZEL_TOKEN` | beszel hub ui | when regenerating api access |
-| `KEEPALIVED_PASSWORD` | random generation | rarely (must match bender) |
-| `KEEPALIVED_VIP` | network planning | rarely (requires both hosts + all clients update) |
+| variable | generation method |
+|----------|-------------------|
+| `TSDPROXY_AUTHKEY` | Tailscale admin console → Auth Keys |
+| `POSTGRES_PASSWORD` | `openssl rand -base64 32` |
+| `PIHOLE_PASSWORD` | user-chosen password |
+| `MINIFLUX_ADMIN_PASSWORD` | `openssl rand -base64 24` |
+| `SSS_SALT` | `openssl rand -hex 32` |
+| `BESZEL_KEY` | generated by beszel hub during agent registration |
+| `BESZEL_TOKEN` | generated by beszel hub during agent registration |
+| `KEEPALIVED_PASSWORD` | `openssl rand -base64 16` (same on both hosts) |
 
-### non-secret values (safe for .env.template)
+### non-sensitive (9 variables) — safe to include in examples
 
-| variable | typical value |
-|----------|--------------|
-| `TIMEZONE` | `America/Toronto` |
-| `PUID` | `1000` |
-| `PGID` | `1000` |
-| `AMY_HOST_IP` | `192.168.21.130` |
-| `TAILSCALE_DOMAIN` | `bunny-enigmatic.ts.net` |
-| `MINIFLUX_ADMIN_USERNAME` | `admin` |
-| `DIUN_NTFY_TOPIC` | `container-updates-amy` |
+TIMEZONE, PUID, PGID, AMY_HOST_IP, TAILSCALE_DOMAIN, MINIFLUX_ADMIN_USERNAME, DIUN_NTFY_TOPIC, KEEPALIVED_VIP
 
 ---
 
 ## generating secure values
 
-### random passwords (32 characters, alphanumeric)
-
 ```bash
-openssl rand -base64 32 | tr -dc 'a-zA-Z0-9' | head -c 32
-```
+# postgres password
+openssl rand -base64 32
 
-### random salt (64 characters, hex)
+# pihole password
+# choose a memorable password for the web UI
 
-```bash
+# miniflux admin password
+openssl rand -base64 24
+
+# spendspentspent salt
 openssl rand -hex 32
+
+# keepalived password (must match bender)
+openssl rand -base64 16
+
+# tailscale auth key
+# generate at: https://login.tailscale.com/admin/settings/keys
 ```
-
-### tailscale auth key
-
-1. go to https://login.tailscale.com/admin/settings/keys
-2. generate a new auth key
-3. set it as reusable if needed for container recreation
-4. copy the `tskey-auth-...` value
-
-### beszel key
-
-1. open beszel hub web ui (https://beszel.bunny-enigmatic.ts.net)
-2. click "add system"
-3. copy the generated key value
-
-### keepalived password
-
-```bash
-# must be 8 characters or fewer for vrrp compatibility
-openssl rand -base64 6 | tr -dc 'a-zA-Z0-9' | head -c 8
-```
-
-> **important:** keepalived password must be identical on both bender and amy. after changing it, update both hosts and restart keepalived on both.
 
 ---
 
