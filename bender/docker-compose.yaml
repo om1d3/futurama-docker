@@ -174,7 +174,7 @@ services:
       tsdproxy.enable: "true"
       tsdproxy.name: "bender-dockwatch"
       tsdproxy.container_port: "80"
-      tsdproxy.dash.icon: "sh/docker"
+      tsdproxy.dash.icon: "sh/docker-dark"
     environment:
       - PUID=${PUID}
       - PGID=${PGID}
@@ -718,7 +718,7 @@ services:
       tsdproxy.enable: "true"
       tsdproxy.name: "jdown"
       tsdproxy.container_port: "5800"
-      tsdproxy.dash.icon: "sh/jdownloader"
+      tsdproxy.dash.icon: "mdi/cloud-download"
     environment:
       - TZ=${TIMEZONE}
       - USER_ID=${PUID}
@@ -943,7 +943,7 @@ services:
       tsdproxy.enable: "true"
       tsdproxy.name: "bazarr"
       tsdproxy.container_port: "6767"
-      tsdproxy.dash.icon: "sh/bazarr"
+      tsdproxy.dash.icon: "mdi/subtitles"
     environment:
       - TZ=${TIMEZONE}
       - PUID=${PUID}
@@ -1057,7 +1057,7 @@ services:
       tsdproxy.enable: "true"
       tsdproxy.name: "tts"
       tsdproxy.container_port: "5051"
-      tsdproxy.dash.icon: "sh/audiobookshelf"
+      tsdproxy.dash.icon: "mdi/microphone"
     environment:
       - TZ=${TIMEZONE}
       - NTFY_URL=http://192.168.21.130:8888/tts-pipeline
