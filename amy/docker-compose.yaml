@@ -1,42 +1,49 @@
 # ============================================
 # amy (Intel i3-2310M, 16GB RAM) - Utilities & Services
-# Version: 99 - Fixed atuin command for new image structure
+# Version: 100 - Added tax-calculator service
 # ============================================
 # Host: Intel i3-2310M
 # IP: 192.168.21.130
 # RAM: 16GB
 # Data path: /docker/
 # ============================================
-# v91 CHANGES (2026-01-19):
-#   - REMOVED unapproved lubelogger SMTP config (MailConfig__* variables)
-#   - Restored lubelogger to minimal v84-style configuration
-# v92 CHANGES (2026-01-19):
-#   - MOVED vaultwarden to bender (user requested migration)
-# v93 CHANGES (2026-01-19):
-#   - ADDED dns: 192.168.21.100 to all services on utility-network
-#   - Uses keepalived VIP for local DNS resolution
-# v94 CHANGES (2026-01-20):
-#   - FIXED postgres volume path from /docker/postgres/data to /portainer/postgresql/data
-#   - This restores access to existing databases (atuin, miniflux, sss, mealie)
-# v95 CHANGES (2026-01-20):
-#   - ADDED /docker/spendspentspent/config:/config volume mount to spendspentspent
-#   - Ensures config persists across container recreations
+# v100 CHANGES (2026-02-23):
+#   - ADDED tax-calculator service (nginx:alpine serving static tax calculator)
+#   - Ontario T1 Income Tax Calculator for 2024 & 2025 tax years
+#   - Multi-T4 support with CPP/EI overpayment detection
+#   - CRA-confirmed federal and provincial rates
+#   - Static HTML served from /docker/tax/html
+#   - Port 8484:80, tsdproxy name: "tax"
+# v99 CHANGES (2026-02-11):
+#   - FIXED atuin command from "server start" to "start"
+#   - Upstream changed binary from "atuin" to "atuin-server" (entrypoint)
+#   - "server" subcommand no longer exists — "start" is now a direct subcommand
+# v98 CHANGES (2026-02-07):
+#   - ADDED telegraf service (consolidated from /portainer/telegraf/docker-compose.yml)
+#   - Telegraf monitors Cisco 3750X switch and Brother MFC-L3710CW printer via SNMP
+#   - Uses existing config at /portainer/telegraf/config/telegraf.conf
+# v97 CHANGES (2026-02-06):
+#   - ADDED SYSTEM_MAXDPI=1200 to stirling environment variables
+#   - Fixes "DPI value 300 exceeds maximum safe limit of 0" error
 # v96 CHANGES (2026-01-20):
 #   - ADDED verification comments to all fixed services
 #   - FIXED stirling image from frooodle/s-pdf:latest to stirlingtools/stirling-pdf:latest
 #   - FIXED netalertx volume mount and added required capabilities
 #   - FIXED mealie image from hkotel/mealie:latest to ghcr.io/mealie-recipes/mealie:latest
-# v97 CHANGES (2026-02-06):
-#   - ADDED SYSTEM_MAXDPI=1200 to stirling environment variables
-#   - Fixes "DPI value 300 exceeds maximum safe limit of 0" error
-# v98 CHANGES (2026-02-07):
-#   - ADDED telegraf service (consolidated from /portainer/telegraf/docker-compose.yml)
-#   - Telegraf monitors Cisco 3750X switch and Brother MFC-L3710CW printer via SNMP
-#   - Uses existing config at /portainer/telegraf/config/telegraf.conf
-# v99 CHANGES (2026-02-11):
-#   - FIXED atuin command from "server start" to "start"
-#   - Upstream changed binary from "atuin" to "atuin-server" (entrypoint)
-#   - "server" subcommand no longer exists — "start" is now a direct subcommand
+# v95 CHANGES (2026-01-20):
+#   - ADDED /docker/spendspentspent/config:/config volume mount to spendspentspent
+#   - Ensures config persists across container recreations
+# v94 CHANGES (2026-01-20):
+#   - FIXED postgres volume path from /docker/postgres/data to /portainer/postgresql/data
+#   - This restores access to existing databases (atuin, miniflux, sss, mealie)
+# v93 CHANGES (2026-01-19):
+#   - ADDED dns: 192.168.21.100 to all services on utility-network
+#   - Uses keepalived VIP for local DNS resolution
+# v92 CHANGES (2026-01-19):
+#   - MOVED vaultwarden to bender (user requested migration)
+# v91 CHANGES (2026-01-19):
+#   - REMOVED unapproved lubelogger SMTP config (MailConfig__* variables)
+#   - Restored lubelogger to minimal v84-style configuration
 # ============================================
 # ✅ VERIFIED WORKING SERVICES - DO NOT MODIFY WITHOUT APPROVAL:
 #   - postgres (v94: fixed volume path, removed healthcheck)
@@ -50,6 +57,7 @@
 #   - lubelogger (v91: removed unauthorized SMTP config)
 #   - stirling (v96: fixed image to stirlingtools/stirling-pdf:latest, v97: added SYSTEM_MAXDPI)
 #   - atuin (v99: fixed command for new atuin-server binary)
+#   - tax-calculator (v100: added, nginx:alpine static site)
 #   - All services (v93: added DNS anchor 192.168.21.100)
 # ============================================
 # !! DO NOT REMOVE WATCHTOWER - Keep as fallback !!
@@ -82,7 +90,7 @@ services:
       tsdproxy.enable: "true"
       tsdproxy.name: "amy-proxy"
       tsdproxy.container_port: "8080"
-      tsdproxy.dash.icon: "sh/tsdproxy"
+      tsdproxy.dash.icon: "sh/tailscale"
     environment:
       - TSDPROXY_AUTHKEY=${TSDPROXY_AUTHKEY}
       - TSDPROXY_HOSTNAME=${AMY_HOST_IP}
@@ -108,7 +116,7 @@ services:
       tsdproxy.enable: "true"
       tsdproxy.name: "amy-dockwatch"
       tsdproxy.container_port: "80"
-      tsdproxy.dash.icon: "sh/dockwatch"
+      tsdproxy.dash.icon: "sh/docker-dark"
     environment:
       - PUID=${PUID}
       - PGID=${PGID}
@@ -338,7 +346,7 @@ services:
       tsdproxy.enable: "true"
       tsdproxy.name: "home"
       tsdproxy.container_port: "3000"
-      tsdproxy.dash.icon: "sh/homepage"
+      tsdproxy.dash.icon: "mdi/home"
     environment:
       - TZ=${TIMEZONE}
     volumes:
@@ -433,7 +441,7 @@ services:
       tsdproxy.enable: "true"
       tsdproxy.name: "files"
       tsdproxy.container_port: "80"
-      tsdproxy.dash.icon: "sh/filebrowser"
+      tsdproxy.dash.icon: "sh/file-browser"
     environment:
       - PUID=${PUID}
       - PGID=${PGID}
@@ -458,7 +466,7 @@ services:
       tsdproxy.enable: "true"
       tsdproxy.name: "wallos"
       tsdproxy.container_port: "80"
-      tsdproxy.dash.icon: "sh/wallos"
+      tsdproxy.dash.icon: "mdi/wallet"
     environment:
       - TZ=${TIMEZONE}
     volumes:
@@ -515,7 +523,7 @@ services:
       tsdproxy.enable: "true"
       tsdproxy.name: "argus"
       tsdproxy.container_port: "8080"
-      tsdproxy.dash.icon: "sh/argus"
+      tsdproxy.dash.icon: "mdi/eye-outline"
     volumes:
       - /docker/argus:/app/data
     ports:
@@ -534,7 +542,7 @@ services:
       tsdproxy.enable: "true"
       tsdproxy.name: "lube"
       tsdproxy.container_port: "8080"
-      tsdproxy.dash.icon: "sh/lubelogger"
+      tsdproxy.dash.icon: "mdi/oil"
     environment:
       - TZ=${TIMEZONE}
       - LC_ALL=en_US.UTF-8
@@ -568,7 +576,7 @@ services:
       tsdproxy.enable: "true"
       tsdproxy.name: "money"
       tsdproxy.container_port: "9001"
-      tsdproxy.dash.icon: "sh/spendspentspent"
+      tsdproxy.dash.icon: "mdi/currency-usd"
     environment:
       - TZ=${TIMEZONE}
       - TIMEZONE=${TIMEZONE}
@@ -590,6 +598,30 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+
+  # v100: ADDED - Ontario T1 Income Tax Calculator (2024 & 2025)
+  # Static HTML served by nginx:alpine — no backend, no state
+  # Multi-T4 support, CPP/EI overpayment detection, CRA-confirmed rates
+  # LOCKED tsdproxy.name: "tax" - DO NOT CHANGE
+  # LOCKED PORT: 8484:80 - DO NOT CHANGE
+  tax-calculator:
+    image: nginx:alpine
+    container_name: tax-calculator
+    restart: unless-stopped
+    <<: *default-dns
+    labels:
+      tsdproxy.enable: "true"
+      tsdproxy.name: "tax"
+      tsdproxy.container_port: "80"
+      tsdproxy.dash.icon: "mdi/calculator"
+    environment:
+      - TZ=${TIMEZONE}
+    volumes:
+      - /docker/tax/html:/usr/share/nginx/html:ro
+    ports:
+      - "8484:80"
+    networks:
+      - utility-network
 
   # ============================================
   # AUTOMATION & SUPPORT
@@ -651,7 +683,7 @@ services:
       tsdproxy.enable: "true"
       tsdproxy.name: "beszel"
       tsdproxy.container_port: "8090"
-      tsdproxy.dash.icon: "sh/beszel"
+      tsdproxy.dash.icon: "sh/beszel-dark"
     volumes:
       - /docker/beszel/data:/beszel_data
     ports:
