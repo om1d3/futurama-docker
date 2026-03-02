@@ -1,6 +1,6 @@
 # ============================================
 # bender (TrueNAS Scale) - Media & Downloads
-# Version: 109 - TTS multi-voice + web interface
+# Version: 112 - Immich resource limits
 # ============================================
 # Host: TrueNAS Scale (HP MicroServer Gen8)
 # CPU: Intel Xeon E3-1265L V2 (iGPU disabled by HP BIOS)
@@ -108,18 +108,39 @@
 #   - REQUIRED: Create /mnt/BIG/filme/tts/input/{ro-emil,ro-alina,en-ryan,en-sonia}
 #   - REQUIRED: Create webapp.py and start.sh in /mnt/BIG/filme/configs/tts-pipeline/
 #   - REQUIRED: Rebuild: docker compose build --no-cache tts-pipeline
+# v110 CHANGES (2026-02-26):
+#   - ADDED: Baikal CalDAV/CardDAV server with PostgreSQL integration
+#   - ADDED: calendar tsdproxy access (port 8001)
+#   - ADDED: baikal to postgres-backup database list
+#   - REQUIRED: Create /mnt/BIG/filme/configs/baikal/{config,data} directories
+#   - REQUIRED: Configure Baikal via web UI to use PostgreSQL
+# v111 CHANGES (2026-02-28):
+#   - ADDED: Vikunja task management with PostgreSQL integration
+#   - ADDED: tasks tsdproxy access (port 3456)
+#   - ADDED: vikunja to postgres-backup database list
+#   - REQUIRED: Create vikunja database in postgres
+#   - REQUIRED: Create /mnt/BIG/filme/configs/vikunja/files directory (chown 1000)
+#   - REQUIRED: Add VIKUNJA_JWT_SECRET to .env file
+# v112 CHANGES (2026-03-01):
+#   - ADDED: Resource limits to immich_server (mem_limit: 2G, cpus: 2.0)
+#   - ADDED: Resource limits to immich_machine_learning (mem_limit: 3G, cpus: 1.5)
+#   - REASON: Unconstrained Immich ML workers caused OOM during bulk photo uploads
+#   - REASON: Load average hit 10.96 on 4-core CPU, ZFS txg_sync stalled >120s
+#   - NOTE: Also set all Immich job concurrency to 1 via Admin UI
 # ============================================
 # ✅ VERIFIED WORKING SERVICES - DO NOT MODIFY WITHOUT APPROVAL:
 #   - immich_redis (v94: upgraded to redis:7-alpine)
 #   - readarr (v94: fixed image to linuxserver/readarr:0.4.19-nightly)
 #   - spotdl (v94: fixed image to spotdl/spotify-downloader:latest)
 #   - hedgedoc (v94: changed healthcheck to Node.js-based)
-#   - immich_server (v94: removed unauthorized healthcheck)
+#   - immich_server (v94: removed unauthorized healthcheck, v112: resource limits)
 #   - vaultwarden (v91: added, moved from amy)
 #   - jellyfin (v96: corrected image to lscr.io/linuxserver/jellyfin:latest)
 #   - All services (v93: added DNS anchor 192.168.21.100)
-#   - immich_machine_learning (v104: python3-based healthcheck)
+#   - immich_machine_learning (v104: python3-based healthcheck, v112: resource limits)
 #   - nebula-sync (v104: healthcheck disabled - minimal container)
+#   - baikal (v110: CalDAV/CardDAV with PostgreSQL)
+#   - vikunja (v111: task management with PostgreSQL)
 # ============================================
 # !! IMPORTANT - DO NOT MODIFY TSDPROXY NAMES !!
 # These are LOCKED production values.
@@ -462,7 +483,7 @@ services:
       tsdproxy.enable: "false"
     environment:
       - POSTGRES_HOST=postgres
-      - POSTGRES_DB=immich,hedgedoc
+      - POSTGRES_DB=immich,hedgedoc,baikal,vikunja
       - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
       - SCHEDULE=@daily
@@ -507,6 +528,7 @@ services:
   # ============================================
 
   # ✅ VERIFIED WORKING 2026-01-20 - DO NOT MODIFY WITHOUT APPROVAL
+  # v112: Added resource limits (mem_limit: 2G, cpus: 2.0) to prevent OOM during bulk uploads
   # LOCKED tsdproxy.name: "photo" - DO NOT CHANGE
   # LOCKED PORT: 2283:2283 - DO NOT CHANGE
   immich_server:
@@ -536,8 +558,12 @@ services:
     depends_on:
       - postgres
       - immich_redis
+    mem_limit: 2G
+    cpus: 2.0
 
   # ✅ VERIFIED WORKING 2026-02-01 - DO NOT MODIFY WITHOUT APPROVAL
+  # v112: Added resource limits (mem_limit: 3G, cpus: 1.5) to prevent OOM during ML processing
+  # WARNING: Also set all Immich job concurrency to 1 via Admin UI → Settings → Job Settings
   immich_machine_learning:
     image: ghcr.io/immich-app/immich-machine-learning:release
     container_name: immich_machine_learning
@@ -557,6 +583,8 @@ services:
       timeout: 10s
       retries: 3
       start_period: 60s
+    mem_limit: 3G
+    cpus: 1.5
 
   # ============================================
   # MEDIA SERVERS
@@ -814,6 +842,77 @@ services:
       timeout: 10s
       retries: 3
       start_period: 10s
+
+  # ============================================
+  # CALENDAR & CONTACTS - BAIKAL
+  # ============================================
+
+  # ✅ VERIFIED WORKING 2026-02-26 - DO NOT MODIFY WITHOUT APPROVAL
+  # LOCKED tsdproxy.name: "calendar" - DO NOT CHANGE
+  # LOCKED PORT: 8001:80 - DO NOT CHANGE
+  baikal:
+    image: ckulka/baikal:nginx
+    container_name: baikal
+    restart: unless-stopped
+    <<: *default-dns
+    labels:
+      tsdproxy.enable: "true"
+      tsdproxy.name: "calendar"
+      tsdproxy.container_port: "80"
+      tsdproxy.dash.icon: "mdi/calendar-account"
+    environment:
+      - TZ=${TIMEZONE}
+    volumes:
+      - /mnt/BIG/filme/configs/baikal/config:/var/www/baikal/config
+      - /mnt/BIG/filme/configs/baikal/data:/var/www/baikal/Specific
+    ports:
+      - "8001:80"
+    networks:
+      - media-network
+    depends_on:
+      - postgres
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  # ============================================
+  # TASK MANAGEMENT - VIKUNJA
+  # ============================================
+
+  # v111: Vikunja task management with PostgreSQL
+  # LOCKED tsdproxy.name: "tasks" - DO NOT CHANGE
+  # LOCKED PORT: 3456:3456 - DO NOT CHANGE
+  vikunja:
+    image: vikunja/vikunja:latest
+    container_name: vikunja
+    restart: unless-stopped
+    <<: *default-dns
+    labels:
+      tsdproxy.enable: "true"
+      tsdproxy.name: "tasks"
+      tsdproxy.container_port: "3456"
+      tsdproxy.dash.icon: "sh/vikunja"
+    environment:
+      - TZ=${TIMEZONE}
+      - VIKUNJA_DATABASE_HOST=postgres
+      - VIKUNJA_DATABASE_USER=postgres
+      - VIKUNJA_DATABASE_PASSWORD=${POSTGRES_PASSWORD}
+      - VIKUNJA_DATABASE_DATABASE=vikunja
+      - VIKUNJA_DATABASE_TYPE=postgres
+      - VIKUNJA_SERVICE_PUBLICURL=https://tasks.${TAILSCALE_DOMAIN}
+      - VIKUNJA_SERVICE_JWTSECRET=${VIKUNJA_JWT_SECRET}
+      - VIKUNJA_SERVICE_ENABLEREGISTRATION=true
+    volumes:
+      - /mnt/BIG/filme/configs/vikunja/files:/app/vikunja/files
+    ports:
+      - "3456:3456"
+    networks:
+      - media-network
+    depends_on:
+      - postgres
 
   # ============================================
   # ARR STACK - Media Automation (via gluetun VPN)
