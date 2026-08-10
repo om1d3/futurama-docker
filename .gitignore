@@ -1,198 +1,97 @@
-# ===================================
-# Secrets & Credentials
-# ===================================
+# ============================================
+# futurama-docker
+# ============================================
+# This repository is populated by futurama-sync.sh, which copies only an
+# explicit manifest of files into a neutral clone. So this file is a SAFETY
+# NET, not a working filter. If a rule here ever fires, the manifest is
+# wrong and should be fixed instead.
+#
+# The repository is PUBLIC on GitHub. Nothing in plaintext here may contain
+# a credential. Secrets are committed only as .gpg ciphertext.
+# ============================================
 
-# API Keys & Tokens
-*.key
-*.pem
-*.p12
-*.pfx
+# ---- plaintext secrets: never ----
+.env
+.env.*
+*.env
 secrets.yaml
 secrets.yml
 secrets.json
-secrets.txt
-.secrets
-.env
-#.env.*
-*.env
-
-# SSH Keys
-id_rsa
-id_rsa.*
-id_dsa
-id_dsa.*
-id_ecdsa
-id_ecdsa.*
-id_ed25519
-id_ed25519.*
-*.ppk
-
-# Home Assistant Specific
-home-assistant.log
-home-assistant_v2.db
-home-assistant_v2.db-shm
-home-assistant_v2.db-wal
-*.db
-*.db-shm
-*.db-wal
-.storage/
-.cloud/
-.google.token
-.uuid
-ip_bans.yaml
-
-# Passwords & Auth
-password.txt
-passwords.txt
-auth.json
-token.json
+password*.txt
 credentials.json
-serviceaccount.json
-client_secret*.json
+# ciphertext is the point of this repository
+!*.gpg
+!.env.example
 
-# Certificate Files
-*.crt
-*.cer
-*.der
+# ---- keys and certificates ----
 *.key
-*.p7b
-*.p7c
+*.pem
 *.p12
 *.pfx
-*.pem
+*.crt
+*.cer
 *.csr
+id_rsa*
+id_dsa*
+id_ecdsa*
+id_ed25519*
+*.ppk
 
-# Cloud Provider Credentials
-.aws/
-.azure/
-.gcloud/
-gcloud-key.json
-service-account*.json
+# ---- generated state: belongs in backups, not git ----
+*.db
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3
+*.mv.db
+*.MAD
+state.json
+logos.json
+gravity*.db
+listsCache/
 
-# ===================================
-# macOS
-# ===================================
-.DS_Store
-.DS_Store?
-._*
-.Spotlight-V100
-.Trashes
-.AppleDouble
-.LSOverride
-Icon
-.DocumentRevisions-V100
-.fseventsd
-.TemporaryItems
-.VolumeIcon.icns
-.com.apple.timemachine.donotpresent
-.AppleDB
-.AppleDesktop
-Network Trash Folder
-Temporary Items
-.apdisk
-
-# ===================================
-# Windows
-# ===================================
-Thumbs.db
-Thumbs.db:encryptable
-ehthumbs.db
-ehthumbs_vista.db
-*.stackdump
-[Dd]esktop.ini
-$RECYCLE.BIN/
-*.lnk
-
-# ===================================
-# Linux
-# ===================================
-*~
-.fuse_hidden*
-.directory
-.Trash-*
-.nfs*
-
-# ===================================
-# Editors & IDEs
-# ===================================
-.vscode/
-.vscode/settings.json
-.idea/
-*.swp
-*.swo
-*~
-.project
-.classpath
-.c9/
-*.launch
-.settings/
-*.sublime-workspace
-*.sublime-project
-
-# ===================================
-# Python
-# ===================================
-__pycache__/
-*.py[cod]
-*$py.class
-*.so
-.Python
-venv/
-env/
-ENV/
-*.egg-info/
-.pytest_cache/
-
-# ===================================
-# Node.js
-# ===================================
-node_modules/
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-
-# ===================================
-# Backup & Temporary Files
-# ===================================
-*.bak
+# ---- versioned backups: git IS the version history ----
 *.backup
+*.bak
+*.bak2
+*.OLD
+*_OLD
 *.old
 *.orig
 *.tmp
 *.temp
+*_WRONG
+
+# ---- logs and reports ----
 *.log
-*.cache
+logs/
+reports/
+
+# ---- build and runtime artifacts ----
+venv/
+__pycache__/
+*.pyc
+node_modules/
+
+# ---- archives may hide anything ----
+*.zip
+*.tar
+*.tar.gz
+*.tgz
+*.7z
+*.rar
+
+# ---- nested repositories ----
+# configs/audiobook-foundry is its own git checkout and must not be nested
+audiobook-foundry/
+nod-config.git/
+
+# ---- editor and OS noise ----
+.DS_Store
+._*
+Thumbs.db
 *.swp
 *.swo
 *~
-.#*
-\#*#
-
-# Compressed archives (might contain secrets)
-*.7z
-*.dmg
-*.gz
-*.iso
-*.jar
-*.rar
-*.tar
-*.zip
-
-# ===================================
-# Git
-# ===================================
-*.patch
-*.diff
-
-# ===================================
-# Docker (might contain secrets in configs)
-# ===================================
-docker-compose.override.yml
-.dockerignore
-
-# ===================================
-# Custom Sensitive Files
-# ===================================
-# Add any project-specific sensitive files below:
-# custom-secrets.yaml
-# my-api-keys.txt
+.idea/
+.vscode/
