@@ -1,0 +1,168 @@
+{
+  "SchemaVersion": 2,
+  "CreatedAt": "2026-02-25T04:32:15.366229032-05:00",
+  "ArtifactName": "henrygd/beszel:latest",
+  "ArtifactType": "container_image",
+  "Metadata": {
+    "Size": 31598592,
+    "ImageID": "sha256:48abd7c254eb69b3823bb44a4d3ce34f45a41dfe01c09d2743b3fe93da55c0f3",
+    "DiffIDs": [
+      "sha256:cca962f93ac9df584739570bfdaaba745e1699abc6c9038b7ad3eef6025d580e",
+      "sha256:f90d5807defe93a4e8794a60939ace44dc170e1b1d3f690698a835e9e55efbc5"
+    ],
+    "RepoTags": [
+      "henrygd/beszel:latest"
+    ],
+    "RepoDigests": [
+      "henrygd/beszel@sha256:64bcaa60d1ed4149f0628c70cf68044b5d1ea90b3437de41e009e873f50e3f36"
+    ],
+    "ImageConfig": {
+      "architecture": "amd64",
+      "created": "2026-02-20T20:55:31.573438393Z",
+      "history": [
+        {
+          "created": "2026-02-20T20:55:31Z",
+          "created_by": "COPY /beszel / # buildkit",
+          "comment": "buildkit.dockerfile.v0"
+        },
+        {
+          "created": "2026-02-20T20:55:31Z",
+          "created_by": "COPY /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ # buildkit",
+          "comment": "buildkit.dockerfile.v0"
+        },
+        {
+          "created": "2026-02-20T20:55:31Z",
+          "created_by": "VOLUME [/beszel_data]",
+          "comment": "buildkit.dockerfile.v0",
+          "empty_layer": true
+        },
+        {
+          "created": "2026-02-20T20:55:31Z",
+          "created_by": "EXPOSE [8090/tcp]",
+          "comment": "buildkit.dockerfile.v0",
+          "empty_layer": true
+        },
+        {
+          "created": "2026-02-20T20:55:31Z",
+          "created_by": "ENTRYPOINT [\"/beszel\"]",
+          "comment": "buildkit.dockerfile.v0",
+          "empty_layer": true
+        },
+        {
+          "created": "2026-02-20T20:55:31Z",
+          "created_by": "CMD [\"serve\" \"--http=0.0.0.0:8090\"]",
+          "comment": "buildkit.dockerfile.v0",
+          "empty_layer": true
+        }
+      ],
+      "os": "linux",
+      "rootfs": {
+        "type": "layers",
+        "diff_ids": [
+          "sha256:cca962f93ac9df584739570bfdaaba745e1699abc6c9038b7ad3eef6025d580e",
+          "sha256:f90d5807defe93a4e8794a60939ace44dc170e1b1d3f690698a835e9e55efbc5"
+        ]
+      },
+      "config": {
+        "Cmd": [
+          "serve",
+          "--http=0.0.0.0:8090"
+        ],
+        "Entrypoint": [
+          "/beszel"
+        ],
+        "Env": [
+          "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+        ],
+        "Labels": {
+          "org.opencontainers.image.created": "2026-02-20T20:53:09.997Z",
+          "org.opencontainers.image.description": "Lightweight server monitoring hub with historical data, docker stats, and alerts.",
+          "org.opencontainers.image.licenses": "MIT",
+          "org.opencontainers.image.revision": "ac79860d4a8a3ce73c15797db339f9f230472033",
+          "org.opencontainers.image.source": "https://github.com/henrygd/beszel",
+          "org.opencontainers.image.title": "beszel",
+          "org.opencontainers.image.url": "https://github.com/henrygd/beszel",
+          "org.opencontainers.image.version": "0.18.4"
+        },
+        "Volumes": {
+          "/beszel_data": {}
+        },
+        "WorkingDir": "/",
+        "ExposedPorts": {
+          "8090/tcp": {}
+        },
+        "ArgsEscaped": true
+      }
+    },
+    "Layers": [
+      {
+        "Size": 31373312,
+        "DiffID": "sha256:cca962f93ac9df584739570bfdaaba745e1699abc6c9038b7ad3eef6025d580e"
+      },
+      {
+        "Size": 225280,
+        "DiffID": "sha256:f90d5807defe93a4e8794a60939ace44dc170e1b1d3f690698a835e9e55efbc5"
+      }
+    ]
+  },
+  "Results": [
+    {
+      "Target": "beszel",
+      "Class": "lang-pkgs",
+      "Type": "gobinary",
+      "Vulnerabilities": [
+        {
+          "VulnerabilityID": "CVE-2023-36308",
+          "VendorIDs": [
+            "GHSA-q7pp-wcgr-pffx"
+          ],
+          "PkgID": "github.com/disintegration/imaging@v1.6.2",
+          "PkgName": "github.com/disintegration/imaging",
+          "PkgIdentifier": {
+            "PURL": "pkg:golang/github.com/disintegration/imaging@v1.6.2",
+            "UID": "231ccadb100cff60"
+          },
+          "InstalledVersion": "v1.6.2",
+          "Status": "affected",
+          "Layer": {
+            "DiffID": "sha256:cca962f93ac9df584739570bfdaaba745e1699abc6c9038b7ad3eef6025d580e"
+          },
+          "SeveritySource": "ghsa",
+          "PrimaryURL": "https://avd.aquasec.com/nvd/cve-2023-36308",
+          "DataSource": {
+            "ID": "ghsa",
+            "Name": "GitHub Security Advisory Go",
+            "URL": "https://github.com/advisories?query=type%3Areviewed+ecosystem%3Ago"
+          },
+          "Custom": null,
+          "Title": "disintegration Imaging 1.6.2 allows attackers to cause a panic (becaus ...",
+          "Description": "disintegration Imaging 1.6.2 allows attackers to cause a panic (because of an integer index out of range during a Grayscale call) via a crafted TIFF file to the scan function of scanner.go. NOTE: it is unclear whether there are common use cases in which this panic could have any security consequence",
+          "Severity": "LOW",
+          "CweIDs": [
+            "CWE-129"
+          ],
+          "VendorSeverity": {
+            "ghsa": 1,
+            "nvd": 2
+          },
+          "CVSS": {
+            "nvd": {
+              "V3Vector": "CVSS:3.1/AV:L/AC:L/PR:N/UI:R/S:U/C:N/I:N/A:H",
+              "V3Score": 5.5
+            }
+          },
+          "References": [
+            "github.com/disintegration/imaging",
+            "https://github.com/disintegration/imaging/issues/165",
+            "https://github.com/disintegration/imaging/releases/tag/v1.6.2",
+            "https://lists.fedoraproject.org/archives/list/package-announce%40lists.fedoraproject.org/message/3GX2SYGRCNFUAGELLDOBIERCSCYSGKFY/",
+            "https://lists.fedoraproject.org/archives/list/package-announce@lists.fedoraproject.org/message/3GX2SYGRCNFUAGELLDOBIERCSCYSGKFY/",
+            "https://nvd.nist.gov/vuln/detail/CVE-2023-36308"
+          ],
+          "PublishedDate": "2023-09-05T04:15:08.703Z",
+          "LastModifiedDate": "2025-11-04T18:15:40.753Z"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,146 @@
+{
+  "SchemaVersion": 2,
+  "CreatedAt": "2026-07-15T04:36:22.138172179-04:00",
+  "ArtifactName": "amir20/dozzle:latest",
+  "ArtifactType": "container_image",
+  "Metadata": {
+    "Size": 68341248,
+    "ImageID": "sha256:66478175319172c02962ada94fa03ab5e821ef4965aa0198242d43f0783a5df7",
+    "DiffIDs": [
+      "sha256:18339348d2720ebb8f4be4df72d9f2567de823b060bd232b49d1e2ec6ffca49a",
+      "sha256:475eb46200ab9a2c52794033ea59285b0a5f8c6d3248c09795ae9b2dd090a244",
+      "sha256:bc0cbd75d5ce04ad6f4009d8ffb25af4ad1cb8f4e963a0485ca401a1d8896dfd",
+      "sha256:f2010a07abf638bef796417369df2e1eea565b03d33ea6341e1e644fb5c5e1cf"
+    ],
+    "RepoTags": [
+      "amir20/dozzle:latest"
+    ],
+    "RepoDigests": [
+      "amir20/dozzle@sha256:6f4644814cce31e11fe80f2610515df6a5a2e40120b4087c298a72df8d65866b"
+    ],
+    "ImageConfig": {
+      "architecture": "amd64",
+      "created": "2026-07-10T18:27:04.033687999Z",
+      "history": [
+        {
+          "created": "2025-11-09T15:53:53Z",
+          "created_by": "COPY /data /data # buildkit",
+          "comment": "buildkit.dockerfile.v0"
+        },
+        {
+          "created": "2025-11-09T15:53:53Z",
+          "created_by": "COPY /tmp /tmp # buildkit",
+          "comment": "buildkit.dockerfile.v0"
+        },
+        {
+          "created": "2026-06-16T12:42:46Z",
+          "created_by": "COPY /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt # buildkit",
+          "comment": "buildkit.dockerfile.v0"
+        },
+        {
+          "created": "2026-07-10T18:27:04Z",
+          "created_by": "COPY /dozzle/dozzle /dozzle # buildkit",
+          "comment": "buildkit.dockerfile.v0"
+        },
+        {
+          "created": "2026-07-10T18:27:04Z",
+          "created_by": "EXPOSE [8080/tcp]",
+          "comment": "buildkit.dockerfile.v0",
+          "empty_layer": true
+        },
+        {
+          "created": "2026-07-10T18:27:04Z",
+          "created_by": "ENTRYPOINT [\"/dozzle\"]",
+          "comment": "buildkit.dockerfile.v0",
+          "empty_layer": true
+        }
+      ],
+      "os": "linux",
+      "rootfs": {
+        "type": "layers",
+        "diff_ids": [
+          "sha256:18339348d2720ebb8f4be4df72d9f2567de823b060bd232b49d1e2ec6ffca49a",
+          "sha256:475eb46200ab9a2c52794033ea59285b0a5f8c6d3248c09795ae9b2dd090a244",
+          "sha256:bc0cbd75d5ce04ad6f4009d8ffb25af4ad1cb8f4e963a0485ca401a1d8896dfd",
+          "sha256:f2010a07abf638bef796417369df2e1eea565b03d33ea6341e1e644fb5c5e1cf"
+        ]
+      },
+      "config": {
+        "Entrypoint": [
+          "/dozzle"
+        ],
+        "Env": [
+          "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+        ],
+        "Labels": {
+          "org.opencontainers.image.created": "2026-07-10T18:23:03.273Z",
+          "org.opencontainers.image.description": "Realtime log viewer for containers.  Supports Docker, Swarm and K8s.",
+          "org.opencontainers.image.licenses": "MIT",
+          "org.opencontainers.image.revision": "2b1d9e889e6bbaaf0979ee4ba2e26d29ceefb49d",
+          "org.opencontainers.image.source": "https://github.com/amir20/dozzle",
+          "org.opencontainers.image.title": "dozzle",
+          "org.opencontainers.image.url": "https://github.com/amir20/dozzle",
+          "org.opencontainers.image.version": "v10.6.9"
+        },
+        "WorkingDir": "/",
+        "ExposedPorts": {
+          "8080/tcp": {}
+        }
+      }
+    },
+    "Layers": [
+      {
+        "Size": 1536,
+        "DiffID": "sha256:18339348d2720ebb8f4be4df72d9f2567de823b060bd232b49d1e2ec6ffca49a"
+      },
+      {
+        "Size": 1536,
+        "DiffID": "sha256:475eb46200ab9a2c52794033ea59285b0a5f8c6d3248c09795ae9b2dd090a244"
+      },
+      {
+        "Size": 182784,
+        "DiffID": "sha256:bc0cbd75d5ce04ad6f4009d8ffb25af4ad1cb8f4e963a0485ca401a1d8896dfd"
+      },
+      {
+        "Size": 68155392,
+        "DiffID": "sha256:f2010a07abf638bef796417369df2e1eea565b03d33ea6341e1e644fb5c5e1cf"
+      }
+    ]
+  },
+  "Results": [
+    {
+      "Target": "dozzle",
+      "Class": "lang-pkgs",
+      "Type": "gobinary",
+      "Vulnerabilities": [
+        {
+          "VulnerabilityID": "GO-2026-5932",
+          "PkgID": "golang.org/x/crypto@v0.54.0",
+          "PkgName": "golang.org/x/crypto",
+          "PkgIdentifier": {
+            "PURL": "pkg:golang/golang.org/x/crypto@v0.54.0",
+            "UID": "354962a21b4349a9"
+          },
+          "InstalledVersion": "v0.54.0",
+          "Status": "affected",
+          "Layer": {
+            "DiffID": "sha256:f2010a07abf638bef796417369df2e1eea565b03d33ea6341e1e644fb5c5e1cf"
+          },
+          "DataSource": {
+            "ID": "govulndb",
+            "Name": "The Go Vulnerability Database",
+            "URL": "https://pkg.go.dev/vuln/"
+          },
+          "Custom": null,
+          "Title": "The golang.org/x/crypto/openpgp package is unmaintained, unsafe by design, and has known security issues",
+          "Description": "The golang.org/x/crypto/openpgp package is unsafe by design, has numerous known security issues, is not maintained, and should not be used.\n\nIf you are required to interoperate with OpenPGP systems and need a maintained package, consider github.com/ProtonMail/go-crypto/openpgp which is a maintained fork that aims to be a drop-in replacement for this package.",
+          "Severity": "UNKNOWN",
+          "References": [
+            "https://go.dev/issue/44226",
+            "https://pkg.go.dev/vuln/GO-2026-5932"
+          ]
+        }
+      ]
+    }
+  ]
+}

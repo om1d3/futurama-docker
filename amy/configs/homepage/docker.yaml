@@ -1,0 +1,13 @@
+# ============================================
+# Homepage docker.yaml
+# Place this file in /docker/homepage/docker.yaml on amy
+# ============================================
+
+# Local Docker socket (amy)
+amy:
+  socket: /var/run/docker.sock
+
+# Remote Docker via socket proxy (bender)
+bender:
+  host: 10.30.0.12
+  port: 2375

@@ -1,0 +1,106 @@
+{
+  "SchemaVersion": 2,
+  "CreatedAt": "2026-02-25T04:34:21.539908605-05:00",
+  "ArtifactName": "henrygd/beszel-agent:latest",
+  "ArtifactType": "container_image",
+  "Metadata": {
+    "Size": 9226240,
+    "ImageID": "sha256:8954d11a900f56d48fc997fc0a424455f15017d85c01baf4f239fc80e9f940cc",
+    "DiffIDs": [
+      "sha256:72a792a38c1a6f96a135cc1101b8f6272d722eaded11694d0e2baf65d8b344b6",
+      "sha256:bc58263d5422d7d561a4b26450059f1e09dfd835e5a04edbeba41a8b64e2c26a",
+      "sha256:cad191c0b0a89dad4c840cfbbc6205ab6d4d5ef3679f5a719769a3bd8bd7fe92"
+    ],
+    "RepoTags": [
+      "henrygd/beszel-agent:latest"
+    ],
+    "RepoDigests": [
+      "henrygd/beszel-agent@sha256:00829897142460910ed1de162b166d2494916c061ecdb092de3b0653818c02b9"
+    ],
+    "ImageConfig": {
+      "architecture": "amd64",
+      "created": "2026-02-20T20:57:54.519279442Z",
+      "history": [
+        {
+          "created": "2026-02-20T20:57:54Z",
+          "created_by": "COPY /agent /agent # buildkit",
+          "comment": "buildkit.dockerfile.v0"
+        },
+        {
+          "created": "2026-02-20T20:57:54Z",
+          "created_by": "COPY /tmp /tmp # buildkit",
+          "comment": "buildkit.dockerfile.v0"
+        },
+        {
+          "created": "2026-02-20T20:57:54Z",
+          "created_by": "COPY /app/agent/test-data/amdgpu.ids /usr/share/libdrm/amdgpu.ids # buildkit",
+          "comment": "buildkit.dockerfile.v0"
+        },
+        {
+          "created": "2026-02-20T20:57:54Z",
+          "created_by": "VOLUME [/var/lib/beszel-agent]",
+          "comment": "buildkit.dockerfile.v0",
+          "empty_layer": true
+        },
+        {
+          "created": "2026-02-20T20:57:54Z",
+          "created_by": "ENTRYPOINT [\"/agent\"]",
+          "comment": "buildkit.dockerfile.v0",
+          "empty_layer": true
+        }
+      ],
+      "os": "linux",
+      "rootfs": {
+        "type": "layers",
+        "diff_ids": [
+          "sha256:72a792a38c1a6f96a135cc1101b8f6272d722eaded11694d0e2baf65d8b344b6",
+          "sha256:bc58263d5422d7d561a4b26450059f1e09dfd835e5a04edbeba41a8b64e2c26a",
+          "sha256:cad191c0b0a89dad4c840cfbbc6205ab6d4d5ef3679f5a719769a3bd8bd7fe92"
+        ]
+      },
+      "config": {
+        "Entrypoint": [
+          "/agent"
+        ],
+        "Env": [
+          "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+        ],
+        "Labels": {
+          "org.opencontainers.image.created": "2026-02-20T20:56:38.642Z",
+          "org.opencontainers.image.description": "Lightweight server monitoring hub with historical data, docker stats, and alerts.",
+          "org.opencontainers.image.licenses": "MIT",
+          "org.opencontainers.image.revision": "ac79860d4a8a3ce73c15797db339f9f230472033",
+          "org.opencontainers.image.source": "https://github.com/henrygd/beszel",
+          "org.opencontainers.image.title": "beszel",
+          "org.opencontainers.image.url": "https://github.com/henrygd/beszel",
+          "org.opencontainers.image.version": "0.18.4"
+        },
+        "Volumes": {
+          "/var/lib/beszel-agent": {}
+        },
+        "WorkingDir": "/"
+      }
+    },
+    "Layers": [
+      {
+        "Size": 9197568,
+        "DiffID": "sha256:72a792a38c1a6f96a135cc1101b8f6272d722eaded11694d0e2baf65d8b344b6"
+      },
+      {
+        "Size": 1536,
+        "DiffID": "sha256:bc58263d5422d7d561a4b26450059f1e09dfd835e5a04edbeba41a8b64e2c26a"
+      },
+      {
+        "Size": 27136,
+        "DiffID": "sha256:cad191c0b0a89dad4c840cfbbc6205ab6d4d5ef3679f5a719769a3bd8bd7fe92"
+      }
+    ]
+  },
+  "Results": [
+    {
+      "Target": "agent",
+      "Class": "lang-pkgs",
+      "Type": "gobinary"
+    }
+  ]
+}

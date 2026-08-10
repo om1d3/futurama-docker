@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Ontario T1 Income Tax Calculator — 2024 &amp; 2025</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#f8fafc;color:#1f2937;padding:16px}
+#root{max-width:760px;margin:0 auto}
+</style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.24.0/babel.min.js"></script>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const {useState,useMemo}=React;
+const TD={
+2024:{federal:{brackets:[{min:0,max:55867,rate:.15},{min:55867,max:111733,rate:.205},{min:111733,max:173205,rate:.26},{min:173205,max:246752,rate:.29},{min:246752,max:1/0,rate:.33}],bpaMin:14156,bpaMax:15705,bpaPhaseOutStart:173205,bpaPhaseOutEnd:246752,creditRate:.15,ceaMax:1368},ontario:{brackets:[{min:0,max:51446,rate:.0505},{min:51446,max:102894,rate:.0915},{min:102894,max:150000,rate:.1116},{min:150000,max:220000,rate:.1216},{min:220000,max:1/0,rate:.1316}],bpa:11865,creditRate:.0505,s20:5315,s36:6802},cpp:{ympe:68500,ex:3500,rate:.0595,max:3867.5,yampe:73200,c2r:.04,c2m:188,ed:631},ei:{mie:63200,rate:.0166,max:1049.12},rrsp:{limit:31560,rate:.18},fhsa:8000},
+2025:{federal:{brackets:[{min:0,max:57375,rate:.145},{min:57375,max:114750,rate:.205},{min:114750,max:177882,rate:.26},{min:177882,max:253414,rate:.29},{min:253414,max:1/0,rate:.33}],bpaMin:14538,bpaMax:16129,bpaPhaseOutStart:177882,bpaPhaseOutEnd:253414,creditRate:.145,ceaMax:1471},ontario:{brackets:[{min:0,max:52886,rate:.0505},{min:52886,max:105775,rate:.0915},{min:105775,max:150000,rate:.1116},{min:150000,max:220000,rate:.1216},{min:220000,max:1/0,rate:.1316}],bpa:12747,creditRate:.0505,s20:5710,s36:7307},cpp:{ympe:71300,ex:3500,rate:.0595,max:4034.1,yampe:81200,c2r:.04,c2m:396,ed:681.6},ei:{mie:65700,rate:.0164,max:1077.48},rrsp:{limit:32490,rate:.18},fhsa:8000}
+};
+function bTax(i,b){let t=0;for(const x of b){if(i<=x.min)break;t+=(Math.min(i,x.max)-x.min)*x.rate}return t}
+function hp(i){if(i<=20000)return 0;if(i<=25000)return Math.min((i-20000)*.06,300);if(i<=36000)return 300;if(i<=38500)return Math.min(300+(i-36000)*.06,450);if(i<=48000)return 450;if(i<=48600)return Math.min(450+(i-48000)*.25,600);if(i<=72000)return 600;if(i<=72600)return Math.min(600+(i-72000)*.25,750);if(i<=200000)return 750;if(i<=200600)return Math.min(750+(i-200000)*.25,900);return 900}
+function calc(yr,t4s,rc,fc){
+const d=TD[yr],gr=t4s.reduce((s,t)=>s+(t.b14||0),0);
+const tCpp=t4s.reduce((s,t)=>s+(t.b16||0),0),tC2=t4s.reduce((s,t)=>s+(t.b166||0),0),tEi=t4s.reduce((s,t)=>s+(t.b18||0),0),tTd=t4s.reduce((s,t)=>s+(t.b22||0),0);
+const hd=t4s.some(t=>t.b16>0||t.b18>0||t.b22>0);
+const c1=Math.min(Math.max((Math.min(gr,d.cpp.ympe)-d.cpp.ex)*d.cpp.rate,0),d.cpp.max);
+let c2=0;if(gr>d.cpp.ympe)c2=Math.min((Math.min(gr,d.cpp.yampe)-d.cpp.ympe)*d.cpp.c2r,d.cpp.c2m);
+const ei=Math.min(Math.min(gr,d.ei.mie)*d.ei.rate,d.ei.max);
+const co=hd?Math.max(tCpp-c1,0):0,c2o=hd?Math.max(tC2-c2,0):0,eo=hd?Math.max(tEi-ei,0):0,to=co+c2o+eo;
+const rr=Math.min(gr*d.rrsp.rate,d.rrsp.limit),ar=Math.min(rc,rr),af=Math.min(fc,d.fhsa);
+const cd=Math.min(d.cpp.ed,c1)+c2,ti=Math.max(gr-ar-af-cd,0);
+let ft=bTax(ti,d.federal.brackets);let bpa=d.federal.bpaMax;
+if(ti>d.federal.bpaPhaseOutStart)bpa-=(d.federal.bpaMax-d.federal.bpaMin)*Math.min((ti-d.federal.bpaPhaseOutStart)/(d.federal.bpaPhaseOutEnd-d.federal.bpaPhaseOutStart),1);
+const cr=d.federal.creditRate,fb=bpa*cr,fc2=Math.min(gr,d.federal.ceaMax)*cr,bc=Math.max(c1-d.cpp.ed,0),fcp=bc*cr,fe=ei*cr,ftc=fb+fc2+fcp+fe;
+const nf=Math.max(ft-ftc,0);
+let ot=bTax(ti,d.ontario.brackets);const ob=d.ontario.bpa*d.ontario.creditRate,ocp=bc*d.ontario.creditRate,oe=ei*d.ontario.creditRate,otc=ob+ocp+oe;
+const bo=Math.max(ot-otc,0),s20=Math.max((bo-d.ontario.s20)*.2,0),s36=Math.max((bo-d.ontario.s36)*.36,0),st=s20+s36,no=bo+st,h=hp(ti);
+const tt=nf+no+h,ni=gr-tt-c1-c2-ei-ar-af;
+let fr=0,onr=0;for(const b of d.federal.brackets)if(ti>b.min)fr=b.rate;for(const b of d.ontario.brackets)if(ti>b.min)onr=b.rate;
+let sm=1;if(bo>d.ontario.s36)sm=1.56;else if(bo>d.ontario.s20)sm=1.2;
+return{gr,ti,ar,af,rr,cd,c1,c2,ei,tp:c1+c2+ei,tCpp,tC2,tEi,tTd,hd,co,c2o,eo,to,ft,fb,fc2:fc2,fcp,fe,ftc,nf,ot,otc,bo,st,no,h,tt,ni,eff:gr>0?(tt/gr)*100:0,mr:((fr+onr*sm)*100).toFixed(2),ref:hd?tTd-tt+to:null,bc}}
+const fm=n=>n.toLocaleString("en-CA",{style:"currency",currency:"CAD",minimumFractionDigits:2});
+const fp=n=>(typeof n==='string'?n:n.toFixed(2))+'%';
+const mk=id=>({id,nm:'',b14:0,b16:0,b166:0,b18:0,b22:0});
+function App(){
+const[t24,sT24]=useState([mk(1)]);
+const[t25,sT25]=useState([mk(1),mk(2)]);
+const[rr,sRr]=useState(0);const[fh,sFh]=useState(0);
+const[tab,sTab]=useState("calc");const[det,sDet]=useState(false);
+const add=(y)=>{if(y===2024)sT24(p=>[...p,mk(p.length+1)]);else sT25(p=>[...p,mk(p.length+1)])};
+const rem=(y,i)=>{if(y===2024&&t24.length>1)sT24(p=>p.filter((_,j)=>j!==i));else if(y===2025&&t25.length>1)sT25(p=>p.filter((_,j)=>j!==i))};
+const upd=(y,i,f,v)=>{const s=y===2024?sT24:sT25;s(p=>p.map((t,j)=>j===i?{...t,[f]:f==='nm'?v:Math.max(0,+v)}:t))};
+const r24=useMemo(()=>calc(2024,t24,rr,fh),[t24,rr,fh]);
+const r25=useMemo(()=>calc(2025,t25,rr,fh),[t25,rr,fh]);
+const ts24=useMemo(()=>calc(2024,t24,0,0).tt-r24.tt,[t24,r24]);
+const ts25=useMemo(()=>calc(2025,t25,0,0).tt-r25.tt,[t25,r25]);
+const Sec=({title,children,color='blue'})=>{
+const bg={blue:'#1e3a5f',green:'#14532d',red:'#7f1d1d',purple:'#581c87',amber:'#78350f'};
+const bd={blue:'#1e40af',green:'#166534',red:'#991b1b',purple:'#6b21a8',amber:'#92400e'};
+return(<div style={{marginBottom:14,border:`1px solid ${bd[color]}22`,borderRadius:8,overflow:'hidden'}}><div style={{background:bg[color],color:'#fff',padding:'7px 14px',fontSize:12,fontWeight:700,letterSpacing:.5}}>{title}</div><div style={{padding:'4px 0'}}>{children}</div></div>)};
+const Row=({label,v1,v2,bold,hl,sub})=>(
+<div style={{display:'grid',gridTemplateColumns:'1fr 125px 125px',padding:'2px 0',background:hl?'#fffbeb':'transparent'}}>
+<div style={{paddingLeft:sub?26:12,fontSize:sub?11:12,fontWeight:bold?700:400}}>{label}</div>
+<div style={{textAlign:'right',paddingRight:12,fontSize:sub?11:12,fontWeight:bold?700:400,fontFamily:'monospace'}}>{v1}</div>
+<div style={{textAlign:'right',paddingRight:12,fontSize:sub?11:12,fontWeight:bold?700:400,fontFamily:'monospace'}}>{v2}</div></div>);
+const T4In=({t4s,year})=>(
+<div style={{marginBottom:12}}>
+<div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:6}}>
+<span style={{fontSize:13,fontWeight:700,color:year===2024?'#92400e':'#1e40af'}}>{year} T4 Slips ({t4s.length})</span>
+<button onClick={()=>add(year)} style={{fontSize:11,padding:'3px 10px',background:'#e0e7ff',color:'#3730a3',border:'none',borderRadius:5,cursor:'pointer',fontWeight:600}}>+ Add T4</button></div>
+{t4s.map((t,i)=>(
+<div key={i} style={{background:'#fff',border:'1px solid #e2e8f0',borderRadius:8,padding:10,marginBottom:6}}>
+<div style={{display:'flex',gap:8,alignItems:'center',marginBottom:6}}>
+<span style={{fontSize:11,fontWeight:700,color:'#6b7280',minWidth:50}}>T4 #{i+1}</span>
+<input placeholder="Employer (optional)" value={t.nm} onChange={e=>upd(year,i,'nm',e.target.value)} style={{flex:1,border:'1px solid #e5e7eb',borderRadius:4,padding:'4px 8px',fontSize:12}}/>
+{t4s.length>1&&<button onClick={()=>rem(year,i)} style={{fontSize:11,color:'#dc2626',background:'#fef2f2',border:'1px solid #fecaca',borderRadius:4,padding:'3px 8px',cursor:'pointer'}}>Remove</button>}</div>
+<div style={{display:'grid',gridTemplateColumns:det?'1fr 1fr 1fr 1fr 1fr':'1fr',gap:6}}>
+<div><label style={{fontSize:9,fontWeight:700,color:'#6b7280'}}>BOX 14 – Gross *</label>
+<div style={{display:'flex',alignItems:'center',background:'#f9fafb',border:'1px solid #d1d5db',borderRadius:4,padding:'0 6px'}}>
+<span style={{color:'#9ca3af',fontSize:12}}>$</span>
+<input type="number" value={t.b14||''} onChange={e=>upd(year,i,'b14',e.target.value)} style={{border:'none',outline:'none',width:'100%',padding:'5px 4px',fontSize:13,fontFamily:'monospace',background:'transparent'}}/></div></div>
+{det&&<><div><label style={{fontSize:9,fontWeight:700,color:'#6b7280'}}>BOX 16 – CPP</label>
+<div style={{display:'flex',alignItems:'center',background:'#f9fafb',border:'1px solid #d1d5db',borderRadius:4,padding:'0 6px'}}><span style={{color:'#9ca3af',fontSize:12}}>$</span>
+<input type="number" value={t.b16||''} onChange={e=>upd(year,i,'b16',e.target.value)} style={{border:'none',outline:'none',width:'100%',padding:'5px 4px',fontSize:13,fontFamily:'monospace',background:'transparent'}}/></div></div>
+<div><label style={{fontSize:9,fontWeight:700,color:'#6b7280'}}>BOX 16.6 – CPP2</label>
+<div style={{display:'flex',alignItems:'center',background:'#f9fafb',border:'1px solid #d1d5db',borderRadius:4,padding:'0 6px'}}><span style={{color:'#9ca3af',fontSize:12}}>$</span>
+<input type="number" value={t.b166||''} onChange={e=>upd(year,i,'b166',e.target.value)} style={{border:'none',outline:'none',width:'100%',padding:'5px 4px',fontSize:13,fontFamily:'monospace',background:'transparent'}}/></div></div>
+<div><label style={{fontSize:9,fontWeight:700,color:'#6b7280'}}>BOX 18 – EI</label>
+<div style={{display:'flex',alignItems:'center',background:'#f9fafb',border:'1px solid #d1d5db',borderRadius:4,padding:'0 6px'}}><span style={{color:'#9ca3af',fontSize:12}}>$</span>
+<input type="number" value={t.b18||''} onChange={e=>upd(year,i,'b18',e.target.value)} style={{border:'none',outline:'none',width:'100%',padding:'5px 4px',fontSize:13,fontFamily:'monospace',background:'transparent'}}/></div></div>
+<div><label style={{fontSize:9,fontWeight:700,color:'#6b7280'}}>BOX 22 – Tax Ded.</label>
+<div style={{display:'flex',alignItems:'center',background:'#f9fafb',border:'1px solid #d1d5db',borderRadius:4,padding:'0 6px'}}><span style={{color:'#9ca3af',fontSize:12}}>$</span>
+<input type="number" value={t.b22||''} onChange={e=>upd(year,i,'b22',e.target.value)} style={{border:'none',outline:'none',width:'100%',padding:'5px 4px',fontSize:13,fontFamily:'monospace',background:'transparent'}}/></div></div></>}
+</div></div>))}</div>);
+return(
+<div>
+<div style={{textAlign:'center',marginBottom:16}}>
+<h1 style={{fontSize:19,fontWeight:800,margin:0}}>Ontario T1 Income Tax Calculator</h1>
+<p style={{fontSize:11,color:'#6b7280',margin:'4px 0 0'}}>2024 &amp; 2025 • Multi-T4 • CRA-Confirmed • CPP/EI Overpayment Detection</p>
+<div style={{display:'flex',justifyContent:'center',gap:16,marginTop:6,fontSize:11}}>
+<span>2024 due: <b>Apr 30, 2025</b></span><span>2025 due: <b>Apr 30, 2026</b></span></div></div>
+<div style={{display:'flex',gap:2,marginBottom:14,borderBottom:'2px solid #e5e7eb',flexWrap:'wrap'}}>
+{[['calc','Calculator'],['t1map','T1 Line Map'],['optimize','Optimization'],['rates','Rate Tables']].map(([k,l])=>(
+<button key={k} onClick={()=>sTab(k)} style={{padding:'7px 14px',fontSize:12,fontWeight:tab===k?700:500,border:'none',borderBottom:tab===k?'3px solid #1e40af':'3px solid transparent',background:'none',cursor:'pointer',color:tab===k?'#1e40af':'#6b7280'}}>{l}</button>))}</div>
+{tab==="calc"&&<>
+<div style={{background:'#f8fafc',border:'1px solid #e2e8f0',borderRadius:10,padding:14,marginBottom:16}}>
+<div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:10}}>
+<span style={{fontSize:13,fontWeight:800}}>T4 EMPLOYMENT INCOME SLIPS</span>
+<label style={{fontSize:11,color:'#4b5563',display:'flex',alignItems:'center',gap:4,cursor:'pointer'}}>
+<input type="checkbox" checked={det} onChange={e=>sDet(e.target.checked)}/>Show Box 16/18/22 details</label></div>
+<div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12}}>
+<T4In t4s={t24} year={2024}/><T4In t4s={t25} year={2025}/></div>
+<div style={{borderTop:'1px solid #e2e8f0',paddingTop:10,marginTop:6}}>
+<div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12}}>
+<div><label style={{fontSize:10,fontWeight:700}}>RRSP CONTRIBUTION</label>
+<div style={{display:'flex',alignItems:'center',background:'#fff',border:'1px solid #d1d5db',borderRadius:5,padding:'0 6px',marginTop:3}}>
+<span style={{color:'#9ca3af',fontSize:13}}>$</span>
+<input type="number" value={rr||''} onChange={e=>sRr(Math.max(0,+e.target.value))} style={{border:'none',outline:'none',width:'100%',padding:'6px 4px',fontSize:14,fontFamily:'monospace'}}/></div>
+<div style={{fontSize:9,color:'#9ca3af',marginTop:2}}>Room: {fm(r24.rr)} (24) / {fm(r25.rr)} (25)</div></div>
+<div><label style={{fontSize:10,fontWeight:700}}>FHSA CONTRIBUTION</label>
+<div style={{display:'flex',alignItems:'center',background:'#fff',border:'1px solid #d1d5db',borderRadius:5,padding:'0 6px',marginTop:3}}>
+<span style={{color:'#9ca3af',fontSize:13}}>$</span>
+<input type="number" value={fh||''} onChange={e=>sFh(Math.max(0,+e.target.value))} style={{border:'none',outline:'none',width:'100%',padding:'6px 4px',fontSize:14,fontFamily:'monospace'}}/></div>
+<div style={{fontSize:9,color:'#9ca3af',marginTop:2}}>Max $8,000/year</div></div></div></div></div>
+<div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:8,marginBottom:16}}>
+{[{l:'Total Tax',a:fm(r24.tt),b:fm(r25.tt),c:'#dc2626'},{l:'Take-Home',a:fm(r24.ni),b:fm(r25.ni),c:'#16a34a'},{l:'Effective Rate',a:fp(r24.eff),b:fp(r25.eff),c:'#2563eb'},{l:'Marginal Rate',a:fp(r24.mr),b:fp(r25.mr),c:'#7c3aed'}].map((c,i)=>(
+<div key={i} style={{background:'#fff',border:'1px solid #e5e7eb',borderRadius:7,padding:8,borderTop:`3px solid ${c.c}`}}>
+<div style={{fontSize:9,fontWeight:700,color:'#6b7280',textTransform:'uppercase',marginBottom:3}}>{c.l}</div>
+<div style={{fontSize:12,fontWeight:700,color:'#92400e',fontFamily:'monospace'}}>24: {c.a}</div>
+<div style={{fontSize:12,fontWeight:700,color:'#1e40af',fontFamily:'monospace'}}>25: {c.b}</div></div>))}</div>
+{(r24.to>0||r25.to>0)&&<div style={{background:'#f0fdf4',border:'1px solid #86efac',borderRadius:8,padding:12,marginBottom:14}}>
+<div style={{fontSize:13,fontWeight:700,color:'#166534',marginBottom:4}}>CPP/EI OVERPAYMENT DETECTED (Refundable!)</div>
+<div style={{fontSize:12,color:'#15803d'}}>Multiple employers each deducted CPP/EI independently. CRA refunds the excess when you file.</div>
+<div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10,marginTop:8}}>
+{r24.to>0&&<div style={{background:'#fff',borderRadius:6,padding:8}}>
+<div style={{fontSize:11,fontWeight:700,color:'#92400e'}}>2024 Overpayments</div>
+{r24.co>0&&<div style={{fontSize:11,marginTop:2}}>CPP: <b>{fm(r24.co)}</b></div>}
+{r24.c2o>0&&<div style={{fontSize:11}}>CPP2: <b>{fm(r24.c2o)}</b></div>}
+{r24.eo>0&&<div style={{fontSize:11}}>EI: <b>{fm(r24.eo)}</b></div>}
+<div style={{fontSize:12,fontWeight:700,color:'#166534',marginTop:4}}>Total: {fm(r24.to)}</div></div>}
+{r25.to>0&&<div style={{background:'#fff',borderRadius:6,padding:8}}>
+<div style={{fontSize:11,fontWeight:700,color:'#1e40af'}}>2025 Overpayments</div>
+{r25.co>0&&<div style={{fontSize:11,marginTop:2}}>CPP: <b>{fm(r25.co)}</b></div>}
+{r25.c2o>0&&<div style={{fontSize:11}}>CPP2: <b>{fm(r25.c2o)}</b></div>}
+{r25.eo>0&&<div style={{fontSize:11}}>EI: <b>{fm(r25.eo)}</b></div>}
+<div style={{fontSize:12,fontWeight:700,color:'#166534',marginTop:4}}>Total: {fm(r25.to)}</div></div>}</div></div>}
+{(r24.ref!==null||r25.ref!==null)&&<div style={{background:((r24.ref||0)>=0&&(r25.ref||0)>=0)?'#eff6ff':'#fef2f2',border:`1px solid ${((r24.ref||0)>=0&&(r25.ref||0)>=0)?'#93c5fd':'#fecaca'}`,borderRadius:8,padding:12,marginBottom:14}}>
+<div style={{fontSize:13,fontWeight:700,marginBottom:4}}>ESTIMATED REFUND / BALANCE OWING</div>
+<div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10,fontSize:12}}>
+{r24.ref!==null&&<div><span style={{fontWeight:700,color:'#92400e'}}>2024: </span><span style={{fontWeight:700,color:r24.ref>=0?'#166534':'#dc2626'}}>{r24.ref>=0?`Refund ${fm(r24.ref)}`:`Owing ${fm(Math.abs(r24.ref))}`}</span></div>}
+{r25.ref!==null&&<div><span style={{fontWeight:700,color:'#1e40af'}}>2025: </span><span style={{fontWeight:700,color:r25.ref>=0?'#166534':'#dc2626'}}>{r25.ref>=0?`Refund ${fm(r25.ref)}`:`Owing ${fm(Math.abs(r25.ref))}`}</span></div>}
+</div><div style={{fontSize:10,color:'#6b7280',marginTop:4}}>Based on Box 22 totals vs calculated tax. Includes CPP/EI overpayment refunds.</div></div>}
+<div style={{display:'grid',gridTemplateColumns:'1fr 125px 125px',padding:'5px 0',borderBottom:'2px solid #374151',marginBottom:2}}>
+<div style={{paddingLeft:12,fontSize:11,fontWeight:700,color:'#6b7280',textTransform:'uppercase'}}>Line Item</div>
+<div style={{textAlign:'right',paddingRight:12,fontSize:11,fontWeight:700,color:'#92400e'}}>2024</div>
+<div style={{textAlign:'right',paddingRight:12,fontSize:11,fontWeight:700,color:'#1e40af'}}>2025</div></div>
+<Sec title={`INCOME & DEDUCTIONS (${t24.length} T4${t24.length>1?'s':''} / ${t25.length} T4${t25.length>1?'s':''})`}>
+<Row label="Total Gross Employment (Line 10100)" v1={fm(r24.gr)} v2={fm(r25.gr)} bold/>
+{t24.length>1&&t24.map((t,i)=><Row key={`a${i}`} label={`  T4 #${i+1}${t.nm?` (${t.nm})`:''}`} v1={fm(t.b14)} v2="—" sub/>)}
+{t25.length>1&&t25.map((t,i)=><Row key={`b${i}`} label={`  T4 #${i+1}${t.nm?` (${t.nm})`:''}`} v1="—" v2={fm(t.b14)} sub/>)}
+<Row label="Less: RRSP (Line 20800)" v1={fm(r24.ar)} v2={fm(r25.ar)} sub/>
+<Row label="Less: FHSA (Line 20805)" v1={fm(r24.af)} v2={fm(r25.af)} sub/>
+<Row label="Less: CPP Enh+CPP2 Deduction (22215)" v1={fm(r24.cd)} v2={fm(r25.cd)} sub/>
+<Row label="Taxable Income (Line 26000)" v1={fm(r24.ti)} v2={fm(r25.ti)} bold hl/></Sec>
+<Sec title="CPP, CPP2 & EI" color="purple">
+<Row label="Correct CPP (combined income)" v1={fm(r24.c1)} v2={fm(r25.c1)}/>
+<Row label="Correct CPP2" v1={fm(r24.c2)} v2={fm(r25.c2)}/>
+<Row label="Correct EI" v1={fm(r24.ei)} v2={fm(r25.ei)}/>
+{(r24.hd||r25.hd)&&<><Row label="Deducted by employers (T4s)" v1={r24.hd?fm(r24.tCpp+r24.tC2+r24.tEi):'—'} v2={r25.hd?fm(r25.tCpp+r25.tC2+r25.tEi):'—'}/>
+<Row label="CPP/EI Overpayment (refundable)" v1={r24.hd?fm(r24.to):'—'} v2={r25.hd?fm(r25.to):'—'} bold hl/></>}
+<Row label="Net Payroll Cost" v1={fm(r24.tp)} v2={fm(r25.tp)} bold/></Sec>
+<Sec title="FEDERAL TAX (Schedule 1)">
+<Row label="Gross Federal Tax" v1={fm(r24.ft)} v2={fm(r25.ft)}/>
+<Row label="Basic Personal Amount Credit" v1={fm(r24.fb)} v2={fm(r25.fb)} sub/>
+<Row label="Canada Employment Credit" v1={fm(r24.fc2)} v2={fm(r25.fc2)} sub/>
+<Row label="CPP Base Credit" v1={fm(r24.fcp)} v2={fm(r25.fcp)} sub/>
+<Row label="EI Credit" v1={fm(r24.fe)} v2={fm(r25.fe)} sub/>
+<Row label="Total Federal Credits" v1={fm(r24.ftc)} v2={fm(r25.ftc)}/>
+<Row label="Net Federal Tax" v1={fm(r24.nf)} v2={fm(r25.nf)} bold hl/></Sec>
+<Sec title="ONTARIO TAX (ON428)" color="green">
+<Row label="Gross Ontario Tax" v1={fm(r24.ot)} v2={fm(r25.ot)}/>
+<Row label="Ontario Non-Refundable Credits" v1={fm(r24.otc)} v2={fm(r25.otc)} sub/>
+<Row label="Basic Ontario Tax" v1={fm(r24.bo)} v2={fm(r25.bo)}/>
+<Row label="Ontario Surtax (20% + 36%)" v1={fm(r24.st)} v2={fm(r25.st)}/>
+<Row label="Net Ontario Tax" v1={fm(r24.no)} v2={fm(r25.no)} bold/>
+<Row label="Ontario Health Premium" v1={fm(r24.h)} v2={fm(r25.h)}/>
+<Row label="Total ON Tax + Health" v1={fm(r24.no+r24.h)} v2={fm(r25.no+r25.h)} bold hl/></Sec>
+<Sec title="TOTAL TAX & NET INCOME" color="red">
+<Row label="Federal Tax" v1={fm(r24.nf)} v2={fm(r25.nf)}/>
+<Row label="Ontario Tax + Health" v1={fm(r24.no+r24.h)} v2={fm(r25.no+r25.h)}/>
+<Row label="TOTAL INCOME TAX" v1={fm(r24.tt)} v2={fm(r25.tt)} bold hl/>
+<Row label="Payroll (CPP+CPP2+EI)" v1={fm(r24.tp)} v2={fm(r25.tp)}/>
+<Row label="RRSP + FHSA" v1={fm(r24.ar+r24.af)} v2={fm(r25.ar+r25.af)}/>
+<Row label="NET TAKE-HOME" v1={fm(r24.ni)} v2={fm(r25.ni)} bold hl/>
+{(rr>0||fh>0)&&<Row label="Tax Saved by RRSP/FHSA" v1={fm(ts24)} v2={fm(ts25)} bold/>}</Sec>
+</>}
+{tab==="t1map"&&<div style={{fontSize:12,lineHeight:1.8}}>
+<Sec title="T1 GENERAL — MULTI-T4 LINE MAPPING"><div style={{padding:'8px 12px'}}>
+<p style={{fontWeight:700,color:'#1e40af',marginBottom:4}}>Income (All T4s Combined)</p>
+<div style={{lineHeight:2}}><div><b>Line 10100</b> — Employment income: SUM of all T4 Box 14</div><div><b>Line 15000</b> — Total income = Line 10100</div></div>
+<p style={{fontWeight:700,color:'#1e40af',marginBottom:4,marginTop:10}}>Net Income Deductions</p>
+<div style={{lineHeight:2}}><div><b>Line 20800</b> — RRSP deduction</div><div><b>Line 20805</b> — FHSA deduction</div><div><b>Line 22215</b> — CPP enhanced + CPP2 deduction (Schedule 8)</div><div><b>Line 23600 / 26000</b> — Net / Taxable income</div></div>
+<p style={{fontWeight:700,color:'#991b1b',marginBottom:4,marginTop:10}}>Multi-T4 CPP/EI — Schedule 8 (Critical!)</p>
+<div style={{lineHeight:2}}><div><b>Schedule 8</b> — Enter each T4 Box 16, 16.6 separately</div><div style={{paddingLeft:14}}>• Calculates total CPP/CPP2 required</div><div style={{paddingLeft:14}}>• Compares to what employers deducted</div><div style={{paddingLeft:14}}>• <b>Overpayment = refund on Line 44800</b></div><div><b>Line 30800</b> — CPP base credit (from Schedule 8)</div><div><b>Line 31200</b> — EI premiums (sum Box 18, capped)</div></div>
+<p style={{fontWeight:700,color:'#166534',marginBottom:4,marginTop:10}}>Refund / Balance Owing</p>
+<div style={{lineHeight:2}}><div><b>Line 43500</b> — Total payable (Fed + Prov)</div><div><b>Line 43700</b> — Tax deducted (SUM all T4 Box 22)</div><div><b>Line 44800</b> — CPP overpayment</div><div><b>Line 45000</b> — EI overpayment</div><div><b>Line 48400</b> — Refund / <b>48500</b> — Balance owing</div></div>
+</div></Sec>
+<div style={{padding:12,background:'#fef3c7',borderRadius:8,fontSize:11,lineHeight:1.6}}><b>Multi-Employer Alert:</b> Each employer deducts CPP/EI independently. Schedule 8 reconciles. <b>Do not skip Schedule 8.</b></div></div>}
+{tab==="optimize"&&<div style={{fontSize:12,lineHeight:1.7}}>
+<Sec title="MULTI-EMPLOYER OPTIMIZATION" color="amber"><div style={{padding:'8px 12px'}}>
+<p style={{fontWeight:700,color:'#92400e',marginBottom:4}}>1. Claim CPP/EI Overpayment</p><p>Enter T4 Box 16/18 values. Automatic via Schedule 8.</p>
+<p style={{fontWeight:700,color:'#92400e',marginBottom:4,marginTop:10}}>2. Check TD1 Forms</p><p>If each employer applied full BPA, combined withholding may be too low.</p></div></Sec>
+<Sec title="GENERAL OPTIMIZATION" color="green"><div style={{padding:'8px 12px'}}>
+<p style={{fontWeight:700,color:'#166534',marginBottom:4}}>3. RRSP</p><p>At ~{r25.mr}% marginal, max RRSP saves ~{fm(r25.rr*parseFloat(r25.mr)/100)}. 2025 deadline: Mar 2, 2026.</p>
+<p style={{fontWeight:700,color:'#166534',marginBottom:4,marginTop:10}}>4. FHSA</p><p>$8k/yr deductible + tax-free for home. Dec 31 deadline.</p>
+<p style={{fontWeight:700,color:'#166534',marginBottom:4,marginTop:10}}>5. 2024 vs 2025</p><p>Federal lowest: 15% (2024) vs 14.5% (2025). CPP2 max: $188 vs $396.</p>
+<p style={{fontWeight:700,color:'#166534',marginBottom:4,marginTop:10}}>6. Ontario Surtax</p><p>Kicks in ~$90.6K (2024) / ~$93.1K (2025). RRSP near threshold = multiplied savings.</p>
+</div></Sec></div>}
+{tab==="rates"&&<div style={{fontSize:11}}>
+<Sec title="FEDERAL BRACKETS (CRA-CONFIRMED)"><div style={{padding:'4px 12px'}}>
+<table style={{width:'100%',borderCollapse:'collapse',fontSize:11}}><thead><tr style={{borderBottom:'2px solid #d1d5db'}}><th style={{textAlign:'left',padding:3}}>2024</th><th style={{textAlign:'right',padding:3}}>Rate</th><th style={{textAlign:'left',padding:'3px 3px 3px 12px'}}>2025</th><th style={{textAlign:'right',padding:3}}>Rate</th></tr></thead>
+<tbody>{TD[2024].federal.brackets.map((b,i)=>{const b2=TD[2025].federal.brackets[i];return(<tr key={i} style={{borderBottom:'1px solid #f3f4f6'}}><td style={{padding:3}}>{b.max===1/0?`Over ${fm(b.min)}`:`${fm(b.min)}–${fm(b.max)}`}</td><td style={{textAlign:'right',padding:3,fontWeight:700}}>{(b.rate*100).toFixed(1)}%</td><td style={{padding:'3px 3px 3px 12px'}}>{b2.max===1/0?`Over ${fm(b2.min)}`:`${fm(b2.min)}–${fm(b2.max)}`}</td><td style={{textAlign:'right',padding:3,fontWeight:700,color:i===0?'#16a34a':'inherit'}}>{(b2.rate*100).toFixed(1)}%</td></tr>)})}</tbody></table>
+<div style={{marginTop:4,fontSize:10,color:'#16a34a',fontWeight:600}}>* 2025: 14.5% blended (15% Jan-Jun, 14% Jul-Dec)</div></div></Sec>
+<Sec title="ONTARIO BRACKETS (CRA-CONFIRMED)" color="green"><div style={{padding:'4px 12px'}}>
+<table style={{width:'100%',borderCollapse:'collapse',fontSize:11}}><thead><tr style={{borderBottom:'2px solid #d1d5db'}}><th style={{textAlign:'left',padding:3}}>2024</th><th style={{textAlign:'right',padding:3}}>Rate</th><th style={{textAlign:'left',padding:'3px 3px 3px 12px'}}>2025</th><th style={{textAlign:'right',padding:3}}>Rate</th></tr></thead>
+<tbody>{TD[2024].ontario.brackets.map((b,i)=>{const b2=TD[2025].ontario.brackets[i];return(<tr key={i} style={{borderBottom:'1px solid #f3f4f6'}}><td style={{padding:3}}>{b.max===1/0?`Over ${fm(b.min)}`:`${fm(b.min)}–${fm(b.max)}`}</td><td style={{textAlign:'right',padding:3,fontWeight:700}}>{(b.rate*100).toFixed(2)}%</td><td style={{padding:'3px 3px 3px 12px'}}>{b2.max===1/0?`Over ${fm(b2.min)}`:`${fm(b2.min)}–${fm(b2.max)}`}</td><td style={{textAlign:'right',padding:3,fontWeight:700}}>{(b2.rate*100).toFixed(2)}%</td></tr>)})}</tbody></table>
+<div style={{marginTop:4,fontSize:10,color:'#6b7280'}}>Surtax 2024: 20% over $5,315 + 36% over $6,802 | 2025: 20% over $5,710 + 36% over $7,307</div></div></Sec>
+<Sec title="CPP, CPP2 & EI" color="purple"><div style={{padding:'4px 12px'}}>
+<table style={{width:'100%',borderCollapse:'collapse',fontSize:11}}><thead><tr style={{borderBottom:'2px solid #d1d5db'}}><th style={{textAlign:'left',padding:3}}>Param</th><th style={{textAlign:'right',padding:3}}>2024</th><th style={{textAlign:'right',padding:3}}>2025</th></tr></thead>
+<tbody>{[['CPP YMPE',fm(68500),fm(71300)],['CPP Rate','5.95%','5.95%'],['CPP Max',fm(3867.5),fm(4034.1)],['CPP2 YAMPE',fm(73200),fm(81200)],['CPP2 Rate','4%','4%'],['CPP2 Max',fm(188),fm(396)],['EI MIE',fm(63200),fm(65700)],['EI Rate','1.66%','1.64%'],['EI Max',fm(1049.12),fm(1077.48)],['RRSP Limit',fm(31560),fm(32490)],['Fed BPA','$14,156–$15,705','$14,538–$16,129'],['ON BPA',fm(11865),fm(12747)]].map(([l,a,b],i)=>(<tr key={i} style={{borderBottom:'1px solid #f3f4f6'}}><td style={{padding:3}}>{l}</td><td style={{textAlign:'right',padding:3,fontFamily:'monospace'}}>{a}</td><td style={{textAlign:'right',padding:3,fontFamily:'monospace'}}>{b}</td></tr>))}</tbody></table></div></Sec></div>}
+<div style={{marginTop:12,padding:10,background:'#f1f5f9',borderRadius:7,fontSize:9,color:'#64748b',lineHeight:1.5}}>
+CRA-confirmed rates. Educational tool — not tax advice. Consult a CPA before filing.</div></div>)}
+ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+</script>
+</body>
+</html>

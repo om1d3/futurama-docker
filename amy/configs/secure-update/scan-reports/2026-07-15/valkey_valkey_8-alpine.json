@@ -1,0 +1,176 @@
+{
+  "SchemaVersion": 2,
+  "CreatedAt": "2026-07-15T05:05:36.554221034-04:00",
+  "ArtifactName": "valkey/valkey:8-alpine",
+  "ArtifactType": "container_image",
+  "Metadata": {
+    "Size": 42723328,
+    "OS": {
+      "Family": "alpine",
+      "Name": "3.23.5"
+    },
+    "ImageID": "sha256:bc24dc7cdaac93ee4d0f46e9471624a1e7e41c42df5e36d78ef2375fe86f5c3e",
+    "DiffIDs": [
+      "sha256:31ad4a471c6852bfec14d757cc75a566c82a9769f12c3918cf6bf52cc0eeb3d0",
+      "sha256:f68831d58595876c69b819a929a253647c6d1a97926929df1c52f27f16761b77",
+      "sha256:5140b270a3c420326f46d36ffdbad40fedb214e4d5349744f9e5847607fbf2dc",
+      "sha256:5d3bec19b3f471b02b1d7f9e8a96d170e87b39427ed0058c8f51bad5610b6d6a",
+      "sha256:9b742b6113c3b753d10d60803f5012b08ed4683ae68336fb87a378a29291ae4b",
+      "sha256:5f70bf18a086007016e948b04aed3b82103a36bea41755b6cddfaf10ace3c6ef",
+      "sha256:4d91fd14d62cc64df67ce04c3a5f430ef884356ec761a7928e140b81ebfcbecd"
+    ],
+    "RepoTags": [
+      "valkey/valkey:8-alpine"
+    ],
+    "RepoDigests": [
+      "valkey/valkey@sha256:94365b275456ae14621001c03556c732b1d93a0cdeacc317d1bdd52eba680885"
+    ],
+    "ImageConfig": {
+      "architecture": "amd64",
+      "created": "2026-07-14T22:53:23.767021654Z",
+      "history": [
+        {
+          "created": "2026-06-22T19:20:09Z",
+          "created_by": "ADD alpine-minirootfs-3.23.5-x86_64.tar.gz / # buildkit",
+          "comment": "buildkit.dockerfile.v0"
+        },
+        {
+          "created": "2026-06-22T19:20:09Z",
+          "created_by": "CMD [\"/bin/sh\"]",
+          "comment": "buildkit.dockerfile.v0",
+          "empty_layer": true
+        },
+        {
+          "created": "2026-07-14T22:42:33Z",
+          "created_by": "ENV VALKEY_VERSION=8.1.8",
+          "comment": "buildkit.dockerfile.v0",
+          "empty_layer": true
+        },
+        {
+          "created": "2026-07-14T22:42:33Z",
+          "created_by": "LABEL org.opencontainers.image.source=https://github.com/valkey-io/valkey",
+          "comment": "buildkit.dockerfile.v0",
+          "empty_layer": true
+        },
+        {
+          "created": "2026-07-14T22:42:33Z",
+          "created_by": "RUN /bin/sh -c set -eux; \taddgroup -S -g 1000 valkey; \tadduser -S -G valkey -u 999 valkey # buildkit",
+          "comment": "buildkit.dockerfile.v0"
+        },
+        {
+          "created": "2026-07-14T22:42:35Z",
+          "created_by": "RUN /bin/sh -c set -eux; \tapk add --no-cache \t\ttzdata \t\tsetpriv \t\topenssl \t\tlibgcc \t; # buildkit",
+          "comment": "buildkit.dockerfile.v0"
+        },
+        {
+          "created": "2026-07-14T22:53:23Z",
+          "created_by": "COPY /usr/local /usr/local # buildkit",
+          "comment": "buildkit.dockerfile.v0"
+        },
+        {
+          "created": "2026-07-14T22:53:23Z",
+          "created_by": "RUN /bin/sh -c mkdir /data \u0026\u0026 \tchown valkey:valkey /data \u0026\u0026 \tchmod 1777 /data \u0026\u0026 \tmkdir -p /run/valkey \u0026\u0026 \tchown valkey:valkey /run/valkey \u0026\u0026 \tchmod 1777 /run/valkey \u0026\u0026 \tvalkey-cli --version \u0026\u0026 \tvalkey-server --version # buildkit",
+          "comment": "buildkit.dockerfile.v0"
+        },
+        {
+          "created": "2026-07-14T22:53:23Z",
+          "created_by": "WORKDIR /data",
+          "comment": "buildkit.dockerfile.v0"
+        },
+        {
+          "created": "2026-07-14T22:53:23Z",
+          "created_by": "COPY docker-entrypoint.sh /usr/local/bin/ # buildkit",
+          "comment": "buildkit.dockerfile.v0"
+        },
+        {
+          "created": "2026-07-14T22:53:23Z",
+          "created_by": "ENTRYPOINT [\"docker-entrypoint.sh\"]",
+          "comment": "buildkit.dockerfile.v0",
+          "empty_layer": true
+        },
+        {
+          "created": "2026-07-14T22:53:23Z",
+          "created_by": "EXPOSE [6379/tcp]",
+          "comment": "buildkit.dockerfile.v0",
+          "empty_layer": true
+        },
+        {
+          "created": "2026-07-14T22:53:23Z",
+          "created_by": "CMD [\"valkey-server\"]",
+          "comment": "buildkit.dockerfile.v0",
+          "empty_layer": true
+        }
+      ],
+      "os": "linux",
+      "rootfs": {
+        "type": "layers",
+        "diff_ids": [
+          "sha256:31ad4a471c6852bfec14d757cc75a566c82a9769f12c3918cf6bf52cc0eeb3d0",
+          "sha256:f68831d58595876c69b819a929a253647c6d1a97926929df1c52f27f16761b77",
+          "sha256:5140b270a3c420326f46d36ffdbad40fedb214e4d5349744f9e5847607fbf2dc",
+          "sha256:5d3bec19b3f471b02b1d7f9e8a96d170e87b39427ed0058c8f51bad5610b6d6a",
+          "sha256:9b742b6113c3b753d10d60803f5012b08ed4683ae68336fb87a378a29291ae4b",
+          "sha256:5f70bf18a086007016e948b04aed3b82103a36bea41755b6cddfaf10ace3c6ef",
+          "sha256:4d91fd14d62cc64df67ce04c3a5f430ef884356ec761a7928e140b81ebfcbecd"
+        ]
+      },
+      "config": {
+        "Cmd": [
+          "valkey-server"
+        ],
+        "Entrypoint": [
+          "docker-entrypoint.sh"
+        ],
+        "Env": [
+          "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+          "VALKEY_VERSION=8.1.8"
+        ],
+        "Labels": {
+          "org.opencontainers.image.source": "https://github.com/valkey-io/valkey"
+        },
+        "WorkingDir": "/data",
+        "ExposedPorts": {
+          "6379/tcp": {}
+        },
+        "ArgsEscaped": true
+      }
+    },
+    "Layers": [
+      {
+        "Size": 8693760,
+        "DiffID": "sha256:31ad4a471c6852bfec14d757cc75a566c82a9769f12c3918cf6bf52cc0eeb3d0"
+      },
+      {
+        "Size": 10752,
+        "DiffID": "sha256:f68831d58595876c69b819a929a253647c6d1a97926929df1c52f27f16761b77"
+      },
+      {
+        "Size": 1993216,
+        "DiffID": "sha256:5140b270a3c420326f46d36ffdbad40fedb214e4d5349744f9e5847607fbf2dc"
+      },
+      {
+        "Size": 32017920,
+        "DiffID": "sha256:5d3bec19b3f471b02b1d7f9e8a96d170e87b39427ed0058c8f51bad5610b6d6a"
+      },
+      {
+        "Size": 2560,
+        "DiffID": "sha256:9b742b6113c3b753d10d60803f5012b08ed4683ae68336fb87a378a29291ae4b"
+      },
+      {
+        "Size": 1024,
+        "DiffID": "sha256:5f70bf18a086007016e948b04aed3b82103a36bea41755b6cddfaf10ace3c6ef"
+      },
+      {
+        "Size": 4096,
+        "DiffID": "sha256:4d91fd14d62cc64df67ce04c3a5f430ef884356ec761a7928e140b81ebfcbecd"
+      }
+    ]
+  },
+  "Results": [
+    {
+      "Target": "valkey/valkey:8-alpine (alpine 3.23.5)",
+      "Class": "os-pkgs",
+      "Type": "alpine"
+    }
+  ]
+}

@@ -1,0 +1,330 @@
+{
+  "SchemaVersion": 2,
+  "CreatedAt": "2026-02-18T04:54:17.759873078-05:00",
+  "ArtifactName": "pihole/pihole:latest",
+  "ArtifactType": "container_image",
+  "Metadata": {
+    "Size": 100030976,
+    "OS": {
+      "Family": "alpine",
+      "Name": "3.23.3"
+    },
+    "ImageID": "sha256:0f48fbd2ea9d7bca9c029c9b707cffc49758c2a78a52f3926e10598faaa59fa5",
+    "DiffIDs": [
+      "sha256:989e799e634906e94dc9a5ee2ee26fc92ad260522990f26e707861a5f52bf64e",
+      "sha256:aaf77588869fbaf9aad715dc3d8e82cd1632a2b5ed997f9f93b603d708f03d6a",
+      "sha256:5f70bf18a086007016e948b04aed3b82103a36bea41755b6cddfaf10ace3c6ef",
+      "sha256:9bbdb967e7789d65e78fd7d2261b8890a21159b60e28ba0520dc442d42506d7f",
+      "sha256:a3df439d628b6639662d35f2d07f5e95eae8f8ea14c16ebae0dcd858d75afe72",
+      "sha256:01c919a0ca256dba3ee66e01a244d22d38fb836b54aad5897596eff2cfd0bbc4",
+      "sha256:0b1bb55691433dccecf10ff8e3bed18bf237c5f7b46dde721186590c0e6cb60a",
+      "sha256:4e33e80328c4a8917c83ea4763d93ef92693ff57fb2e2554998cda6283765c45",
+      "sha256:660771905f71db0a8a81055ea2a6d0e6acb403517c827066e2a7c1f167432e87",
+      "sha256:c69ab67ed162e23347e370a1b667c9adf1c7cfaa42c270ab3fb62c1eca5abb0d",
+      "sha256:72385624c68a0df612c61d39107867ac1f30aca5ea331b2a23266033cdc1ff70"
+    ],
+    "RepoTags": [
+      "pihole/pihole:latest"
+    ],
+    "RepoDigests": [
+      "pihole/pihole@sha256:ee348529cea9601df86ad94d62a39cad26117e1eac9e82d8876aa0ec7fe1ba27"
+    ],
+    "ImageConfig": {
+      "architecture": "amd64",
+      "created": "2026-02-17T20:50:26.810479005Z",
+      "history": [
+        {
+          "created": "2026-01-28T01:18:04Z",
+          "created_by": "ADD alpine-minirootfs-3.23.3-x86_64.tar.gz / # buildkit",
+          "comment": "buildkit.dockerfile.v0"
+        },
+        {
+          "created": "2026-01-28T01:18:04Z",
+          "created_by": "CMD [\"/bin/sh\"]",
+          "comment": "buildkit.dockerfile.v0",
+          "empty_layer": true
+        },
+        {
+          "created": "2026-02-17T20:50:23Z",
+          "created_by": "ARG TARGETPLATFORM=linux/amd64",
+          "comment": "buildkit.dockerfile.v0",
+          "empty_layer": true
+        },
+        {
+          "created": "2026-02-17T20:50:23Z",
+          "created_by": "ARG WEB_BRANCH=master",
+          "comment": "buildkit.dockerfile.v0",
+          "empty_layer": true
+        },
+        {
+          "created": "2026-02-17T20:50:23Z",
+          "created_by": "ARG CORE_BRANCH=master",
+          "comment": "buildkit.dockerfile.v0",
+          "empty_layer": true
+        },
+        {
+          "created": "2026-02-17T20:50:23Z",
+          "created_by": "ARG FTL_BRANCH=master",
+          "comment": "buildkit.dockerfile.v0",
+          "empty_layer": true
+        },
+        {
+          "created": "2026-02-17T20:50:23Z",
+          "created_by": "ARG PIHOLE_DOCKER_TAG=2026.02.0",
+          "comment": "buildkit.dockerfile.v0",
+          "empty_layer": true
+        },
+        {
+          "created": "2026-02-17T20:50:23Z",
+          "created_by": "ARG PADD_BRANCH=master",
+          "comment": "buildkit.dockerfile.v0",
+          "empty_layer": true
+        },
+        {
+          "created": "2026-02-17T20:50:23Z",
+          "created_by": "ARG CORE_FORK=pi-hole",
+          "comment": "buildkit.dockerfile.v0",
+          "empty_layer": true
+        },
+        {
+          "created": "2026-02-17T20:50:23Z",
+          "created_by": "ARG WEB_FORK=pi-hole",
+          "comment": "buildkit.dockerfile.v0",
+          "empty_layer": true
+        },
+        {
+          "created": "2026-02-17T20:50:23Z",
+          "created_by": "ARG PADD_FORK=pi-hole",
+          "comment": "buildkit.dockerfile.v0",
+          "empty_layer": true
+        },
+        {
+          "created": "2026-02-17T20:50:23Z",
+          "created_by": "ARG PIHOLE_UID=1000",
+          "comment": "buildkit.dockerfile.v0",
+          "empty_layer": true
+        },
+        {
+          "created": "2026-02-17T20:50:23Z",
+          "created_by": "ARG PIHOLE_GID=1000",
+          "comment": "buildkit.dockerfile.v0",
+          "empty_layer": true
+        },
+        {
+          "created": "2026-02-17T20:50:23Z",
+          "created_by": "ENV DNSMASQ_USER=pihole",
+          "comment": "buildkit.dockerfile.v0",
+          "empty_layer": true
+        },
+        {
+          "created": "2026-02-17T20:50:23Z",
+          "created_by": "ENV FTL_CMD=no-daemon",
+          "comment": "buildkit.dockerfile.v0",
+          "empty_layer": true
+        },
+        {
+          "created": "2026-02-17T20:50:23Z",
+          "created_by": "RUN |11 TARGETPLATFORM=linux/amd64 WEB_BRANCH=master CORE_BRANCH=master FTL_BRANCH=master PIHOLE_DOCKER_TAG=2026.02.0 PADD_BRANCH=master CORE_FORK=pi-hole WEB_FORK=pi-hole PADD_FORK=pi-hole PIHOLE_UID=1000 PIHOLE_GID=1000 /bin/sh -c apk add --no-cache     bash     bash-completion     bind-tools     binutils     coreutils     curl     git     grep     iproute2     jq     libcap     logrotate     ncurses     procps-ng     psmisc     shadow     sudo     tzdata     unzip     wget # buildkit",
+          "comment": "buildkit.dockerfile.v0"
+        },
+        {
+          "created": "2026-02-17T20:50:23Z",
+          "created_by": "RUN |11 TARGETPLATFORM=linux/amd64 WEB_BRANCH=master CORE_BRANCH=master FTL_BRANCH=master PIHOLE_DOCKER_TAG=2026.02.0 PADD_BRANCH=master CORE_FORK=pi-hole WEB_FORK=pi-hole PADD_FORK=pi-hole PIHOLE_UID=1000 PIHOLE_GID=1000 /bin/sh -c if [ \"${PIHOLE_DOCKER_TAG}\" = \"nightly\" ]; then     apk add --no-cache gdb screen \u0026\u0026     echo \"ulimit -c unlimited\" \u003e\u003e /etc/profile \u0026\u0026     echo \"handle SIGHUP nostop SIGPIPE nostop SIGTERM nostop SIG32 nostop SIG33 nostop SIG34 nostop SIG35 nostop SIG36 nostop SIG37 nostop SIG38 nostop SIG39 nostop SIG40 nostop SIG41 nostop\" \u003e /root/.gdbinit;     fi # buildkit",
+          "comment": "buildkit.dockerfile.v0"
+        },
+        {
+          "created": "2026-02-17T20:50:23Z",
+          "created_by": "ADD https://ftl.pi-hole.net/macvendor.db /macvendor.db # buildkit",
+          "comment": "buildkit.dockerfile.v0"
+        },
+        {
+          "created": "2026-02-17T20:50:23Z",
+          "created_by": "COPY crontab.txt /crontab.txt # buildkit",
+          "comment": "buildkit.dockerfile.v0"
+        },
+        {
+          "created": "2026-02-17T20:50:23Z",
+          "created_by": "ADD --chmod=0755 https://raw.githubusercontent.com/pi-hole/PADD/master/padd.sh /usr/local/bin/padd # buildkit",
+          "comment": "buildkit.dockerfile.v0"
+        },
+        {
+          "created": "2026-02-17T20:50:26Z",
+          "created_by": "RUN |11 TARGETPLATFORM=linux/amd64 WEB_BRANCH=master CORE_BRANCH=master FTL_BRANCH=master PIHOLE_DOCKER_TAG=2026.02.0 PADD_BRANCH=master CORE_FORK=pi-hole WEB_FORK=pi-hole PADD_FORK=pi-hole PIHOLE_UID=1000 PIHOLE_GID=1000 /bin/sh -c clone_repo() {         FORK=\"$1\";         REPO=\"$2\";         BRANCH=\"$3\";         DEST=\"$4\";         CLONE_BRANCH=\"$BRANCH\";         if [ \"$BRANCH\" = \"master\" ]; then             CLONE_BRANCH=$(curl -s https://api.github.com/repos/${FORK}/${REPO}/releases/latest | jq -r .tag_name);         fi;         git clone --branch \"$CLONE_BRANCH\" --single-branch --depth 1 \"https://github.com/${FORK}/${REPO}.git\" \"$DEST\";         cd \"$DEST\";         if [ \"$BRANCH\" = \"master\" ]; then git checkout -b master; fi;     };     clone_repo \"${WEB_FORK}\" \"web\" \"${WEB_BRANCH}\" \"/var/www/html/admin\";     clone_repo \"${CORE_FORK}\" \"pi-hole\" \"${CORE_BRANCH}\" \"/etc/.pihole\" # buildkit",
+          "comment": "buildkit.dockerfile.v0"
+        },
+        {
+          "created": "2026-02-17T20:50:26Z",
+          "created_by": "RUN |11 TARGETPLATFORM=linux/amd64 WEB_BRANCH=master CORE_BRANCH=master FTL_BRANCH=master PIHOLE_DOCKER_TAG=2026.02.0 PADD_BRANCH=master CORE_FORK=pi-hole WEB_FORK=pi-hole PADD_FORK=pi-hole PIHOLE_UID=1000 PIHOLE_GID=1000 /bin/sh -c cd /etc/.pihole \u0026\u0026     install -Dm755 -d /opt/pihole \u0026\u0026     install -Dm755 -t /opt/pihole gravity.sh \u0026\u0026     install -Dm755 -t /opt/pihole ./advanced/Scripts/*.sh \u0026\u0026     install -Dm755 -t /opt/pihole ./advanced/Scripts/COL_TABLE \u0026\u0026     install -Dm755 -d /etc/pihole \u0026\u0026     install -Dm644 -t /etc/pihole ./advanced/Templates/logrotate \u0026\u0026     install -Dm755 -d /var/log/pihole \u0026\u0026     install -Dm755 -d /var/lib/logrotate \u0026\u0026     install -Dm755 -t /usr/local/bin pihole \u0026\u0026     install -Dm644 ./advanced/bash-completion/pihole.bash /etc/bash_completion.d/pihole \u0026\u0026     install -Dm644 ./advanced/bash-completion/pihole-ftl.bash /etc/bash_completion.d/pihole-FTL \u0026\u0026     install -T -m 0755 ./advanced/Templates/pihole-FTL-prestart.sh /opt/pihole/pihole-FTL-prestart.sh \u0026\u0026     install -T -m 0755 ./advanced/Templates/pihole-FTL-poststop.sh /opt/pihole/pihole-FTL-poststop.sh \u0026\u0026     addgroup -S pihole -g ${PIHOLE_GID} \u0026\u0026 adduser -S pihole -G pihole -u ${PIHOLE_UID} \u0026\u0026     echo \"${PIHOLE_DOCKER_TAG}\" \u003e /pihole.docker.tag # buildkit",
+          "comment": "buildkit.dockerfile.v0"
+        },
+        {
+          "created": "2026-02-17T20:50:26Z",
+          "created_by": "COPY --chmod=0755 bash_functions.sh /usr/bin/bash_functions.sh # buildkit",
+          "comment": "buildkit.dockerfile.v0"
+        },
+        {
+          "created": "2026-02-17T20:50:26Z",
+          "created_by": "COPY --chmod=0755 start.sh /usr/bin/start.sh # buildkit",
+          "comment": "buildkit.dockerfile.v0"
+        },
+        {
+          "created": "2026-02-17T20:50:26Z",
+          "created_by": "EXPOSE [53/tcp 53/udp]",
+          "comment": "buildkit.dockerfile.v0",
+          "empty_layer": true
+        },
+        {
+          "created": "2026-02-17T20:50:26Z",
+          "created_by": "EXPOSE [67/udp]",
+          "comment": "buildkit.dockerfile.v0",
+          "empty_layer": true
+        },
+        {
+          "created": "2026-02-17T20:50:26Z",
+          "created_by": "EXPOSE [80/tcp]",
+          "comment": "buildkit.dockerfile.v0",
+          "empty_layer": true
+        },
+        {
+          "created": "2026-02-17T20:50:26Z",
+          "created_by": "EXPOSE [123/udp]",
+          "comment": "buildkit.dockerfile.v0",
+          "empty_layer": true
+        },
+        {
+          "created": "2026-02-17T20:50:26Z",
+          "created_by": "EXPOSE [443/tcp]",
+          "comment": "buildkit.dockerfile.v0",
+          "empty_layer": true
+        },
+        {
+          "created": "2026-02-17T20:50:26Z",
+          "created_by": "RUN |11 TARGETPLATFORM=linux/amd64 WEB_BRANCH=master CORE_BRANCH=master FTL_BRANCH=master PIHOLE_DOCKER_TAG=2026.02.0 PADD_BRANCH=master CORE_FORK=pi-hole WEB_FORK=pi-hole PADD_FORK=pi-hole PIHOLE_UID=1000 PIHOLE_GID=1000 /bin/sh -c if   [ \"$TARGETPLATFORM\" = \"linux/amd64\" ];    then FTLARCH=amd64;     elif [ \"$TARGETPLATFORM\" = \"linux/386\" ];      then FTLARCH=386;     elif [ \"$TARGETPLATFORM\" = \"linux/arm/v6\" ];   then FTLARCH=armv6;     elif [ \"$TARGETPLATFORM\" = \"linux/arm/v7\" ];   then FTLARCH=armv7;     elif [ \"$TARGETPLATFORM\" = \"linux/arm64\" ];    then FTLARCH=arm64;     elif [ \"$TARGETPLATFORM\" = \"linux/riscv64\" ];  then FTLARCH=riscv64;     else FTLARCH=amd64; fi     \u0026\u0026 echo \"Arch: ${TARGETPLATFORM}, FTLARCH: ${FTLARCH}\"     \u0026\u0026 if [ \"${FTL_BRANCH}\" = \"master\" ]; then URL=\"https://github.com/pi-hole/ftl/releases/latest/download\"; else URL=\"https://ftl.pi-hole.net/${FTL_BRANCH}\"; fi     \u0026\u0026 curl -sSL \"${URL}/pihole-FTL-${FTLARCH}\" -o /usr/bin/pihole-FTL     \u0026\u0026 chmod +x /usr/bin/pihole-FTL     \u0026\u0026 readelf -h /usr/bin/pihole-FTL || (echo \"Error with downloaded FTL binary\" \u0026\u0026 exit 1)     \u0026\u0026 /usr/bin/pihole-FTL  -vv # buildkit",
+          "comment": "buildkit.dockerfile.v0"
+        },
+        {
+          "created": "2026-02-17T20:50:26Z",
+          "created_by": "HEALTHCHECK \u0026{[\"CMD-SHELL\" \"dig -p $(pihole-FTL --config dns.port) +short +norecurse +retry=0 @127.0.0.1 pi.hole || exit 1\"] \"0s\" \"0s\" \"0s\" \"0s\" '\\x00'}",
+          "comment": "buildkit.dockerfile.v0",
+          "empty_layer": true
+        },
+        {
+          "created": "2026-02-17T20:50:26Z",
+          "created_by": "ENTRYPOINT [\"start.sh\"]",
+          "comment": "buildkit.dockerfile.v0",
+          "empty_layer": true
+        }
+      ],
+      "os": "linux",
+      "rootfs": {
+        "type": "layers",
+        "diff_ids": [
+          "sha256:989e799e634906e94dc9a5ee2ee26fc92ad260522990f26e707861a5f52bf64e",
+          "sha256:aaf77588869fbaf9aad715dc3d8e82cd1632a2b5ed997f9f93b603d708f03d6a",
+          "sha256:5f70bf18a086007016e948b04aed3b82103a36bea41755b6cddfaf10ace3c6ef",
+          "sha256:9bbdb967e7789d65e78fd7d2261b8890a21159b60e28ba0520dc442d42506d7f",
+          "sha256:a3df439d628b6639662d35f2d07f5e95eae8f8ea14c16ebae0dcd858d75afe72",
+          "sha256:01c919a0ca256dba3ee66e01a244d22d38fb836b54aad5897596eff2cfd0bbc4",
+          "sha256:0b1bb55691433dccecf10ff8e3bed18bf237c5f7b46dde721186590c0e6cb60a",
+          "sha256:4e33e80328c4a8917c83ea4763d93ef92693ff57fb2e2554998cda6283765c45",
+          "sha256:660771905f71db0a8a81055ea2a6d0e6acb403517c827066e2a7c1f167432e87",
+          "sha256:c69ab67ed162e23347e370a1b667c9adf1c7cfaa42c270ab3fb62c1eca5abb0d",
+          "sha256:72385624c68a0df612c61d39107867ac1f30aca5ea331b2a23266033cdc1ff70"
+        ]
+      },
+      "config": {
+        "Healthcheck": {
+          "Test": [
+            "CMD-SHELL",
+            "dig -p $(pihole-FTL --config dns.port) +short +norecurse +retry=0 @127.0.0.1 pi.hole || exit 1"
+          ]
+        },
+        "Entrypoint": [
+          "start.sh"
+        ],
+        "Env": [
+          "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+          "DNSMASQ_USER=pihole",
+          "FTL_CMD=no-daemon"
+        ],
+        "Labels": {
+          "org.opencontainers.image.created": "2026-02-17T20:50:04.301Z",
+          "org.opencontainers.image.description": "The official Pi-hole Docker image from pi-hole.net",
+          "org.opencontainers.image.licenses": "NOASSERTION",
+          "org.opencontainers.image.revision": "b890f5db95e837f8b94f954a25f2ea3d2dc54765",
+          "org.opencontainers.image.source": "https://github.com/pi-hole/docker-pi-hole",
+          "org.opencontainers.image.title": "docker-pi-hole",
+          "org.opencontainers.image.url": "https://github.com/pi-hole/docker-pi-hole",
+          "org.opencontainers.image.version": "2026.02.0"
+        },
+        "WorkingDir": "/",
+        "ExposedPorts": {
+          "123/udp": {},
+          "443/tcp": {},
+          "53/tcp": {},
+          "53/udp": {},
+          "67/udp": {},
+          "80/tcp": {}
+        }
+      }
+    },
+    "Layers": [
+      {
+        "Size": 8724480,
+        "DiffID": "sha256:989e799e634906e94dc9a5ee2ee26fc92ad260522990f26e707861a5f52bf64e"
+      },
+      {
+        "Size": 50571776,
+        "DiffID": "sha256:aaf77588869fbaf9aad715dc3d8e82cd1632a2b5ed997f9f93b603d708f03d6a"
+      },
+      {
+        "Size": 1024,
+        "DiffID": "sha256:5f70bf18a086007016e948b04aed3b82103a36bea41755b6cddfaf10ace3c6ef"
+      },
+      {
+        "Size": 3446272,
+        "DiffID": "sha256:9bbdb967e7789d65e78fd7d2261b8890a21159b60e28ba0520dc442d42506d7f"
+      },
+      {
+        "Size": 2048,
+        "DiffID": "sha256:a3df439d628b6639662d35f2d07f5e95eae8f8ea14c16ebae0dcd858d75afe72"
+      },
+      {
+        "Size": 83968,
+        "DiffID": "sha256:01c919a0ca256dba3ee66e01a244d22d38fb836b54aad5897596eff2cfd0bbc4"
+      },
+      {
+        "Size": 9089536,
+        "DiffID": "sha256:0b1bb55691433dccecf10ff8e3bed18bf237c5f7b46dde721186590c0e6cb60a"
+      },
+      {
+        "Size": 216576,
+        "DiffID": "sha256:4e33e80328c4a8917c83ea4763d93ef92693ff57fb2e2554998cda6283765c45"
+      },
+      {
+        "Size": 14336,
+        "DiffID": "sha256:660771905f71db0a8a81055ea2a6d0e6acb403517c827066e2a7c1f167432e87"
+      },
+      {
+        "Size": 7680,
+        "DiffID": "sha256:c69ab67ed162e23347e370a1b667c9adf1c7cfaa42c270ab3fb62c1eca5abb0d"
+      },
+      {
+        "Size": 27873280,
+        "DiffID": "sha256:72385624c68a0df612c61d39107867ac1f30aca5ea331b2a23266033cdc1ff70"
+      }
+    ]
+  },
+  "Results": [
+    {
+      "Target": "pihole/pihole:latest (alpine 3.23.3)",
+      "Class": "os-pkgs",
+      "Type": "alpine"
+    },
+    {
+      "Target": "Node.js",
+      "Class": "lang-pkgs",
+      "Type": "node-pkg"
+    }
+  ]
+}

@@ -2,9 +2,9 @@
 
 ## operational runbook
 
-**document version:** 3.0
-**infrastructure version:** 99
-**last updated:** february 2026
+**document version:** 5.0
+**infrastructure version:** 20260810.2
+**last updated:** august 2026
 
 ---
 
@@ -15,182 +15,148 @@
 3. [weekly operations](#weekly-operations)
 4. [monthly operations](#monthly-operations)
 5. [common tasks](#common-tasks)
-6. [backup procedures](#backup-procedures)
-7. [restore procedures](#restore-procedures)
-8. [emergency procedures](#emergency-procedures)
-9. [service-specific maintenance](#service-specific-maintenance)
-10. [system maintenance](#system-maintenance)
+6. [compose change procedure](#compose-change-procedure)
+7. [replica hosting duties](#replica-hosting-duties)
+8. [backup procedures](#backup-procedures)
+9. [restore procedures](#restore-procedures)
+10. [emergency procedures](#emergency-procedures)
+11. [service-specific maintenance](#service-specific-maintenance)
+12. [host (Debian) maintenance](#host-debian-maintenance)
 
 ---
 
 ## overview
 
-amy runs 29 active services managed by a single docker-compose.yaml (v99). most maintenance is automated through cron jobs and the secure container update system. unlike bender, amy can execute scripts directly without copying to `/tmp/`.
+amy runs 25 of 31 defined services from a single docker-compose.yaml (20260810.2); six are parked. automation is lighter than bender's – no build containers, no SMART subsystem (single SSD, still worth a manual smartctl habit), no replication *source* duties.
 
 ### automated tasks
 
 | task | schedule | system |
 |------|----------|--------|
-| container vulnerability scan | wednesday 04:30 | secure-container-update.sh weekly |
-| retry blocked containers | all other days 04:30 | secure-container-update.sh retry |
-| pihole config sync | hourly (from bender) | nebula-sync on bender |
-| postgresql backup | daily | postgres-backup container |
-| image update notifications | wednesday 04:00 | diun |
+| container vulnerability scan | wednesday 04:30 | secure-container-update.sh weekly (crontab) |
+| retry blocked containers | other days 04:30 | secure-container-update.sh retry (crontab) |
+| image update notifications | wednesday 04:00 | diun → local ntfy |
+| postgresql backup (5 databases) | daily | postgres-backup container (internal @daily) |
+| switch config backup | hourly | oxidized → github.com/om1d3/nod-config |
+| receive bender's replica | daily 03:30 | (driven from bender) |
+| pihole config refresh | hourly | nebula-sync push from bender |
 
 ---
 
 ## daily operations
 
-### verify all containers running
-
 ```bash
 cd /docker-compose
 
-# quick count (expect 29)
+# quick count (expect 31)
 docker compose ps --format "{{.Names}}" | wc -l
 
-# show any non-running containers
+# non-running / unhealthy
 docker compose ps --format "table {{.Names}}\t{{.Status}}" | grep -v "Up"
-
-# check for unhealthy containers
 docker ps --format "{{.Names}}\t{{.Status}}" | grep -i "unhealthy"
-```
 
-### check notification system
-
-```bash
-# verify ntfy is responding
-curl -s -o /dev/null -w "%{http_code}" http://localhost:8888
-
-# send test notification
-curl -s -X POST http://localhost:8888/test \
-  -H "Title: Health Check" \
-  -d "Amy maintenance check $(date)"
+# the hub services specifically – silent ntfy is silent everything
+curl -s -o /dev/null -w "ntfy: %{http_code}\n" http://localhost:8888
+curl -s -o /dev/null -w "beszel: %{http_code}\n" http://localhost:8090
 ```
 
 ---
 
 ## weekly operations
 
-### review update reports
+### update reports and retry queue
 
 ```bash
-# list recent reports
-ls -lt /docker-compose/reports/weekly-reports/ | head -5
-
-# read latest report
-cat /docker-compose/reports/weekly-reports/$(ls -t /docker-compose/reports/weekly-reports/ | head -1)
+cat /docker-compose/configs/secure-update/retry-queue.json 2>/dev/null   # path VERIFY (see 04)
+./scripts/secure-container-update.sh status
 ```
 
-### check retry queue
+### oxidized freshness
 
 ```bash
-cat /docker-compose/configs/secure-update/retry-queue.json
+# last commit age on nod-config – hours old is healthy, days old means PAT or reachability
+docker logs oxidized --tail 20
+curl -s http://localhost:8889/nodes | head -5
 ```
 
-if containers are stuck for more than a week:
+### replica landing zone
 
 ```bash
-bash /docker-compose/scripts/secure-container-update.sh scan <container_name>
+ls -la /docker/backups/bender-replica/
+df -h /                                   # amy's single SSD carries the replica – watch headroom
 ```
 
-### check disk usage
+### disk health (manual habit – no smart-test.sh here)
 
 ```bash
-# filesystem usage
-df -h /
-
-# docker disk usage
-docker system df
-
-# largest directories
-du -sh /docker/*/ 2>/dev/null | sort -rh | head -10
-du -sh /portainer/*/ 2>/dev/null | sort -rh | head -5
+sudo smartctl -H /dev/sda && sudo smartctl -A /dev/sda | grep -E "Reallocated|Pending|Offline_Unc|CRC"
 ```
 
 ---
 
 ## monthly operations
 
-### clean up unused docker resources
-
 ```bash
-cd /docker-compose
-
-# remove unused images
 docker image prune -f
-
-# remove build cache
 docker builder prune -f
 
-# check for dangling volumes
-docker volume ls --filter dangling=true
-```
-
-### verify backups
-
-```bash
-# check postgres backup exists and is recent
+# verify backups: recent, non-empty, all five databases represented
 ls -lht /docker/postgres-backup/ | head -10
-
-# verify backup sizes are reasonable
 find /docker/postgres-backup/ -name "*.sql*" -mtime -1 -exec ls -lh {} \;
-```
 
-### system updates
-
-```bash
-# update debian packages
-apt update && apt upgrade -y
-
-# check if reboot required
-[ -f /var/run/reboot-required ] && echo "Reboot required" || echo "No reboot needed"
+# debian housekeeping
+sudo apt update && apt list --upgradable
 ```
 
 ---
 
 ## common tasks
 
-### restart a single service
-
 ```bash
 cd /docker-compose
-docker compose restart <service_name>
+
+docker compose restart <service>
+docker logs <service> --tail 50
+
+# manual single-container update
+docker compose pull <service> && docker compose up -d <service>
+
+# env/compose change (recreation mandatory) + verification
+docker compose up -d --force-recreate <service>
+docker inspect <service> --format '{{range .Config.Env}}{{println .}}{{end}}' | grep <VAR>
 ```
 
-### restart all services
+---
+
+## compose change procedure
+
+same ritual as bender, minus the TrueNAS ceremony:
+
+1. edit docker-compose.yaml → bump header version + dated changelog entry
+2. new secret? add to `.env` (**hex**), sync the .env header version, changelog it
+3. `docker compose up -d --force-recreate <changed services>`
+4. verify via `docker inspect`
+5. update docs, sync futurama-docker (compose + .env.gpg + .env.example + docs), commit together. **count sweep** on service add/remove: `grep -rn "31\|expected:" docs/`
+6. new tsdproxy name? it appears in DNS on bender's next hourly scrape (or trigger it from bender: `bash /mnt/BIG/filme/docker-compose/scripts/pihole-dns-update.sh`), then `dig <name>.home.arpa @10.30.0.2`
+
+---
+
+## replica hosting duties
+
+the entire contract, checked in one block:
 
 ```bash
-cd /docker-compose
-docker compose down && docker compose up -d
+# 1. SSH trust for bender's root key still valid (run FROM bender):
+#    ssh -o BatchMode=yes kube@10.30.0.11 true
+# 2. destination healthy and owned by kube:
+ls -ld /docker/backups/bender-replica && stat -c '%U:%G' /docker/backups/bender-replica
+# 3. fresh content (dated within ~24h):
+ls -la /docker/backups/bender-replica/docker-compose/
+# 4. disk headroom:
+df -h /
 ```
 
-### view logs
-
-```bash
-# recent logs
-docker logs <container_name> --tail 50
-
-# follow logs
-docker logs <container_name> -f
-
-# logs with timestamps
-docker logs <container_name> --tail 100 -t
-```
-
-### update a single container manually
-
-```bash
-cd /docker-compose
-docker compose pull <service_name>
-docker compose up -d <service_name>
-```
-
-### check container resource usage
-
-```bash
-docker stats --no-stream
-```
+never repurpose, prune, or "organize" that directory from the amy side – retention is managed by bender's script.
 
 ---
 
@@ -198,290 +164,246 @@ docker stats --no-stream
 
 ### automated postgres backup
 
-postgres-backup runs daily and backs up atuin, miniflux, sss, mealie, and stirling:
-
 ```bash
-# verify backup container is running
 docker ps --format "{{.Names}}\t{{.Status}}" | grep postgres-backup
-
-# check latest backups
 ls -lht /docker/postgres-backup/ | head -10
 ```
 
 ### manual postgres backup
 
 ```bash
-# full dump (all databases)
-docker exec postgres pg_dumpall -U postgres > /docker/backups/postgres/manual-$(date +%Y%m%d).sql
-
-# single database
-docker exec postgres pg_dump -U postgres atuin > /docker/backups/postgres/atuin-$(date +%Y%m%d).sql
+docker exec postgres pg_dumpall -U postgres > /docker/postgres-backup/manual-$(date +%Y%m%d).sql
+docker exec postgres pg_dump -U postgres sss > /docker/postgres-backup/sss-$(date +%Y%m%d).sql
 ```
 
-### configuration backup
-
-the git repository at `~/code/futurama-docker` (pushed to `github.com/om1d3/futurama-docker`) contains all configuration:
+### configuration backup (git repo)
 
 ```bash
-# on laptop
+# on the workstation
 cd ~/code/futurama-docker
-
-# pull latest configs from production
-scp root@192.168.21.130:/docker-compose/docker-compose.yaml amy/docker-compose.yaml
-scp root@192.168.21.130:/docker-compose/.env /tmp/amy.env
-
-# re-encrypt .env
+scp kube@10.30.0.11:/docker-compose/docker-compose.yaml amy/docker-compose.yaml
+ssh kube@10.30.0.11 'sudo cat /docker-compose/.env' > /tmp/amy.env   # .env is root-owned; plain scp as kube will fail
 gpg --symmetric --cipher-algo AES256 -o amy/.env.gpg /tmp/amy.env
-rm /tmp/amy.env
-
-# update .env.example
-sed 's/=.*/=/' /tmp/amy.env > amy/.env.example
-
-# commit and push
-git add .
-git commit -m "amy v99: <description>"
-git push
+sed 's/=.*/=/' /tmp/amy.env > amy/.env.example    # comments survive – no secrets in comments!
+shred -u /tmp/amy.env 2>/dev/null || rm -f /tmp/amy.env
+git add . && git commit -m "amy 20260721: <description>" && git push
 ```
+
+do NOT commit `/docker/keepalived/keepalived.conf` (inline VRRP password) or anything under `/docker/oxidized/` (GitHub PAT) – template them if repo copies are wanted.
 
 ---
 
 ## restore procedures
 
-### restore postgres from backup
+### restore a database
 
 ```bash
-# list available backups
-bash /docker-compose/scripts/rollback.sh list-postgres
-
-# restore full backup
-bash /docker-compose/scripts/rollback.sh postgres /docker/postgres-backup/last/atuin-latest.sql.gz
-
-# restore single database
-bash /docker-compose/scripts/rollback.sh database atuin /docker/postgres-backup/daily/atuin-20260210.sql.gz
+# stop the consumer, restore, start
+docker compose stop miniflux
+zcat /docker/postgres-backup/<dump>.sql.gz | docker exec -i postgres psql -U postgres -d miniflux
+docker compose start miniflux
 ```
 
-### restore single container from image backup
+### restore a container image
 
 ```bash
-# list backups
-bash /docker-compose/scripts/rollback.sh list-containers ntfy
-
-# rollback to most recent backup
-bash /docker-compose/scripts/rollback.sh container ntfy
-
-# rollback to second backup
-bash /docker-compose/scripts/rollback.sh container ntfy 2
+./scripts/rollback.sh list ntfy
+./scripts/rollback.sh rollback ntfy
+./scripts/rollback.sh postgres     # dependent-aware
 ```
 
-### restore from git repository
+### rebuild amy from zero
 
-```bash
-# on laptop
-cd ~/code/futurama-docker
-
-# decrypt .env
-gpg --decrypt --output /tmp/amy.env amy/.env.gpg
-
-# deploy to amy
-scp amy/docker-compose.yaml root@192.168.21.130:/docker-compose/
-scp /tmp/amy.env root@192.168.21.130:/docker-compose/.env
-rm /tmp/amy.env
-
-# restart services on amy
-ssh root@192.168.21.130 'cd /docker-compose && docker compose up -d'
-```
+1. Debian + docker + compose; create `/docker`, `/docker-compose`, `/portainer/postgresql`, `/portainer/telegraf/config`
+2. from the futurama-docker repo: amy compose, `gpg --decrypt .env.gpg` → .env, scripts/
+3. recreate the two out-of-band secrets: keepalived.conf (VRRP password matching bender) and oxidized config (fresh PAT)
+4. `docker compose up -d postgres` → restore the five databases from `/docker/postgres-backup` (or from off-site) → `docker compose up -d`
+5. re-establish kube's authorized_key for bender's root (replication resumes at the next 03:30)
+6. re-add root's crontab entries (weekly/retry – see 04)
 
 ---
 
 ## emergency procedures
 
-### ntfy down (both hosts lose notifications)
+### ntfy down (silent infrastructure)
 
 ```bash
-# check ntfy
-docker ps | grep ntfy
-docker logs ntfy --tail 20
-
-# restart ntfy
-docker restart ntfy
-
-# verify
-curl -s -o /dev/null -w "%{http_code}" http://localhost:8888
+docker logs ntfy --tail 30
+docker compose up -d --force-recreate ntfy
+curl -d "test after recovery" http://localhost:8888/test
 ```
 
-### pihole down / DNS failover active
+remember: while ntfy is down, bender's alerts are lost, not queued – check bender's logs for anything that fired during the gap.
 
-if bender's pihole failed and amy is serving DNS:
+### pihole VIP behavior
 
 ```bash
-# verify amy's pihole is healthy
-docker ps | grep pihole
-dig @localhost google.com +short
-
-# check keepalived VIP is on amy
-ip addr show enp4s0 | grep 192.168.21.100
-
-# check when nebula-sync last replicated config
-ls -la /docker/pihole/etc-pihole/pihole.toml
+# does amy currently hold the VIP? (only when bender's pihole is down)
+ip addr show enp4s0 | grep 10.30.0.2
+docker logs keepalived --tail 20
+dig @10.30.0.2 google.com +short
 ```
+
+amy holding the VIP for long means bender's pihole is genuinely down – fix bender; amy will cede automatically (priority 100 < 200).
 
 ### postgres won't start
 
 ```bash
-# check logs
 docker logs postgres --tail 50
-
-# check disk space
 df -h /
-df -h /portainer/
-
-# check data directory
-ls -la /portainer/postgresql/data/
-
-# if data corruption suspected
-bash /docker-compose/scripts/rollback.sh list-postgres
-```
-
-### all services down after reboot
-
-```bash
-# start all services
-cd /docker-compose
-docker compose up -d
-
-# verify
-docker compose ps --format "table {{.Names}}\t{{.Status}}"
+ls -la /portainer/postgresql/data/    # the canonical (legacy) path – see the v94 scar
+./scripts/rollback.sh postgres
 ```
 
 ---
 
 ## service-specific maintenance
 
-### atuin
-
-the atuin command was changed from `server start` to `start` in v99 due to an upstream binary change (atuin → atuin-server):
+### ntfy
 
 ```bash
-# verify atuin is running
-docker ps --format "{{.Names}}\t{{.Status}}" | grep atuin
-
-# check logs for startup errors
-docker logs atuin --tail 20
-
-# if atuin fails with "unknown command 'server'", verify compose has:
-#   command: start
-# (not: command: server start)
-```
-
-### telegraf
-
-```bash
-# check telegraf is collecting data
-docker logs telegraf --tail 20
-
-# verify SNMP connectivity to switch
-docker exec telegraf snmpwalk -v2c -c futurama 192.168.21.5 1.3.6.1.2.1.1.5.0 2>/dev/null || echo "SNMP failed"
-
-# verify SNMP connectivity to printer
-docker exec telegraf snmpwalk -v2c -c public 192.168.21.10 1.3.6.1.2.1.1.1.0 2>/dev/null || echo "SNMP failed"
-
-# check influxdb connectivity
-curl -s "http://192.168.21.220:8086/ping" && echo "InfluxDB reachable" || echo "InfluxDB unreachable"
+curl -d "ping" http://localhost:8888/test    # then check your phone/browser
 ```
 
 ### beszel
 
 ```bash
-# check beszel hub
 curl -s -o /dev/null -w "%{http_code}" http://localhost:8090
-
-# check beszel-agent
-docker ps --format "{{.Names}}\t{{.Status}}" | grep beszel-agent
-
-# verify bender's agent is reporting (check beszel web UI)
+# both hosts' agents should show recent data in the UI
 ```
+
+### oxidized
+
+```bash
+docker logs oxidized --tail 20
+# PAT rotation: GitHub → new fine-grained PAT scoped to nod-config →
+# update /docker/oxidized config → docker restart oxidized → verify a push lands
+```
+
+### spendspentspent / limdius (browser automation)
+
+```bash
+# both consume playwright-chrome – restart the browser first on weirdness:
+docker restart playwright-chrome
+curl -s -o /dev/null -w "%{http_code}" http://localhost:9021   # sss
+curl -s -o /dev/null -w "%{http_code}" http://localhost:5050   # limdius
+```
+
+### miniflux
+
+full login works on `http://rss.home.arpa:8385` (the BASE_URL origin, v103) – cross-origin failures on other paths are the documented behavior, not a regression.
 
 ### mealie
 
-```bash
-# check mealie
-docker ps --format "{{.Names}}\t{{.Status}}" | grep mealie
+BASE_URL is the tailscale origin (`https://mealie.bunny-enigmatic.ts.net`) – the inverse choice from miniflux; generated links favor remote use.
 
-# verify database connection
-docker exec postgres psql -U postgres -d mealie -c "SELECT 1;"
+### atuin
 
-# check logs
-docker logs mealie --tail 20
-```
+`command: start` (v99) – if an image update ever fails on "unknown subcommand", upstream moved the binary again; check their changelog before touching the command.
 
-### spendspentspent
+### netalertx / telegraf
 
-```bash
-# check service
-docker ps --format "{{.Names}}\t{{.Status}}" | grep spendspentspent
-
-# verify database
-docker exec postgres psql -U postgres -d sss -c "SELECT 1;"
-
-# check playwright-chrome (needed for bank scraping)
-docker ps --format "{{.Names}}\t{{.Status}}" | grep playwright-chrome
-```
+host-network monitors; netalertx data under /docker/netalertx, telegraf config at the legacy /portainer path (read-only). after switch or printer changes, telegraf's SNMP targets live in that conf.
 
 ---
 
-## system maintenance
+## host (Debian) maintenance
 
-### cron jobs
+- **updates:** ordinary `apt update && apt upgrade` cadence; docker engine from Docker's repo. no TrueNAS-style landmines
+- **crontab:** root's crontab is the scheduler and persists across upgrades – still, keep the entries mirrored in 04's table so a host rebuild can restore them
+- **reboots:** only for kernel updates; verify afterwards: 31 containers up, VIP NOT held (bender healthy), ntfy test message delivered, replica directory intact
+- **time:** schedules assume America/Toronto – verify `timedatectl` after installs
 
-verify cron jobs are configured:
 
-```bash
-crontab -l | grep -E "secure-container|retry"
-```
+---
 
-expected:
+## working with parked services (20260810)
 
-| schedule | command |
-|----------|---------|
-| `30 4 * * 3` | `bash /docker-compose/scripts/secure-container-update.sh weekly` |
-| `30 4 * * 0-2,4-6` | `bash /docker-compose/scripts/secure-container-update.sh retry` |
-
-### debian system updates
+six services are parked. see 02 for the list and the reasoning.
 
 ```bash
-# check for updates
-apt update
-apt list --upgradable
+# what starts by default
+docker compose config --services | wc -l          # 25
 
-# apply updates
-apt upgrade -y
+# what is defined in total
+docker compose --profile parked config --services | wc -l   # 31
 
-# reboot if kernel was updated
-[ -f /var/run/reboot-required ] && reboot
+# start one parked service on demand
+docker compose up -d tax-calculator
+
+# start all six
+docker compose --profile parked up -d
+
+# stop and remove one again
+docker compose stop tax-calculator && docker compose rm -f tax-calculator
 ```
 
-### docker updates
+`docker compose start <name>` does not work for a parked service. it does
+not enable the profile. use `up -d`.
+
+---
+
+## version bump ritual
+
+amy follows bender's convention. every change to the compose file gets a
+version and a changelog entry, even a one-line change.
+
+1. back up: `cp docker-compose.yaml docker-compose.yaml.<current>.backup`
+2. bump the header to `YYYYMMDD`, or `YYYYMMDD.2` for a second edit the same day
+3. add a changelog block at the TOP of the list; amy's changelog is newest first
+4. record REQUIRED steps and NOTEs in that block
+5. `docker compose config -q`
+6. `diff` against the backup and read it
+7. apply
+8. if the `.env` changed in the same release, bump its header to the same version
+
+two changes were applied by hand on 2026-08-08 without a version bump: the
+tsdproxy and oxidized pins. they were recorded retroactively in 20260810.
+that gap is the reason for the ritual.
+
+---
+
+## configuration is version controlled
+
+amy does not hold a git checkout. bender is the single committer and
+collects amy's files over SSH.
+
+on bender:
 
 ```bash
-# check docker version
-docker --version
-docker compose version
-
-# update docker (if using docker's official repo)
-apt update && apt upgrade docker-ce docker-ce-cli containerd.io docker-compose-plugin -y
+/root/futurama-sync.sh --dry-run     # show what would change
+/root/futurama-sync.sh "amy: <what changed>"
 ```
 
-### SSH key for bender access
+the script pulls, triggers encryption on both hosts, copies both hosts'
+manifest files into a neutral clone, then commits and pushes to forgejo.
+forgejo mirrors to GitHub.
 
-bender's pihole-dns-update.sh connects to amy as user `kube` via SSH. if amy is reinstalled or SSH keys are regenerated:
+secrets never leave their host in plaintext. each host encrypts its own
+with `encrypt-secrets.sh`, and only the `.gpg` files are copied.
 
-```bash
-# on bender, verify SSH access works
-ssh -o ConnectTimeout=5 -o BatchMode=yes kube@192.168.21.130 "docker ps -q | wc -l"
+on amy, files in the manifest include the compose file, `scripts/`,
+`configs/`, homepage, ntfy, argus, limdius.py, the tax calculator site, and
+telegraf's config. encrypted: `.env`, oxidized's config and router.db,
+tsdproxy.yaml, keepalived.conf.
 
-# if it fails, re-copy bender's public key to amy
-ssh-copy-id kube@192.168.21.130
-```
+---
+
+## ntfy topics
+
+amy hosts ntfy, and it is the notification endpoint for both hosts.
+subscribe to every topic in use, not only the ones you remember:
+
+| topic | producer |
+|-------|----------|
+| container-updates-bender | bender diun, secure-container-update.sh |
+| container-updates-amy | amy diun |
+| tts-pipeline | bender audiobook-foundry |
+| bender-backup | bender-replicate.sh |
+
+four high-priority backup failures went unseen in July because the
+`bender-backup` topic had no subscriber. the script worked correctly and
+reported correctly. nobody was listening.
 
 ---
 

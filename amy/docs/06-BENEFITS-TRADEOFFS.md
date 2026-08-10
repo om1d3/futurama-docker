@@ -2,263 +2,325 @@
 
 ## design decisions analysis
 
-**document version:** 3.0
-**infrastructure version:** 99
-**last updated:** february 2026
+**document version:** 5.0
+**infrastructure version:** 20260810.2
+**last updated:** august 2026
 
 ---
 
 ## table of contents
 
-1. [amy's role in the two-host architecture](#amys-role-in-the-two-host-architecture)
-2. [debian vs TrueNAS](#debian-vs-truenas)
-3. [shared postgresql](#shared-postgresql)
-4. [keepalived BACKUP role](#keepalived-backup-role)
-5. [local ntfy](#local-ntfy)
-6. [telegraf for SNMP monitoring](#telegraf-for-snmp-monitoring)
-7. [cadvisor resource optimization](#cadvisor-resource-optimization)
-8. [legacy portainer paths](#legacy-portainer-paths)
-9. [valkey instead of redis](#valkey-instead-of-redis)
-10. [python-based limdius](#python-based-limdius)
+1. [repurposed laptop as second host](#repurposed-laptop-as-second-host)
+2. [amy as the notification and monitoring seat](#amy-as-the-notification-and-monitoring-seat)
+3. [amy as bender's replica target](#amy-as-benders-replica-target)
+4. [shared postgresql (17-alpine)](#shared-postgresql-17-alpine)
+5. [valkey over redis](#valkey-over-redis)
+6. [four critical services](#four-critical-services)
+7. [oxidized for switch-config backup](#oxidized-for-switch-config-backup)
+8. [shared headless browser](#shared-headless-browser)
+9. [pihole upstream asymmetry](#pihole-upstream-asymmetry)
+10. [static-site tax calculator](#static-site-tax-calculator)
+11. [legacy /portainer paths kept canonical](#legacy-portainer-paths-kept-canonical)
+12. [watchtower kept as commented fallback](#watchtower-kept-as-commented-fallback)
+13. [tailscale via tsdproxy](#tailscale-via-tsdproxy)
 
 ---
 
-## amy's role in the two-host architecture
+## repurposed laptop as second host
 
 ### decision
 
-amy handles lightweight utilities, monitoring, and notifications while bender handles media and downloads.
+run the secondary host on a spare Intel i3-2310M laptop instead of buying dedicated hardware.
 
 ### benefits
 
-- **failure isolation**: amy stays running when bender is down for TrueNAS upgrades or ZFS issues
-- **DNS continuity**: pihole on amy takes over via keepalived when bender is unavailable
-- **notification independence**: ntfy on amy can still receive notifications even if bender is completely down
-- **monitoring continuity**: beszel hub on amy continues collecting metrics from amy itself during bender outages
+- **zero cost**, low power, and a built-in UPS (the laptop battery)
+- **plain Debian**: direct script execution, ordinary crontab, apt without ceremony – the anti-TrueNAS
+- **adequate**: 31 lightweight containers fit comfortably in 16 GB
 
 ### tradeoffs
 
-- **limited hardware**: the i3-2310M is significantly less powerful than bender's Xeon E3-1265L V2
-- **no ZFS**: single SSD with no data redundancy (mitigated by daily postgres backups)
-- **cross-host dependencies**: homepage needs bender's dockerproxy, beszel-agent on bender needs amy's beszel hub
+- **2 cores/4 threads**: the load gate (4.0) trips more easily; heavyweight tenants (playwright-chrome, stirling OCR) budget carefully
+- **single SSD**: no redundancy – mitigated by daily postgres dumps and the fact that amy's services are individually rebuildable; the residual risk is the bender-replica living on this same disk
+- **aging hardware**: replacement path is the eventual k8s worker fleet
 
 ---
 
-## debian vs TrueNAS
+## amy as the notification and monitoring seat
 
 ### decision
 
-run amy on stock Debian 13 rather than TrueNAS Scale.
+place ntfy (notifications) and beszel (metrics hub) on amy, not bender.
 
 ### benefits
 
-- **direct script execution**: no TrueNAS `/mnt` execution restrictions — scripts run from their actual paths
-- **simpler storage**: single SSD, no ZFS pool management overhead
-- **standard package management**: `apt` for system updates, no TrueNAS middleware layer
-- **lighter resource usage**: no ZFS ARC cache consuming RAM
+- **the watcher is not the watched**: bender's saturday updates, TrueNAS upgrades, and pool incidents get reported *by amy* – alerts survive the outage they describe
+- **update-day offsetting** (amy wednesday, bender saturday) means one host is always fully stable
 
 ### tradeoffs
 
-- **no ZFS protection**: single SSD means no checksumming, no redundancy, no snapshots
-- **manual Docker installation**: Docker isn't pre-installed like on TrueNAS Scale
-- **no web UI for system management**: server management via SSH only (no TrueNAS dashboard)
+- **amy down = silent infrastructure**: accepted, and the reason amy's stack stays small, boring, and update-gated
+- **cross-host coupling**: every bender producer needs amy reachable at notification time
 
 ---
 
-## shared postgresql
+## amy as bender's replica target
 
 ### decision
 
-one postgres:17-alpine instance shared by atuin, miniflux, spendspentspent, mealie, and stirling.
+receive bender's nightly critical-data rsync into /docker/backups/bender-replica.
 
 ### benefits
 
-- **RAM savings**: ~400 MB saved vs running 5 separate postgres instances
-- **centralized backup**: postgres-backup backs up all 5 databases in one container
-- **simplified management**: one database to monitor and upgrade
-- **version consistency**: all apps use the same postgres 17 release
+- **real DR**: bender's configs, secrets, and database dumps survive a total bender loss
+- **cheap**: reuses existing SSH trust; excluded regenerable bulk keeps it small
+- **self-carrying**: the replica includes bender's compose + scripts – the rebuild kit travels with the data
 
 ### tradeoffs
 
-- **single point of failure**: if postgres crashes, 5 services go down simultaneously
-- **upgrade risk**: postgres 17 → 18 upgrade affects all applications at once
-- **mixed workloads**: atuin (append-heavy shell history) and mealie (recipe CRUD) have different I/O patterns
+- **secrets sprawl**: bender's .env now lives on amy's disk – amy's physical security and disk disposal now matter to bender
+- **single-SSD landing zone**: the replica's own durability is one laptop SSD; the git repo + off-site copies are the second line
 
-### mitigation
+### duties (the whole contract)
 
-- postgres is classified as critical in the update system (4 critical services total on amy)
-- pre-upgrade backups mandatory before any postgres update
-- health checks verify all 5 databases are accessible after updates
-- automatic rollback if any dependent service fails
+keep kube's SSH trust valid, keep disk space free, be up at 03:30.
 
 ---
 
-## keepalived BACKUP role
+## shared postgresql (17-alpine)
 
 ### decision
 
-amy runs keepalived as BACKUP (priority 100) while bender runs as MASTER (priority 200).
+one postgres:17-alpine instance for five tenants: atuin, miniflux, sss, mealie, stirling (stirling's app-side linkage unverified – see 02).
 
 ### benefits
 
-- **automatic failover**: if bender's pihole fails, amy takes the VIP within ~5 seconds
-- **automatic recovery**: when bender recovers, the VIP returns automatically (higher priority wins)
-- **no manual intervention**: the entire failover/recovery cycle is automated
+- **RAM efficiency** on a 16 GB laptop
+- **one backup pipeline**: postgres-backup-local:17 dumps all five daily (7d/4w/6m)
+- **boring mainline image**: unlike bender (chained to immich's vectorchord build), amy runs stock postgres and upgrades on its own terms
 
 ### tradeoffs
 
-- **amy's pihole may have stale config**: nebula-sync runs hourly, so amy's pihole could be up to 1 hour behind bender's after a config change
-- **different upstream DNS**: bender uses 1.1.1.1 + 8.8.8.8 while amy uses 9.9.9.9 + 1.1.1.1 — clients may see different DNS behavior during failover
-- **keepalived image not pinned**: amy uses `osixia/keepalived:latest` while bender uses `:2.0.20` — a breaking update could affect amy's keepalived
+- **shared superuser**: all five tenants ride the `postgres` user – the forgejo-style dedicated-user pattern from bender has not been applied here yet
+- **single point of failure** for five apps – hence critical-service treatment
 
-### configuration differences from bender
+### v94 scar
 
-| setting | bender | amy |
-|---------|--------|-----|
-| role | MASTER | BACKUP |
-| interface | bond0 | enp4s0 |
-| priority | 200 | 100 |
-| image | osixia/keepalived:2.0.20 (pinned) | osixia/keepalived:latest |
-| volume mount | single file (read-only) | directory mount |
-| KEEPALIVED_INTERFACE env | set in compose | not set (uses config file) |
-| --copy-service flag | yes | no |
+a "clean" volume path (/docker/postgres/data) once orphaned the real databases; restoring `/portainer/postgresql/data` fixed it. that path is canonical; see 03.
 
 ---
 
-## local ntfy
+## valkey over redis
 
 ### decision
 
-run ntfy on amy rather than using a cloud notification service.
+run valkey (8-alpine) as the redis-compatible cache.
 
 ### benefits
 
-- **works without internet**: notifications still flow during internet outages (both hosts are on LAN)
-- **no external dependency**: no reliance on pushover, discord, or other cloud services
-- **privacy**: notification content stays on the local network
-- **used by both hosts**: bender's diun and secure-container-update.sh send notifications to amy's ntfy
+- **license clarity**: valkey is the community fork with an open license trajectory
+- **drop-in**: RESP-compatible; appendonly persistence enabled
 
 ### tradeoffs
 
-- **single point of failure**: if amy is down, both hosts lose notifications
-- **no mobile push without tailscale**: ntfy mobile app needs tailscale or internet exposure to receive notifications remotely
-- **LAN-only by default**: remote notification access requires tailscale URL (https://ntfy.bunny-enigmatic.ts.net)
+- essentially none at this scale; consumers that hardcode "redis" in health tooling need the name adjusted
+- **open audit item:** no v104 compose service actually references valkey – confirm its consumer(s) or retire it (see 02)
 
 ---
 
-## telegraf for SNMP monitoring
+## four critical services
 
 ### decision
 
-use telegraf on amy to monitor the Cisco 3750X switch and Brother printer via SNMP, rather than monitoring from Home Assistant directly.
+classify postgres, ntfy, beszel, and spendspentspent as critical in the update system (versus bender's postgres + gluetun).
 
 ### benefits
 
-- **SNMP expertise**: telegraf's SNMP input plugin handles table walks, OID translation, and retry logic
-- **custom processing**: starlark processor parses Brother's proprietary hex-encoded page counts and drum percentages
-- **decoupled from HA**: if Home Assistant restarts, telegraf continues collecting data — no gaps in metrics
-- **host networking**: telegraf runs with network_mode: host for reliable SNMP access
+- the choices encode amy's actual blast radii: five databases (postgres), all alerting (ntfy), all metrics (beszel), and finance data with a browser-automation dependency (sss)
 
 ### tradeoffs
 
-- **extra hop**: data flows telegraf → influxdb → grafana instead of directly into Home Assistant
-- **influxdb dependency**: requires influxdb on the HA VM (192.168.21.220)
-- **legacy config path**: telegraf config lives at `/portainer/telegraf/config/` (historical)
-
-### consolidation history
-
-telegraf was originally deployed as a standalone docker-compose at `/portainer/telegraf/docker-compose.yml`. in v98, it was consolidated into amy's main docker-compose.yaml to simplify management while keeping the config at its original path.
+- longer update cycles for those four (pre-actions, dependent restarts, integration re-tests) – fine on a wednesday at 04:30
 
 ---
 
-## cadvisor resource optimization
+## oxidized for switch-config backup
 
 ### decision
 
-deploy cadvisor with aggressive resource-saving flags, matching bender's configuration.
-
-### results (measured during v98 deployment)
-
-| metric | before optimization | after optimization | reduction |
-|--------|--------------------|--------------------|-----------|
-| CPU usage | 9.90% | 0.32% | 97% |
-| memory usage | 118 MiB | 18 MiB | 85% |
-
-### flags used
-
-- `--docker_only=true` — skips host-level metrics
-- `--housekeeping_interval=30s` — reduces internal polling
-- `--disable_metrics=percpu,sched,tcp,udp,disk,diskIO,hugetlb,referenced_memory,cpu_topology,resctrl`
-
-particularly important on amy given the limited i3-2310M CPU — every percent of saved CPU matters.
-
----
-
-## legacy portainer paths
-
-### decision
-
-keep postgresql data at `/portainer/postgresql/data/` and telegraf config at `/portainer/telegraf/config/` rather than migrating to `/docker/` paths.
+back up nod's (Cisco 3750X) running config hourly to a private GitHub repo via oxidized.
 
 ### benefits
 
-- **zero migration risk**: no chance of data loss from moving the database
-- **no downtime**: migration would require stopping all dependent services
-- **works correctly**: the path doesn't affect functionality
+- **closes the config-loss hole**: switch configs die with hardware; now every change lands in git within the hour
+- **diffable history**: `git log` on nod-config answers "what changed on the switch and when"
+- **off-site by construction**: GitHub is the off-site copy
 
 ### tradeoffs
 
-- **inconsistent naming**: most services use `/docker/<service>/` but postgres and telegraf use `/portainer/`
-- **confusion potential**: new operators might look in `/docker/postgres/` and not find data
-- **documentation overhead**: must document the legacy paths clearly
-
-### when to migrate
-
-migration would be justified if: the `/portainer/` partition runs out of space, or if a major postgres version upgrade already requires data recreation. until then, the current paths are correct and stable.
+- **PAT lifecycle**: the amy-oxidized token expires; a silent push failure looks like "no changes" – check the repo's last-commit age during weekly review
+- **secret outside .env**: the PAT lives in oxidized's config directory – never commit that directory
 
 ---
 
-## valkey instead of redis
+## shared headless browser
 
 ### decision
 
-use valkey (redis-compatible fork) instead of redis for amy's key-value caching needs.
+one browserless/chrome (playwright-chrome) serves both spendspentspent and limdius, rather than per-app browsers.
 
 ### benefits
 
-- **open source**: valkey is a truly open-source redis fork (BSD license) after Redis Ltd changed redis's license
-- **drop-in compatible**: all redis clients and commands work with valkey
-- **active development**: maintained by the Linux Foundation with broad industry support
+- one Chrome's worth of RAM instead of two; session caps (10) and timeouts centralized
 
 ### tradeoffs
 
-- **less battle-tested**: valkey is newer than redis, though based on the same codebase
-- **currently unused**: no service on amy explicitly depends on valkey yet (it's available for future use)
-
-note: bender uses redis:7-alpine for immich_redis because immich specifically requires redis. amy uses valkey because there's no specific redis requirement.
+- shared failure domain: a wedged Chrome degrades both consumers – restart playwright-chrome first when either misbehaves
+- no formal depends_on: consumers reconnect over ws://, so ordering is soft
 
 ---
 
-## python-based limdius
+## pihole upstream asymmetry
 
 ### decision
 
-run limdius using a `python:3.11-slim` base image with runtime dependency installation via `pip install` in the command.
+amy's pihole uses quad9 (9.9.9.9) + 1.1.1.1 with DNSSEC and REV_SERVER pointing at fry; bender's uses 1.1.1.1 + 8.8.8.8 without the DNSSEC flag.
 
 ### benefits
 
-- **simple deployment**: no custom Dockerfile needed — just mount the Python script and let the command install dependencies
-- **easy updates**: modify `/docker/limdius/limdius.py` directly, restart the container
+- **provider diversity across the HA pair**: an upstream outage or filtering anomaly on one provider set doesn't take both DNS personalities down identically
+- **reverse lookups**: REV_SERVER at fry gives amy's pihole local hostname resolution for `lan` devices
 
 ### tradeoffs
 
-- **slow startup**: `pip install` runs on every container start (~15–30 seconds)
-- **internet dependency at startup**: if pypi.org is unreachable, the container fails to start
-- **no dependency pinning**: `pip install requests flask playwright` always gets latest versions
+- **behavioral drift on failover**: a VIP migration subtly changes DNSSEC and upstream behavior – remember this when debugging "DNS acts differently today"
+- nebula-sync replicates lists/config, not these env-level upstream settings – the asymmetry is deliberate and persistent
 
-### potential improvement
+---
 
-if startup time becomes an issue, a custom Dockerfile with pre-installed dependencies (similar to bender's transmission build) would eliminate the pip install delay. currently not worth the maintenance overhead for a lightweight service.
+## static-site tax calculator
+
+### decision
+
+serve the Ontario T1 calculator as static HTML under nginx:alpine (v100).
+
+### benefits
+
+- **zero state, zero database, zero attack surface** beyond nginx; read-only mount
+- CRA-rate updates are file edits, not deployments
+
+### tradeoffs
+
+- yearly manual rate maintenance – inherent to the domain
+
+---
+
+## legacy /portainer paths kept canonical
+
+### decision
+
+keep /portainer/postgresql/data and /portainer/telegraf/config as canonical rather than migrating them under /docker.
+
+### benefits
+
+- **zero-risk continuity**: the v94 incident proved that "tidying" a live database path is how data gets orphaned
+- migration buys aesthetics, not function
+
+### tradeoffs
+
+- two exceptions to the /docker convention forever documented (03 does)
+- a future migration, if ever, is a deliberate dump-restore-verify with downtime
+
+---
+
+## watchtower kept as commented fallback
+
+### decision
+
+keep the watchtower service definition in the compose file, commented, marked do-not-remove.
+
+### benefits
+
+- **break-glass updater**: if the secure update system is ever wedged mid-crisis, uncommenting watchtower restores dumb-but-working updates in one edit
+
+### tradeoffs
+
+- dead YAML weight and the standing temptation to "clean it up" – resist; it's insurance, not cruft
+
+---
+
+## tailscale via tsdproxy
+
+### decision
+
+same pattern as bender: tsdproxy labels → automatic `*.bunny-enigmatic.ts.net` HTTPS.
+
+### benefits / tradeoffs
+
+as bender's 06, plus amy's two scars now encoded in the compose:
+
+- **v101**: TSNET_FORCE_LOGIN=1 – silent auth failure became a visible login prompt
+- **v104**: TS_AUTHKEY added and AMY_HOST_IP corrected – post-reboot re-auth failures and proxies routing to the dead pre-migration IP
+
+origin-sensitive apps exist here too: miniflux (v103) binds full login to `http://rss.home.arpa:8385`, amy's counterpart to bender's vikunja lesson.
+
+
+---
+
+## keepalived auth_pass: weaker than it looks (20260810)
+
+amy's `keepalived.conf` carries the VRRP secret inline as `auth_pass`.
+that was already noted as a hygiene item. a new finding makes it smaller
+than it appears.
+
+the keepalived log reports:
+
+```
+(/etc/keepalived/keepalived.conf: Line 21) Truncating auth_pass to 8 characters
+```
+
+VRRP limits `auth_pass` to 8 characters. the configured value is 32. so
+24 characters have never had any effect on either host.
+
+two consequences.
+
+**it is not a strong secret and cannot be made one.** the protocol caps it.
+VRRP authentication is a weak check by design, and it is normally paired
+with a trusted network segment rather than treated as real protection.
+
+**rotation is still a two-host operation.** VRRP requires the same secret
+on both peers. so a rotation must edit both files, then restart the BACKUP
+first and the MASTER second. changing one host alone breaks the VIP, which
+is the DNS failover.
+
+two further messages appear in the same log and are pre-existing:
+
+```
+Script user 'keepalived_script' does not exist
+SECURITY VIOLATION - scripts are being executed but script_security not enabled
+```
+
+both appear because the config defines a `vrrp_script` health check. the
+check runs as root. neither is new, and neither is currently harmful.
+
+---
+
+## two hosts, two keepalived mechanisms
+
+this is deliberate and worth stating plainly, because it looks like drift.
+
+| | amy | bender |
+|---|---|---|
+| version | 2.3.4 | 2.0.20 |
+| pin | digest | tag |
+| config path | `/etc/keepalived/keepalived.conf` | `/container/service/keepalived/assets/keepalived.conf` |
+| mechanism | direct mount | `--copy-service` |
+
+VRRP is a protocol, so the two versions interoperate. an attempt to reach
+version parity by pinning amy to 2.0.20 failed, because that version reads
+a different path and therefore ignored amy's mount. real parity would
+require changing the mount as well, which is a genuine change and not the
+no-op it was assumed to be.
 
 ---
 

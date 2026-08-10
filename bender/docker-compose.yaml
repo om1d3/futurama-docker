@@ -1,10 +1,10 @@
 # ============================================
 # bender (TrueNAS Scale) - Media & Downloads
-# Version: 112 - Immich resource limits
+# Version: 20260809 - influxdb TSI index; deployment corrections from the migration
 # ============================================
 # Host: TrueNAS Scale (HP MicroServer Gen8)
 # CPU: Intel Xeon E3-1265L V2 (iGPU disabled by HP BIOS)
-# IP: 192.168.21.121
+# IP: 10.30.0.12
 # Data path: /mnt/BIG/filme/
 # Config path: /mnt/BIG/filme/configs/
 # ============================================
@@ -72,7 +72,7 @@
 # v104 HEALTHCHECK FIX (2026-02-01):
 #   - FIXED: immich_machine_learning healthcheck now uses python3 (curl not available)
 #   - FIXED: nebula-sync healthcheck disabled (minimal container has no binaries)
-# v105 CHANGES (2026-02-07):
+# 20260721 CHANGES (2026-02-07):
 #   - ADDED: cAdvisor for container resource monitoring (CPU, memory, I/O)
 #   - Scraped by Prometheus on Home Assistant VM for Grafana dashboard
 #   - Port 9099:8080 (matching amy's cAdvisor port)
@@ -83,17 +83,17 @@
 #   - IMPROVED: gluetun healthcheck uses IP-based HTTP test (avoids BusyBox DNS failures)
 #   - ADDED: autoheal container to auto-restart unhealthy gluetun (stale VPN sessions)
 #   - ADDED: autoheal label to gluetun for targeted restart
-#   - Recovery cycle: healthcheck fails 3x → Docker marks unhealthy → autoheal restarts → loops
+#   - Recovery cycle: healthcheck fails 3x -> Docker marks unhealthy -> autoheal restarts -> loops
 # v107 CHANGES (2026-02-12):
 #   - ADDED: Transmission download/seed queue limits (prevents 812-torrent I/O stampede)
 #   - ADDED: Transmission cache 64MB (batches writes to ZFS instead of constant small I/O)
 #   - ADDED: Transmission peer limits (300 global, 30 per torrent)
-#   - CHANGED: MicroSD GRUB intel_iommu=on → intel_iommu=off (eliminates DMAR faults)
+#   - CHANGED: MicroSD GRUB intel_iommu=on -> intel_iommu=off (eliminates DMAR faults)
 #   - REASON: HP iLO DMAR interrupt faults escalated ZFS I/O stalls into hard freezes
 # v108 CHANGES (2026-02-18):
 #   - ADDED: edge-tts container (Microsoft Edge neural TTS API, port 5050)
-#   - ADDED: epub2tts-edge container (on-demand EPUB/TXT → M4B audiobook converter)
-#   - ADDED: tts-pipeline container (watches input folder, automates full PDF/EPUB → audiobook)
+#   - ADDED: epub2tts-edge container (on-demand EPUB/TXT -> M4B audiobook converter)
+#   - ADDED: tts-pipeline container (watches input folder, automates full PDF/EPUB -> audiobook)
 #   - Output goes to audiobookshelf library /audiobooks/cărți/ for automatic pickup
 #   - ADDED: Custom Transmission image with pre-baked Flood UI
 #   - CHANGED: Transmission from image: to build: (eliminates lscr.io mod download on every restart)
@@ -127,6 +127,210 @@
 #   - REASON: Unconstrained Immich ML workers caused OOM during bulk photo uploads
 #   - REASON: Load average hit 10.96 on 4-core CPU, ZFS txg_sync stalled >120s
 #   - NOTE: Also set all Immich job concurrency to 1 via Admin UI
+# v113 CHANGES (2026-05-14):
+#   - MIGRATED: All IPs from 192.168.21.0/24 to 10.30.0.0/24
+#   - CHANGED: dns anchor from 192.168.21.100 to 10.30.0.2 (Pi-hole VIP)
+#   - CHANGED: keepalived KEEPALIVED_INTERFACE from enp4s0 to ens1f0 (new 10G NIC)
+#   - CHANGED: nebula-sync PRIMARY from 192.168.21.121 to 10.30.0.12
+#   - CHANGED: nebula-sync REPLICAS from 192.168.21.130 to 10.30.0.11 (amy)
+#   - CHANGED: lrrr (formerly tts-pipeline) NTFY_URL from 192.168.21.130 to 10.30.0.11
+#   - RENAMED: tts-pipeline service and container to lrrr
+#   - NOTE: pihole-dns-update.sh requires separate manual update
+#   - NOTE: amy keepalived.conf peer IP requires update to 10.30.0.12
+# v114 CHANGES (2026-07-16):
+#   - DOCUMENTED: jellyfin pinned to lscr.io/linuxserver/jellyfin:10.11.11
+#     (manual edit applied earlier; floating 10.11 tag does NOT exist on lscr.io)
+#   - POLICY: bump 10.11.x patch tags manually on Diun notification; NEVER major 12
+#   - CHANGED: vikunja VIKUNJA_SERVICE_PUBLICURL from https://tasks.${TAILSCALE_DOMAIN}
+#     to http://tasks.home.arpa:3456 (must match browsed origin; mismatch caused
+#     malformed-token logouts). Trade-off: generated links use the LAN URL.
+#   - ADDED: vikunja VIKUNJA_SERVICE_JWTTTL=2592000 (30-day sessions)
+#   - ADDED: vikunja VIKUNJA_SERVICE_JWTTTLLONG=7776000 (90 days with Stay logged in)
+#   - REQUIRED: VIKUNJA_JWT_SECRET in .env must be a real secret (was REDACTED)
+#   - REQUIRED: docker compose up -d --force-recreate vikunja
+# v115 CHANGES (2026-07-17):
+#   - ADDED: forgejo git forge (codeberg.org/forgejo/forgejo:15 - v15 LTS,
+#     supported to 2027-07; rolling 15 tag = minor/patch updates only,
+#     major upgrades are manual per Forgejo policy)
+#   - PURPOSE: version control for futurama-terraform IaC repo; stays on
+#     bender permanently (source of truth must not live on the cluster it
+#     defines - same reasoning as Garage state backend)
+#   - PORTS: 3030:3000 (HTTP), 2222:22 (git SSH)
+#   - DATABASE: dedicated forgejo user/database in shared postgres
+#   - ADDED: forgejo to postgres-backup database list
+#   - REGISTRATION: disabled; create admin account on first launch
+#   - REQUIRED: Add FORGEJO_DB_PASSWORD to .env file
+#   - REQUIRED: Create database and user in postgres before first start:
+#       docker exec -it postgres psql -U postgres -c \
+#         "CREATE USER forgejo WITH PASSWORD '<FORGEJO_DB_PASSWORD>';"
+#       docker exec -it postgres psql -U postgres -c \
+#         "CREATE DATABASE forgejo OWNER forgejo;"
+#   - REQUIRED: mkdir -p /mnt/BIG/filme/configs/forgejo && chown 1000:1000 same
+#   - NOTE: git.home.arpa DNS entry auto-populates via the compose-scraper
+#     script into Pi-hole (tsdproxy.name "git")
+# 20260721 CHANGES:
+#   - CHANGED: version scheme to date-based YYYYMMDD, harmonized with amy
+#     (this release was formerly drafted as v116; same-day edits append .2)
+#   - PINNED: postgres-backup image from :latest to :14
+#   - REASON: major-match the backup tooling to the postgres 14 server for
+#     restore compatibility (convention adopted from amy, which pins :17)
+#   - NOTE: Diun will now notify on :14 tag re-pushes; a future postgres
+#     major upgrade must bump this tag in the same change
+#   - ALSO (in .env, same version): REMOVED redundant TS_AUTHKEY variable -
+#     compose derives the container's TS_AUTHKEY from ${TSDPROXY_AUTHKEY}
+#   - REQUIRED: docker compose pull postgres-backup && docker compose up -d postgres-backup
+# 20260729 CHANGES:
+#   - REPLACED: the lrrr service entirely with audiobook-foundry (the
+#     published repo - same pipeline, lineage tts-pipeline v108 -> lrrr
+#     v113 -> audiobook-foundry; service key AND container renamed;
+#     configuration fully env-driven)
+#   - CHANGED: build context /mnt/BIG/filme/configs/tts-pipeline ->
+#     /mnt/BIG/filme/configs/audiobook-foundry (git checkout)
+#   - ADDED: M4B metadata sanitizer in the pipeline (caps description/
+#     comment tags at 4000 chars; fixes the ShelfDroid
+#     SQLiteBlobTooBigException at the generation boundary). Applies to
+#     NEW conversions only - existing library items keep their old
+#     metadata until re-generated or trimmed.
+#   - ADDED: AF_OUTPUT_DIR=/audiobooks/cărți (repo default is /audiobooks;
+#     the explicit value preserves the v109 library layout exactly)
+#   - UNCHANGED: tsdproxy.name "tts" (LOCKED - tts.home.arpa and the
+#     tailscale tts URL keep working) and the NTFY topic /tts-pipeline
+#     (notification history continuity)
+#   - REQUIRED: clone the repo to /mnt/BIG/filme/configs/audiobook-foundry
+#     (forgejo: http://git.home.arpa:3030/<you>/audiobook-foundry.git, or
+#     GitHub) - or move the tested checkout into place
+#   - REQUIRED: docker stop lrrr && docker rm lrrr  (compose sees a removed
+#     service plus a new one, not a rename; alternatively
+#     docker compose up -d --remove-orphans)
+#   - REQUIRED: docker compose build --no-cache audiobook-foundry &&
+#     docker compose up -d audiobook-foundry
+#   - REQUIRED: grep -n "lrrr" /mnt/BIG/filme/docker-compose/scripts/*.sh
+#     /mnt/BIG/filme/docker-compose/scripts/*.json - update any build-based
+#     or skip lists to audiobook-foundry before the next weekly scan
+#   - NOTE: /mnt/BIG/filme/configs/tts-pipeline is retired; keep it until
+#     the first successful conversion on the new image, then archive (the
+#     source of truth is now git)
+#   - NOTE: grafana panels keyed on container_name="lrrr" (cadvisor) need
+#     re-pointing to "audiobook-foundry"
+#   - ADDED: meshcentral (Intel AMT / vPro management plane - browser KVM
+#     and power control for the 10.50.x fleet: zoidberg + EliteDesks).
+#     Fresh install (laptop PoC discarded); NeDB built-in DB; LANOnly.
+#     Ports 8584:80 (redirect) + 8585:443 (web/KVM) - LOCKED.
+#   - REQUIRED (meshcentral, before first start):
+#     mkdir -p /mnt/BIG/filme/configs/meshcentral/{meshcentral-data,meshcentral-files}
+#     and place config.json (cert meshcentral.home.arpa) into meshcentral-data/
+#   - REQUIRED (meshcentral): create the site-admin account IMMEDIATELY after
+#     first start - the first account to register becomes site admin
+#   - REQUIRED (fry): pass rule - source 10.30.0.12 -> dest 10.50.0.0/16,
+#     TCP 16992-16995 + 5900 (AMT web/redirection/KVM). Planned bender-prep
+#     fry rules were never confirmed executed and did not cover AMT ports.
+#   - NOTE: configs/meshcentral/meshcentral-data will hold AMT credentials -
+#     confirm the configs/ tree sits inside a backup scope (verification item)
+#   - NOTE: the tailscale path (tsdproxy -> HTTPS backend on 443) is
+#     verify-on-deploy; LAN path https://10.30.0.12:8585 works regardless.
+#     If the tailscale URL misbehaves, flip tsdproxy.container_port to "80".
+# 20260807 CHANGES:
+#   - ADDED: influxdb (InfluxDB 1.x) - long-term time-series store for Home
+#     Assistant telemetry. Moves the database OFF the Home Assistant VM,
+#     which has a 109 GB disk, onto bender, which has the pool and the
+#     ZFS snapshots. One copy, one truth - this is a MOVE, not a mirror.
+#   - VERSION: pinned to influxdb:1.11 deliberately. Home Assistant's
+#     influxdb: block uses database/username/password, which is the 1.x
+#     API. Do NOT move to 2.x without rewriting that block. Pinning also
+#     follows the policy earned twice in one week: tsdproxy and oxidized
+#     were both broken by unpinned :latest images.
+#     NOTE: if the 1.11 tag does not resolve, 1.8 is the widely deployed
+#     alternative and uses the same environment variables.
+#   - PORT: 8086:8086 - verified free against every other published port
+#     in this file.
+#   - TSDPROXY: DISABLED deliberately (owner decision). This is a database,
+#     not a web service. It stays on the LAN and inside the tailnet only
+#     through bender itself.
+#   - DATA PATH: /mnt/BIG/filme/influxdb - NOT under configs/. Reason:
+#     /mnt/BIG/filme/configs is a source in bender-replicate.sh, and ten
+#     years of telemetry does not belong in the nightly config replica to
+#     amy. It sits parallel to /mnt/BIG/filme/immich for the same reason.
+#     Protection is ZFS snapshots, not the replica.
+#   - RETENTION: InfluxDB 1.x default retention policy (autogen) is
+#     INFINITE. That is intentional here and matches the 10-year target
+#     already set in Home Assistant's recorder. It is recorded explicitly
+#     so nobody later mistakes it for an oversight.
+#   - RESOURCE LIMITS: mem_limit 2G, cpus 1.0. Applied per the v112
+#     doctrine - no unconstrained container on this host.
+#   - HEALTHCHECK: intentionally omitted. The influxdb image may not ship
+#     curl, and a broken healthcheck was already the failure pattern fixed
+#     in v104 for nebula-sync. Add one after verifying what the image
+#     contains. autoheal does not watch this container (no autoheal label).
+#   - REQUIRED: mkdir -p /mnt/BIG/filme/influxdb
+#   - REQUIRED: add to .env:
+#       INFLUXDB_ADMIN_PASSWORD=<new secret>
+#       INFLUXDB_USER_PASSWORD=<the password Home Assistant already uses>
+#     INFLUXDB_USER_PASSWORD must equal the value now in the Home Assistant
+#     secrets.yaml, or Home Assistant cannot write after the cutover.
+#   - REQUIRED: docker compose up -d influxdb
+#   - MIGRATION ORDER (do NOT change configuration.yaml first):
+#       1. Deploy this container. Confirm it starts and the database exists.
+#       2. Back up the add-on data on the Home Assistant VM.
+#       3. Restore into this instance. Verify the series and the row counts.
+#       4. Only then change the Home Assistant influxdb: host to 10.30.0.12.
+#       5. Run both for a period if you want a safety overlap.
+#       6. Remove the Home Assistant add-on last, after the new store is
+#          proven over several days.
+#   - FOLLOW-UP (not in this file): Grafana in the Kubernetes cluster will
+#     need an fry rule - source 10.50.0.0/16 -> dest 10.30.0.12, TCP 8086.
+#     Same shape as the AMT rule added on 20260729. Not needed until the
+#     cluster exists.
+#   - FIXED: two paste-corruption defects carried in the previous file -
+#     a duplicated and malformed cadvisor stanza in the MONITORING
+#     section, and a five-space indent on tsdproxy's TSNET_FORCE_LOGIN.
+#     Both were invalid YAML. Diff this file against the running one and
+#     confirm these were transfer artifacts rather than live edits.
+# 20260809 CHANGES:
+#   - ADDED: INFLUXDB_DATA_INDEX_VERSION=tsi1 to influxdb.
+#   - REASON: the default in-memory index made startup unusable on this
+#     hardware. Measured during the 2026-08-08 migration: a single shard
+#     took up to 302 SECONDS to open, and only 29 of 57 shards opened in
+#     roughly two hours. The in-memory index is rebuilt at EVERY start, so
+#     that cost repeated on every restart, not just the first.
+#     With tsi1 the same 58 shards opened in under 10 minutes.
+#   - NOTE: the index type is fixed at shard creation. Existing shards keep
+#     whatever they were built with. To apply tsi1 the data directory was
+#     wiped and the portable backup restored a second time. An in-place
+#     alternative exists (influx_inspect buildtsi) if this is ever needed
+#     without a restore.
+#   - CORRECTION to the 20260807 entry: its REQUIRED list omitted the
+#     ownership step, and the first deployment failed on
+#     "mkdir /var/lib/influxdb/meta: permission denied".
+#     REQUIRED: chown 1500:1500 /mnt/BIG/filme/influxdb
+#     The influxdb image runs as uid 1500, NOT 1000 like forgejo.
+#     Verify with: docker run --rm influxdb:1.11 id influxdb
+#   - NOTE (operational): even with tsi1 this container needs SEVERAL
+#     MINUTES to open all shards before it accepts connections. Every
+#     restart begins that work from zero. So:
+#       * do not casually restart or recreate this service
+#       * a bender reboot leaves InfluxDB unavailable for some minutes
+#       * the weekly update scan should not treat it as an ordinary container
+#   - NOTE (future growth): the default shard duration is 7 days, which is
+#     about 52 shards per year. Against the 10-year retention target that
+#     reaches roughly 520 shards, and startup time scales with shard count.
+#     A longer shard duration on the retention policy would cap this, and it
+#     applies to new shards only. OPEN DECISION, not applied here.
+#   - MIGRATION COMPLETE (2026-08-08): 2.3 GB of history moved from the Home
+#     Assistant InfluxDB add-on (v1.8.10) to this container (v1.11.8) with
+#     influxd backup/restore -portable. Home Assistant has written to
+#     10.30.0.12 since 09:10 UTC. The add-on has been uninstalled and both
+#     transfer copies deleted. Roughly 6.3 GB reclaimed on the Home
+#     Assistant VM.
+#   - LESSON (recorded deliberately): the cutover appeared to fail for
+#     several hours while Home Assistant reported successful writes. The
+#     cause was a UI config entry in .storage/core.config_entries titled
+#     "homeassistant (10.30.0.41)" which shadowed the influxdb: block in
+#     configuration.yaml. The YAML was correct and unread. Deleting the
+#     entry fixed it immediately.
+#     RULE: verify configuration from the process that consumes it, not
+#     from the file you edited. This is the third instance of this fault
+#     class in this infrastructure, after the /portainer tsdproxy decoy on
+#     amy and the InfluxDB add-on data path.
 # ============================================
 # ✅ VERIFIED WORKING SERVICES - DO NOT MODIFY WITHOUT APPROVAL:
 #   - immich_redis (v94: upgraded to redis:7-alpine)
@@ -135,12 +339,12 @@
 #   - hedgedoc (v94: changed healthcheck to Node.js-based)
 #   - immich_server (v94: removed unauthorized healthcheck, v112: resource limits)
 #   - vaultwarden (v91: added, moved from amy)
-#   - jellyfin (v96: corrected image to lscr.io/linuxserver/jellyfin:latest)
-#   - All services (v93: added DNS anchor 192.168.21.100)
+#   - jellyfin (v96: corrected image to lscr.io; v114: pinned 10.11.11)
+#   - All services (v93: added DNS anchor, v113: migrated to 10.30.0.2)
 #   - immich_machine_learning (v104: python3-based healthcheck, v112: resource limits)
 #   - nebula-sync (v104: healthcheck disabled - minimal container)
 #   - baikal (v110: CalDAV/CardDAV with PostgreSQL)
-#   - vikunja (v111: task management with PostgreSQL)
+#   - vikunja (v111: task management with PostgreSQL; v114: session fix)
 # ============================================
 # !! IMPORTANT - DO NOT MODIFY TSDPROXY NAMES !!
 # These are LOCKED production values.
@@ -151,7 +355,7 @@
 
 x-dns-config: &default-dns
   dns:
-    - 192.168.21.100
+    - 10.30.0.2
 
 services:
 
@@ -162,7 +366,7 @@ services:
   # LOCKED tsdproxy.name: "bender-proxy" - DO NOT CHANGE
   # LOCKED PORT: 8085:8080 - DO NOT CHANGE
   tsdproxy:
-    image: almeidapaulopt/tsdproxy:latest
+    image: almeidapaulopt/tsdproxy@sha256:e75357d559066a6d0a8242b6d64f8e295adfa6024d3cf1c9a3e3f1ecb00c0bb1
     container_name: tsdproxy
     restart: unless-stopped
     labels:
@@ -172,9 +376,11 @@ services:
       tsdproxy.dash.icon: "sh/tailscale"
     environment:
       - TSDPROXY_AUTHKEY=${TSDPROXY_AUTHKEY}
+      - TS_AUTHKEY=${TSDPROXY_AUTHKEY}
       - TSDPROXY_HOSTNAME=${BENDER_HOST_IP}
       - TSDPROXY_DATADIR=/data
       - DOCKER_HOST=unix:///var/run/docker.sock
+      - TSNET_FORCE_LOGIN=1
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - /mnt/BIG/filme/configs/tsdproxy/data/tailscale:/data
@@ -280,6 +486,36 @@ services:
     networks:
       - media-network
 
+  # meshcentral - Intel AMT / vPro management plane (browser KVM, power
+  # control, serial-over-LAN) for the 10.50.x fleet: zoidberg + the
+  # EliteDesks (hermes, kif, zapp, nibbler) once MEBx-provisioned.
+  # Fresh install 20260729 (laptop PoC discarded). NeDB built-in database -
+  # right-sized for a ~10-device AMT fleet; no postgres tenant, no mongo.
+  # meshcentral-data holds AMT credentials -> backup-scope verification item.
+  # LOCKED tsdproxy.name: "meshcentral" - DO NOT CHANGE
+  # LOCKED PORTS: 8584:80 (redirect), 8585:443 (web/KVM) - DO NOT CHANGE
+  meshcentral:
+    image: ghcr.io/ylianst/meshcentral:latest
+    container_name: meshcentral
+    restart: unless-stopped
+    <<: *default-dns
+    labels:
+      tsdproxy.enable: "true"
+      tsdproxy.name: "meshcentral"
+      tsdproxy.container_port: "443"
+      tsdproxy.dash.icon: "mdi/monitor-eye"
+    environment:
+      - TZ=${TIMEZONE}
+      - HOSTNAME=meshcentral.home.arpa
+    volumes:
+      - /mnt/BIG/filme/configs/meshcentral/meshcentral-data:/opt/meshcentral/meshcentral-data
+      - /mnt/BIG/filme/configs/meshcentral/meshcentral-files:/opt/meshcentral/meshcentral-files
+    ports:
+      - "8584:80"
+      - "8585:443"
+    networks:
+      - media-network
+
   # ============================================
   # VPN - GLUETUN (Surfshark OpenVPN)
   # ============================================
@@ -311,8 +547,6 @@ services:
       - OPENVPN_USER=${SURFSHARK_OPENVPN_USER}
       - OPENVPN_PASSWORD=${SURFSHARK_OPENVPN_PASSWORD}
       - SERVER_COUNTRIES=${GLUETUN_SERVER_COUNTRY}
-      # DOT=off disables DNS-over-TLS, using plain DNS instead
-      - DOT=off
     volumes:
       - /mnt/BIG/filme/configs/gluetun:/gluetun
     ports:
@@ -398,12 +632,13 @@ services:
       start_period: 30s
 
   # Keepalived - VIP Failover (MASTER)
+  # v113: KEEPALIVED_INTERFACE updated from enp4s0 to ens1f0 (new 10G NIC)
   keepalived:
     image: osixia/keepalived:2.0.20
     container_name: keepalived
     restart: unless-stopped
     environment:
-      - KEEPALIVED_INTERFACE=enp4s0
+      - KEEPALIVED_INTERFACE=ens1f0
       - KEEPALIVED_PASSWORD=${KEEPALIVED_PASSWORD}
     cap_add:
       - NET_ADMIN
@@ -416,6 +651,7 @@ services:
 
   # ✅ VERIFIED WORKING 2026-02-01 - DO NOT MODIFY WITHOUT APPROVAL
   # v104 FIX: Healthcheck disabled (minimal container has no binaries)
+  # v113: PRIMARY updated to 10.30.0.12, REPLICAS updated to 10.30.0.11 (amy)
   nebula-sync:
     image: ghcr.io/lovelaze/nebula-sync:latest
     container_name: nebula-sync
@@ -425,8 +661,8 @@ services:
       tsdproxy.enable: "false"
     environment:
       - TZ=${TIMEZONE}
-      - "PRIMARY=http://192.168.21.121:8053|${PIHOLE_PASSWORD}"
-      - "REPLICAS=http://192.168.21.130:8053|${PIHOLE_PASSWORD}"
+      - "PRIMARY=http://10.30.0.12:8053|${PIHOLE_PASSWORD}"
+      - "REPLICAS=http://10.30.0.11:8053|${PIHOLE_PASSWORD}"
       - FULL_SYNC=true
       - RUN_GRAVITY=true
       - CRON=0 * * * *
@@ -474,8 +710,11 @@ services:
       -c wal_compression=on
 
   # !! DO NOT REMOVE - Daily PostgreSQL backups !!
+  # 20260721: pinned :latest -> :14 - major-matched to the postgres 14 server
+  #       (restore-compatibility convention adopted from amy's :17 pin).
+  #       Bump this tag in the SAME change as any future postgres major upgrade.
   postgres-backup:
-    image: prodrigestivill/postgres-backup-local:latest
+    image: prodrigestivill/postgres-backup-local:14
     container_name: postgres-backup
     restart: unless-stopped
     <<: *default-dns
@@ -483,7 +722,7 @@ services:
       tsdproxy.enable: "false"
     environment:
       - POSTGRES_HOST=postgres
-      - POSTGRES_DB=immich,hedgedoc,baikal,vikunja
+      - POSTGRES_DB=immich,hedgedoc,baikal,vikunja,forgejo
       - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
       - SCHEDULE=@daily
@@ -522,6 +761,62 @@ services:
       timeout: 10s
       retries: 3
       start_period: 10s
+
+  # 20260807: InfluxDB 1.x - long-term time-series store for Home Assistant.
+  #
+  # WHY IT LIVES HERE: the Home Assistant VM has a 109 GB disk and already
+  # needed a resize this week. Ten years of telemetry belongs on the storage
+  # host, not on an application VM. This is a MOVE of the add-on database,
+  # not a mirror - one copy, one truth.
+  #
+  # VERSION: 1.x is REQUIRED. Home Assistant's influxdb: block uses
+  # database/username/password, which is the 1.x API. A 2.x server needs
+  # bucket/org/token instead. Do not "upgrade" this pin without rewriting
+  # the Home Assistant configuration in the same change.
+  #
+  # DATA PATH: /mnt/BIG/filme/influxdb, deliberately OUTSIDE configs/,
+  # because configs/ is a source in bender-replicate.sh. Telemetry does not
+  # belong in the nightly config replica to amy. Protection is ZFS snapshots.
+  #
+  # RETENTION: the default autogen policy is INFINITE. That is intended and
+  # matches the 10-year recorder target already set in Home Assistant.
+  #
+  # OWNERSHIP: the data directory must be owned by uid 1500, not 1000.
+  # chown 1500:1500 /mnt/BIG/filme/influxdb
+  #
+  # STARTUP: this container needs SEVERAL MINUTES to open its shards before
+  # it accepts connections, and every restart repeats that work. Do not
+  # casually recreate it.
+  #
+  # TSDPROXY: disabled on purpose. This is a database, not a web service.
+  #
+  # LOCKED PORT: 8086:8086 - DO NOT CHANGE
+  influxdb:
+    image: influxdb:1.11
+    container_name: influxdb
+    restart: unless-stopped
+    <<: *default-dns
+    labels:
+      tsdproxy.enable: "false"
+    environment:
+      - TZ=${TIMEZONE}
+      - INFLUXDB_DB=homeassistant
+      - INFLUXDB_HTTP_AUTH_ENABLED=true
+      - INFLUXDB_ADMIN_USER=admin
+      - INFLUXDB_ADMIN_PASSWORD=${INFLUXDB_ADMIN_PASSWORD}
+      - INFLUXDB_USER=hass
+      - INFLUXDB_USER_PASSWORD=${INFLUXDB_USER_PASSWORD}
+      - INFLUXDB_REPORTING_DISABLED=true
+      # 20260809: disk-based index. Without it, startup takes HOURS.
+      - INFLUXDB_DATA_INDEX_VERSION=tsi1
+    volumes:
+      - /mnt/BIG/filme/influxdb:/var/lib/influxdb
+    ports:
+      - "8086:8086"
+    networks:
+      - media-network
+    mem_limit: 2G
+    cpus: 1.0
 
   # ============================================
   # IMMICH - Photo Management
@@ -563,7 +858,7 @@ services:
 
   # ✅ VERIFIED WORKING 2026-02-01 - DO NOT MODIFY WITHOUT APPROVAL
   # v112: Added resource limits (mem_limit: 3G, cpus: 1.5) to prevent OOM during ML processing
-  # WARNING: Also set all Immich job concurrency to 1 via Admin UI → Settings → Job Settings
+  # WARNING: Also set all Immich job concurrency to 1 via Admin UI -> Settings -> Job Settings
   immich_machine_learning:
     image: ghcr.io/immich-app/immich-machine-learning:release
     container_name: immich_machine_learning
@@ -591,10 +886,12 @@ services:
   # ============================================
 
   # ✅ VERIFIED WORKING 2026-01-22 - DO NOT MODIFY WITHOUT APPROVAL
+  # v114: PINNED to 10.11.11 - floating 10.11 tag does NOT exist on lscr.io.
+  # Bump 10.11.x patches manually on Diun notification. NEVER major 12.
   # LOCKED tsdproxy.name: "media" - DO NOT CHANGE
   # LOCKED PORT: 8096:8096 - DO NOT CHANGE
   jellyfin:
-    image: lscr.io/linuxserver/jellyfin:latest
+    image: lscr.io/linuxserver/jellyfin:10.11.11
     container_name: jellyfin
     restart: unless-stopped
     <<: *default-dns
@@ -883,6 +1180,7 @@ services:
   # ============================================
 
   # v111: Vikunja task management with PostgreSQL
+  # v114: PUBLICURL aligned to browsed origin + extended JWT session TTLs
   # LOCKED tsdproxy.name: "tasks" - DO NOT CHANGE
   # LOCKED PORT: 3456:3456 - DO NOT CHANGE
   vikunja:
@@ -902,13 +1200,65 @@ services:
       - VIKUNJA_DATABASE_PASSWORD=${POSTGRES_PASSWORD}
       - VIKUNJA_DATABASE_DATABASE=vikunja
       - VIKUNJA_DATABASE_TYPE=postgres
-      - VIKUNJA_SERVICE_PUBLICURL=https://tasks.${TAILSCALE_DOMAIN}
+      # v114: must match the URL actually browsed; mismatch with the
+      # tailscale URL caused malformed-token logouts. Generated links
+      # will use this LAN URL (trade-off accepted).
+      - VIKUNJA_SERVICE_PUBLICURL=http://tasks.home.arpa:3456
       - VIKUNJA_SERVICE_JWTSECRET=${VIKUNJA_JWT_SECRET}
       - VIKUNJA_SERVICE_ENABLEREGISTRATION=true
+      # v114: 30-day sessions; 90 days with "Stay logged in"
+      - VIKUNJA_SERVICE_JWTTTL=2592000
+      - VIKUNJA_SERVICE_JWTTTLLONG=7776000
     volumes:
       - /mnt/BIG/filme/configs/vikunja/files:/app/vikunja/files
     ports:
       - "3456:3456"
+    networks:
+      - media-network
+    depends_on:
+      - postgres
+
+  # ============================================
+  # GIT FORGE - FORGEJO
+  # ============================================
+
+  # v115: Forgejo - version control for the futurama-terraform IaC repo.
+  # Stays on bender permanently: the source of truth for the cluster must
+  # not live on the cluster it defines (same reasoning as Garage).
+  # Rolling :15 tag = LTS minor/patch updates; major upgrade is a manual,
+  # deliberate operation per Forgejo policy.
+  # LOCKED tsdproxy.name: "git" - DO NOT CHANGE
+  # LOCKED PORTS: 3030:3000, 2222:22 - DO NOT CHANGE
+  forgejo:
+    image: codeberg.org/forgejo/forgejo:15
+    container_name: forgejo
+    restart: unless-stopped
+    <<: *default-dns
+    labels:
+      tsdproxy.enable: "true"
+      tsdproxy.name: "git"
+      tsdproxy.container_port: "3000"
+      tsdproxy.dash.icon: "sh/forgejo"
+    environment:
+      - TZ=${TIMEZONE}
+      - USER_UID=1000
+      - USER_GID=1000
+      - FORGEJO__database__DB_TYPE=postgres
+      - FORGEJO__database__HOST=postgres:5432
+      - FORGEJO__database__NAME=forgejo
+      - FORGEJO__database__USER=forgejo
+      - FORGEJO__database__PASSWD=${FORGEJO_DB_PASSWORD}
+      - FORGEJO__server__ROOT_URL=http://git.home.arpa:3030/
+      - FORGEJO__server__DOMAIN=git.home.arpa
+      - FORGEJO__server__SSH_DOMAIN=git.home.arpa
+      - FORGEJO__server__SSH_PORT=2222
+      # v115: single-user instance - no open registration
+      - FORGEJO__service__DISABLE_REGISTRATION=true
+    volumes:
+      - /mnt/BIG/filme/configs/forgejo:/data
+    ports:
+      - "3030:3000"
+      - "2222:22"
     networks:
       - media-network
     depends_on:
@@ -1136,20 +1486,20 @@ services:
     profiles:
       - tools
 
-  # v108: TTS Pipeline - Automated audiobook converter with web UI
-  # v109: Four voice directories + Flask web interface on port 5051
-  # Input directories:
-  #   /input/ro-emil  → ro-RO-EmilNeural (Romanian male)
-  #   /input/ro-alina → ro-RO-AlinaNeural (Romanian female)
-  #   /input/en-ryan  → en-GB-RyanNeural (British male)
-  #   /input/en-sonia → en-GB-SoniaNeural (British female)
+  # audiobook-foundry - published pipeline, lineage tts-pipeline (v108) ->
+  # lrrr (v113) -> audiobook-foundry (20260729, full rename).
+  # Build context is the git checkout; configuration is env-driven
+  # (AF_*); the pipeline now sanitizes oversized M4B metadata tags (ShelfDroid
+  # 2 MB CursorWindow fix). Voice directories unchanged (repo defaults = v109):
+  #   /input/ro-emil  -> ro-RO-EmilNeural    /input/ro-alina -> ro-RO-AlinaNeural
+  #   /input/en-ryan  -> en-GB-RyanNeural    /input/en-sonia -> en-GB-SoniaNeural
   # LOCKED tsdproxy.name: "tts" - DO NOT CHANGE
   # LOCKED PORT: 5051:5051 - DO NOT CHANGE
-  tts-pipeline:
+  audiobook-foundry:
     build:
-      context: /mnt/BIG/filme/configs/tts-pipeline
+      context: /mnt/BIG/filme/configs/audiobook-foundry
       dockerfile: Dockerfile
-    container_name: tts-pipeline
+    container_name: audiobook-foundry
     restart: unless-stopped
     <<: *default-dns
     labels:
@@ -1159,7 +1509,11 @@ services:
       tsdproxy.dash.icon: "mdi/microphone"
     environment:
       - TZ=${TIMEZONE}
-      - NTFY_URL=http://192.168.21.130:8888/tts-pipeline
+      - NTFY_URL=http://10.30.0.11:8888/tts-pipeline
+      # library-path parity with v109 (the repo default is /audiobooks)
+      - AF_OUTPUT_DIR=/audiobooks/cărți
+      # other knobs (AF_VOICES, AF_MAX_DESCRIPTION_CHARS=4000,
+      # AF_CHAPTER_WARN=200, AF_PORT=5051) ride on repo defaults
     volumes:
       - /mnt/BIG/filme/tts/input:/input
       - /mnt/BIG/filme/audiobookshelf/audiobooks:/audiobooks

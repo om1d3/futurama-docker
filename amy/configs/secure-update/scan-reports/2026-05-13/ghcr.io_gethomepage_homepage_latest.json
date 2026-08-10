@@ -1,0 +1,2081 @@
+{
+  "SchemaVersion": 2,
+  "CreatedAt": "2026-05-13T04:41:28.365502143-04:00",
+  "ArtifactName": "ghcr.io/gethomepage/homepage:latest",
+  "ArtifactType": "container_image",
+  "Metadata": {
+    "Size": 267017216,
+    "OS": {
+      "Family": "alpine",
+      "Name": "3.23.4"
+    },
+    "ImageID": "sha256:d3ab993a116ddb4965aa2762af3ac1fb484f6ad853cf785705e6cc1e0aca33d8",
+    "DiffIDs": [
+      "sha256:29df493baa13de438d6d2ece3a8333032e0b7b9b9d8cce4ee82194da255f61e1",
+      "sha256:1f8b21f3390a09b57b90b6c6d6f04a2f13f9208fb57b331d780e9cd4635cac54",
+      "sha256:7e9cf1ccb68e691a29b8bd44ef50d5f954e667ef386aff839565b96d10447243",
+      "sha256:0e2b4d22f01d9379afea1a242fbbeebc5fc4d0a90703888b29985c1c8d694758",
+      "sha256:993986c89f8b649ccfc3ac1de39fa176c8b655207f3f3b75a818a24f281fc116",
+      "sha256:f14d25d82200dd238041991122b0dd7c1d97cdf94922d5b91bff0aa33a7eba7d",
+      "sha256:fc9a15eeefdedcaa4945bd07fb44536e17b068d9ec8d80d5204bf6bdbd180e4b",
+      "sha256:a2d87d31aa41e8ae5466bf5df12ba3f1054f344f359f918e51539ac7076e9422",
+      "sha256:07c9b226fbdc5cf932cc7328615c5ec88209a5a0b2837801afb790494b6ce0d1",
+      "sha256:073a973aaed95a398ac9620ecd9aa4d05fcee2816face6590d68a538d5f5010c"
+    ],
+    "RepoTags": [
+      "ghcr.io/gethomepage/homepage:latest"
+    ],
+    "RepoDigests": [
+      "ghcr.io/gethomepage/homepage@sha256:d8d784e5090111b6e4c56dfd90e272d2953a2094e87349f647165df0fa6c4401"
+    ],
+    "ImageConfig": {
+      "architecture": "amd64",
+      "created": "2026-05-11T15:48:09.479329688Z",
+      "history": [
+        {
+          "created": "2026-04-15T20:01:40Z",
+          "created_by": "ADD alpine-minirootfs-3.23.4-x86_64.tar.gz / # buildkit",
+          "comment": "buildkit.dockerfile.v0"
+        },
+        {
+          "created": "2026-04-15T20:01:40Z",
+          "created_by": "CMD [\"/bin/sh\"]",
+          "comment": "buildkit.dockerfile.v0",
+          "empty_layer": true
+        },
+        {
+          "created": "2026-04-15T20:46:40Z",
+          "created_by": "ENV NODE_VERSION=22.22.2",
+          "comment": "buildkit.dockerfile.v0",
+          "empty_layer": true
+        },
+        {
+          "created": "2026-04-15T20:46:40Z",
+          "created_by": "RUN /bin/sh -c addgroup -g 1000 node     \u0026\u0026 adduser -u 1000 -G node -s /bin/sh -D node     \u0026\u0026 apk add --no-cache         libstdc++     \u0026\u0026 apk add --no-cache --virtual .build-deps         curl     \u0026\u0026 ARCH= OPENSSL_ARCH='linux*' \u0026\u0026 alpineArch=\"$(apk --print-arch)\"       \u0026\u0026 case \"${alpineArch##*-}\" in         x86_64) ARCH='x64' CHECKSUM=\"c58109c8da448196f0d811df7a6079748678132067e3b53d01c8c8a4bcd86992\" OPENSSL_ARCH=linux-x86_64;;         x86) OPENSSL_ARCH=linux-elf;;         aarch64) OPENSSL_ARCH=linux-aarch64;;         arm*) OPENSSL_ARCH=linux-armv4;;         ppc64le) OPENSSL_ARCH=linux-ppc64le;;         s390x) OPENSSL_ARCH=linux-s390x;;         *) ;;       esac   \u0026\u0026 if [ -n \"${CHECKSUM}\" ]; then     set -eu;     curl -fsSLO --compressed \"https://unofficial-builds.nodejs.org/download/release/v$NODE_VERSION/node-v$NODE_VERSION-linux-$ARCH-musl.tar.xz\";     echo \"$CHECKSUM  node-v$NODE_VERSION-linux-$ARCH-musl.tar.xz\" | sha256sum -c -       \u0026\u0026 tar -xJf \"node-v$NODE_VERSION-linux-$ARCH-musl.tar.xz\" -C /usr/local --strip-components=1 --no-same-owner       \u0026\u0026 ln -s /usr/local/bin/node /usr/local/bin/nodejs;   else     echo \"Building from source\"     \u0026\u0026 apk add --no-cache --virtual .build-deps-full         binutils-gold         g++         gcc         gnupg         libgcc         linux-headers         make         python3         py-setuptools     \u0026\u0026 export GNUPGHOME=\"$(mktemp -d)\"     \u0026\u0026 for key in       5BE8A3F6C8A5C01D106C0AD820B1A390B168D356       DD792F5973C6DE52C432CBDAC77ABFA00DDBF2B7       CC68F5A3106FF448322E48ED27F5E38D5B0A215F       8FCCA13FEF1D0C2E91008E09770F7A9A5AE15600       890C08DB8579162FEE0DF9DB8BEAB4DFCF555EF4       C82FA3AE1CBEDC6BE46B9360C43CEC45C17AB93C       108F52B48DB57BB0CC439B2997B01419BD92F80A       A363A499291CBBC940DD62E41F10027AF002F8B0     ; do       { gpg --batch --keyserver hkps://keys.openpgp.org --recv-keys \"$key\" \u0026\u0026 gpg --batch --fingerprint \"$key\"; } ||       { gpg --batch --keyserver keyserver.ubuntu.com --recv-keys \"$key\" \u0026\u0026 gpg --batch --fingerprint \"$key\"; } ;     done     \u0026\u0026 curl -fsSLO --compressed \"https://nodejs.org/dist/v$NODE_VERSION/node-v$NODE_VERSION.tar.xz\"     \u0026\u0026 curl -fsSLO --compressed \"https://nodejs.org/dist/v$NODE_VERSION/SHASUMS256.txt.asc\"     \u0026\u0026 gpg --batch --decrypt --output SHASUMS256.txt SHASUMS256.txt.asc     \u0026\u0026 gpgconf --kill all     \u0026\u0026 rm -rf \"$GNUPGHOME\"     \u0026\u0026 grep \" node-v$NODE_VERSION.tar.xz\\$\" SHASUMS256.txt | sha256sum -c -     \u0026\u0026 tar -xf \"node-v$NODE_VERSION.tar.xz\"     \u0026\u0026 cd \"node-v$NODE_VERSION\"     \u0026\u0026 ./configure     \u0026\u0026 make -j$(getconf _NPROCESSORS_ONLN) V=     \u0026\u0026 make install     \u0026\u0026 apk del .build-deps-full     \u0026\u0026 cd ..     \u0026\u0026 rm -Rf \"node-v$NODE_VERSION\"     \u0026\u0026 rm \"node-v$NODE_VERSION.tar.xz\" SHASUMS256.txt.asc SHASUMS256.txt;   fi   \u0026\u0026 rm -f \"node-v$NODE_VERSION-linux-$ARCH-musl.tar.xz\"   \u0026\u0026 find /usr/local/include/node/openssl/archs -mindepth 1 -maxdepth 1 ! -name \"$OPENSSL_ARCH\" -exec rm -rf {} \\;   \u0026\u0026 apk del .build-deps   \u0026\u0026 node --version   \u0026\u0026 npm --version   \u0026\u0026 rm -rf /tmp/* # buildkit",
+          "comment": "buildkit.dockerfile.v0"
+        },
+        {
+          "created": "2026-04-15T20:46:40Z",
+          "created_by": "ENV YARN_VERSION=1.22.22",
+          "comment": "buildkit.dockerfile.v0",
+          "empty_layer": true
+        },
+        {
+          "created": "2026-04-15T20:46:43Z",
+          "created_by": "RUN /bin/sh -c apk add --no-cache --virtual .build-deps-yarn curl gnupg tar   \u0026\u0026 export GNUPGHOME=\"$(mktemp -d)\"   \u0026\u0026 for key in     6A010C5166006599AA17F08146C2130DFD2497F5   ; do     { gpg --batch --keyserver hkps://keys.openpgp.org --recv-keys \"$key\" \u0026\u0026 gpg --batch --fingerprint \"$key\"; } ||     { gpg --batch --keyserver keyserver.ubuntu.com --recv-keys \"$key\" \u0026\u0026 gpg --batch --fingerprint \"$key\"; } ;   done   \u0026\u0026 curl -fsSLO --compressed \"https://yarnpkg.com/downloads/$YARN_VERSION/yarn-v$YARN_VERSION.tar.gz\"   \u0026\u0026 curl -fsSLO --compressed \"https://yarnpkg.com/downloads/$YARN_VERSION/yarn-v$YARN_VERSION.tar.gz.asc\"   \u0026\u0026 gpg --batch --verify yarn-v$YARN_VERSION.tar.gz.asc yarn-v$YARN_VERSION.tar.gz   \u0026\u0026 gpgconf --kill all   \u0026\u0026 rm -rf \"$GNUPGHOME\"   \u0026\u0026 mkdir -p /opt   \u0026\u0026 tar -xzf yarn-v$YARN_VERSION.tar.gz -C /opt/   \u0026\u0026 ln -s /opt/yarn-v$YARN_VERSION/bin/yarn /usr/local/bin/yarn   \u0026\u0026 ln -s /opt/yarn-v$YARN_VERSION/bin/yarnpkg /usr/local/bin/yarnpkg   \u0026\u0026 rm yarn-v$YARN_VERSION.tar.gz.asc yarn-v$YARN_VERSION.tar.gz   \u0026\u0026 apk del .build-deps-yarn   \u0026\u0026 yarn --version   \u0026\u0026 rm -rf /tmp/* # buildkit",
+          "comment": "buildkit.dockerfile.v0"
+        },
+        {
+          "created": "2026-04-15T20:46:43Z",
+          "created_by": "COPY docker-entrypoint.sh /usr/local/bin/ # buildkit",
+          "comment": "buildkit.dockerfile.v0"
+        },
+        {
+          "created": "2026-04-15T20:46:43Z",
+          "created_by": "ENTRYPOINT [\"docker-entrypoint.sh\"]",
+          "comment": "buildkit.dockerfile.v0",
+          "empty_layer": true
+        },
+        {
+          "created": "2026-04-15T20:46:43Z",
+          "created_by": "CMD [\"node\"]",
+          "comment": "buildkit.dockerfile.v0",
+          "empty_layer": true
+        },
+        {
+          "created": "2026-05-11T15:47:58Z",
+          "created_by": "LABEL org.opencontainers.image.title=Homepage",
+          "comment": "buildkit.dockerfile.v0",
+          "empty_layer": true
+        },
+        {
+          "created": "2026-05-11T15:47:58Z",
+          "created_by": "LABEL org.opencontainers.image.description=A self-hosted services landing page, with docker and service integrations.",
+          "comment": "buildkit.dockerfile.v0",
+          "empty_layer": true
+        },
+        {
+          "created": "2026-05-11T15:47:58Z",
+          "created_by": "LABEL org.opencontainers.image.url=https://github.com/gethomepage/homepage",
+          "comment": "buildkit.dockerfile.v0",
+          "empty_layer": true
+        },
+        {
+          "created": "2026-05-11T15:47:58Z",
+          "created_by": "LABEL org.opencontainers.image.documentation=https://github.com/gethomepage/homepage/wiki",
+          "comment": "buildkit.dockerfile.v0",
+          "empty_layer": true
+        },
+        {
+          "created": "2026-05-11T15:47:58Z",
+          "created_by": "LABEL org.opencontainers.image.source=https://github.com/gethomepage/homepage",
+          "comment": "buildkit.dockerfile.v0",
+          "empty_layer": true
+        },
+        {
+          "created": "2026-05-11T15:47:58Z",
+          "created_by": "LABEL org.opencontainers.image.licenses=Apache-2.0",
+          "comment": "buildkit.dockerfile.v0",
+          "empty_layer": true
+        },
+        {
+          "created": "2026-05-11T15:47:58Z",
+          "created_by": "WORKDIR /app",
+          "comment": "buildkit.dockerfile.v0"
+        },
+        {
+          "created": "2026-05-11T15:48:01Z",
+          "created_by": "COPY --chown=1000:1000 /public ./public/ # buildkit",
+          "comment": "buildkit.dockerfile.v0"
+        },
+        {
+          "created": "2026-05-11T15:48:06Z",
+          "created_by": "COPY --chmod=755 docker-entrypoint.sh /usr/local/bin/ # buildkit",
+          "comment": "buildkit.dockerfile.v0"
+        },
+        {
+          "created": "2026-05-11T15:48:07Z",
+          "created_by": "COPY --chown=1000:1000 /app/.next/standalone/ ./ # buildkit",
+          "comment": "buildkit.dockerfile.v0"
+        },
+        {
+          "created": "2026-05-11T15:48:06Z",
+          "created_by": "COPY --chown=1000:1000 /app/.next/static/ ./.next/static # buildkit",
+          "comment": "buildkit.dockerfile.v0"
+        },
+        {
+          "created": "2026-05-11T15:48:09Z",
+          "created_by": "RUN /bin/sh -c apk add --no-cache su-exec iputils-ping shadow # buildkit",
+          "comment": "buildkit.dockerfile.v0"
+        },
+        {
+          "created": "2026-05-11T15:48:09Z",
+          "created_by": "USER root",
+          "comment": "buildkit.dockerfile.v0",
+          "empty_layer": true
+        },
+        {
+          "created": "2026-05-11T15:48:09Z",
+          "created_by": "ENV NODE_ENV=production",
+          "comment": "buildkit.dockerfile.v0",
+          "empty_layer": true
+        },
+        {
+          "created": "2026-05-11T15:48:09Z",
+          "created_by": "ENV HOSTNAME=::",
+          "comment": "buildkit.dockerfile.v0",
+          "empty_layer": true
+        },
+        {
+          "created": "2026-05-11T15:48:09Z",
+          "created_by": "ENV PORT=3000",
+          "comment": "buildkit.dockerfile.v0",
+          "empty_layer": true
+        },
+        {
+          "created": "2026-05-11T15:48:09Z",
+          "created_by": "EXPOSE [3000/tcp]",
+          "comment": "buildkit.dockerfile.v0",
+          "empty_layer": true
+        },
+        {
+          "created": "2026-05-11T15:48:09Z",
+          "created_by": "HEALTHCHECK \u0026{[\"CMD-SHELL\" \"wget --no-verbose --tries=1 --spider http://127.0.0.1:$PORT/api/healthcheck || exit 1\"] \"10s\" \"3s\" \"20s\" \"0s\" '\\x00'}",
+          "comment": "buildkit.dockerfile.v0",
+          "empty_layer": true
+        },
+        {
+          "created": "2026-05-11T15:48:09Z",
+          "created_by": "ENTRYPOINT [\"docker-entrypoint.sh\"]",
+          "comment": "buildkit.dockerfile.v0",
+          "empty_layer": true
+        },
+        {
+          "created": "2026-05-11T15:48:09Z",
+          "created_by": "CMD [\"node\" \"server.js\"]",
+          "comment": "buildkit.dockerfile.v0",
+          "empty_layer": true
+        }
+      ],
+      "os": "linux",
+      "rootfs": {
+        "type": "layers",
+        "diff_ids": [
+          "sha256:29df493baa13de438d6d2ece3a8333032e0b7b9b9d8cce4ee82194da255f61e1",
+          "sha256:1f8b21f3390a09b57b90b6c6d6f04a2f13f9208fb57b331d780e9cd4635cac54",
+          "sha256:7e9cf1ccb68e691a29b8bd44ef50d5f954e667ef386aff839565b96d10447243",
+          "sha256:0e2b4d22f01d9379afea1a242fbbeebc5fc4d0a90703888b29985c1c8d694758",
+          "sha256:993986c89f8b649ccfc3ac1de39fa176c8b655207f3f3b75a818a24f281fc116",
+          "sha256:f14d25d82200dd238041991122b0dd7c1d97cdf94922d5b91bff0aa33a7eba7d",
+          "sha256:fc9a15eeefdedcaa4945bd07fb44536e17b068d9ec8d80d5204bf6bdbd180e4b",
+          "sha256:a2d87d31aa41e8ae5466bf5df12ba3f1054f344f359f918e51539ac7076e9422",
+          "sha256:07c9b226fbdc5cf932cc7328615c5ec88209a5a0b2837801afb790494b6ce0d1",
+          "sha256:073a973aaed95a398ac9620ecd9aa4d05fcee2816face6590d68a538d5f5010c"
+        ]
+      },
+      "config": {
+        "Cmd": [
+          "node",
+          "server.js"
+        ],
+        "Healthcheck": {
+          "Test": [
+            "CMD-SHELL",
+            "wget --no-verbose --tries=1 --spider http://127.0.0.1:$PORT/api/healthcheck || exit 1"
+          ],
+          "Interval": 10000000000,
+          "Timeout": 3000000000,
+          "StartPeriod": 20000000000
+        },
+        "Entrypoint": [
+          "docker-entrypoint.sh"
+        ],
+        "Env": [
+          "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+          "NODE_VERSION=22.22.2",
+          "YARN_VERSION=1.22.22",
+          "NODE_ENV=production",
+          "HOSTNAME=::",
+          "PORT=3000"
+        ],
+        "Labels": {
+          "org.opencontainers.image.created": "2026-05-11T15:46:40.557Z",
+          "org.opencontainers.image.description": "A highly customizable homepage (or startpage / application dashboard) with Docker and service API integrations.",
+          "org.opencontainers.image.documentation": "https://github.com/gethomepage/homepage/wiki",
+          "org.opencontainers.image.licenses": "GPL-3.0",
+          "org.opencontainers.image.revision": "233721cc905be3a1eeb995963de14cd8d2a0d614",
+          "org.opencontainers.image.source": "https://github.com/gethomepage/homepage",
+          "org.opencontainers.image.title": "homepage",
+          "org.opencontainers.image.url": "https://github.com/gethomepage/homepage",
+          "org.opencontainers.image.version": "v1.13.1"
+        },
+        "User": "root",
+        "WorkingDir": "/app",
+        "ExposedPorts": {
+          "3000/tcp": {}
+        },
+        "ArgsEscaped": true
+      }
+    },
+    "Layers": [
+      {
+        "Size": 8732160,
+        "DiffID": "sha256:29df493baa13de438d6d2ece3a8333032e0b7b9b9d8cce4ee82194da255f61e1"
+      },
+      {
+        "Size": 151081984,
+        "DiffID": "sha256:1f8b21f3390a09b57b90b6c6d6f04a2f13f9208fb57b331d780e9cd4635cac54"
+      },
+      {
+        "Size": 5389312,
+        "DiffID": "sha256:7e9cf1ccb68e691a29b8bd44ef50d5f954e667ef386aff839565b96d10447243"
+      },
+      {
+        "Size": 3584,
+        "DiffID": "sha256:0e2b4d22f01d9379afea1a242fbbeebc5fc4d0a90703888b29985c1c8d694758"
+      },
+      {
+        "Size": 1536,
+        "DiffID": "sha256:993986c89f8b649ccfc3ac1de39fa176c8b655207f3f3b75a818a24f281fc116"
+      },
+      {
+        "Size": 1642496,
+        "DiffID": "sha256:f14d25d82200dd238041991122b0dd7c1d97cdf94922d5b91bff0aa33a7eba7d"
+      },
+      {
+        "Size": 6144,
+        "DiffID": "sha256:fc9a15eeefdedcaa4945bd07fb44536e17b068d9ec8d80d5204bf6bdbd180e4b"
+      },
+      {
+        "Size": 94989824,
+        "DiffID": "sha256:a2d87d31aa41e8ae5466bf5df12ba3f1054f344f359f918e51539ac7076e9422"
+      },
+      {
+        "Size": 2316800,
+        "DiffID": "sha256:07c9b226fbdc5cf932cc7328615c5ec88209a5a0b2837801afb790494b6ce0d1"
+      },
+      {
+        "Size": 2853376,
+        "DiffID": "sha256:073a973aaed95a398ac9620ecd9aa4d05fcee2816face6590d68a538d5f5010c"
+      }
+    ]
+  },
+  "Results": [
+    {
+      "Target": "ghcr.io/gethomepage/homepage:latest (alpine 3.23.4)",
+      "Class": "os-pkgs",
+      "Type": "alpine"
+    },
+    {
+      "Target": "Node.js",
+      "Class": "lang-pkgs",
+      "Type": "node-pkg",
+      "Vulnerabilities": [
+        {
+          "VulnerabilityID": "CVE-2026-44288",
+          "VendorIDs": [
+            "GHSA-q6x5-8v7m-xcrf"
+          ],
+          "PkgID": "@protobufjs/utf8@1.1.0",
+          "PkgName": "@protobufjs/utf8",
+          "PkgPath": "app/node_modules/.pnpm/@protobufjs+utf8@1.1.0/node_modules/@protobufjs/utf8/package.json",
+          "PkgIdentifier": {
+            "PURL": "pkg:npm/%40protobufjs/utf8@1.1.0",
+            "UID": "9b032e58ceb681f"
+          },
+          "InstalledVersion": "1.1.0",
+          "FixedVersion": "1.1.1",
+          "Status": "fixed",
+          "Layer": {
+            "DiffID": "sha256:a2d87d31aa41e8ae5466bf5df12ba3f1054f344f359f918e51539ac7076e9422"
+          },
+          "SeveritySource": "ghsa",
+          "PrimaryURL": "https://avd.aquasec.com/nvd/cve-2026-44288",
+          "DataSource": {
+            "ID": "ghsa",
+            "Name": "GitHub Security Advisory npm",
+            "URL": "https://github.com/advisories?query=type%3Areviewed+ecosystem%3Anpm"
+          },
+          "Custom": null,
+          "Title": "protobufjs has overlong UTF-8 decoding",
+          "Description": "## Summary\n\nprotobufjs includes a minimal UTF-8 decoder used in non-Node and fallback decoding paths. The affected decoder accepted overlong UTF-8 byte sequences and decoded them to their canonical characters instead of replacing them.\n\nThe issue concerns overlong encodings and code points outside the Unicode range. protobufjs may still accept some non-strict UTF-8 input for compatibility, so applications should not rely on protobufjs as a general-purpose strict UTF-8 validator.\n\n## Impact\n\nAn attacker who can provide protobuf binary data decoded through the affected UTF-8 path may be able to bypass application-level checks that inspect raw bytes before protobuf string decoding. For example, bytes that do not contain certain ASCII characters could decode to strings containing those characters.\n\nThe practical impact depends on downstream application validation and how decoded strings are used. Node.js Buffer-backed decoding paths are not directly affected when they use Node's native UTF-8 decoding.\n\n## Preconditions\n\n- The application must decode protobuf binary data influenced by an attacker.\n- The affected protobuf string field must be decoded through protobufjs's minimal UTF-8 decoder rather than a native UTF-8 decoder.\n- The application must rely on byte-level filtering or validation before protobuf string decoding.\n- The decoded string must then be used in a security-sensitive context.\n\n## Workarounds\n\nAvoid relying only on byte-level filtering before protobuf string decoding with affected versions. Validate decoded strings at the point where they are used, and prefer runtime paths that use native UTF-8 decoding where necessary.",
+          "Severity": "MEDIUM",
+          "VendorSeverity": {
+            "ghsa": 2
+          },
+          "CVSS": {
+            "ghsa": {
+              "V3Vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:L/A:N",
+              "V3Score": 5.3
+            }
+          },
+          "References": [
+            "https://github.com/protobufjs/protobuf.js",
+            "https://github.com/protobufjs/protobuf.js/releases/tag/protobufjs-v7.5.6",
+            "https://github.com/protobufjs/protobuf.js/releases/tag/protobufjs-v8.0.2",
+            "https://github.com/protobufjs/protobuf.js/security/advisories/GHSA-q6x5-8v7m-xcrf"
+          ]
+        },
+        {
+          "VulnerabilityID": "CVE-2026-33750",
+          "VendorIDs": [
+            "GHSA-f886-m6hf-6m8v"
+          ],
+          "PkgID": "brace-expansion@2.0.2",
+          "PkgName": "brace-expansion",
+          "PkgPath": "usr/local/lib/node_modules/npm/node_modules/brace-expansion/package.json",
+          "PkgIdentifier": {
+            "PURL": "pkg:npm/brace-expansion@2.0.2",
+            "UID": "e0d647a9ad61f8ba"
+          },
+          "InstalledVersion": "2.0.2",
+          "FixedVersion": "5.0.5, 3.0.2, 2.0.3, 1.1.13",
+          "Status": "fixed",
+          "Layer": {
+            "DiffID": "sha256:1f8b21f3390a09b57b90b6c6d6f04a2f13f9208fb57b331d780e9cd4635cac54"
+          },
+          "SeveritySource": "ghsa",
+          "PrimaryURL": "https://avd.aquasec.com/nvd/cve-2026-33750",
+          "DataSource": {
+            "ID": "ghsa",
+            "Name": "GitHub Security Advisory npm",
+            "URL": "https://github.com/advisories?query=type%3Areviewed+ecosystem%3Anpm"
+          },
+          "Custom": null,
+          "Title": "brace-expansion: brace-expansion: Denial of Service via zero step value in brace pattern",
+          "Description": "The brace-expansion library generates arbitrary strings containing a common prefix and suffix. Prior to versions 5.0.5, 3.0.2, 2.0.3, and 1.1.13, a brace pattern with a zero step value (e.g., `{1..2..0}`) causes the sequence generation loop to run indefinitely, making the process hang for seconds and allocate heaps of memory. Versions 5.0.5, 3.0.2, 2.0.3, and 1.1.13 fix the issue. As a workaround, sanitize strings passed to `expand()` to ensure a step value of `0` is not used.",
+          "Severity": "MEDIUM",
+          "CweIDs": [
+            "CWE-400"
+          ],
+          "VendorSeverity": {
+            "ghsa": 2,
+            "nvd": 3,
+            "redhat": 2
+          },
+          "CVSS": {
+            "ghsa": {
+              "V3Vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:R/S:U/C:N/I:N/A:H",
+              "V3Score": 6.5
+            },
+            "nvd": {
+              "V3Vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H",
+              "V3Score": 7.5
+            },
+            "redhat": {
+              "V3Vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:R/S:U/C:N/I:N/A:H",
+              "V3Score": 6.5
+            }
+          },
+          "References": [
+            "https://access.redhat.com/security/cve/CVE-2026-33750",
+            "https://github.com/juliangruber/brace-expansion",
+            "https://github.com/juliangruber/brace-expansion/blob/daa71bcb4a30a2df9bcb7f7b8daaf2ab30e5794a/src/index.ts#L107-L113",
+            "https://github.com/juliangruber/brace-expansion/blob/daa71bcb4a30a2df9bcb7f7b8daaf2ab30e5794a/src/index.ts#L184",
+            "https://github.com/juliangruber/brace-expansion/commit/311ac0d54994158c0a384e286a7d6cbb17ee8ed5",
+            "https://github.com/juliangruber/brace-expansion/commit/7fd684f89fdde3549563d0a6522226a9189472a2",
+            "https://github.com/juliangruber/brace-expansion/commit/b9cacd9e55e7a1fa588fe4b7bb1159d52f1d902a",
+            "https://github.com/juliangruber/brace-expansion/issues/98",
+            "https://github.com/juliangruber/brace-expansion/pull/95",
+            "https://github.com/juliangruber/brace-expansion/pull/96",
+            "https://github.com/juliangruber/brace-expansion/pull/97",
+            "https://github.com/juliangruber/brace-expansion/security/advisories/GHSA-f886-m6hf-6m8v",
+            "https://nvd.nist.gov/vuln/detail/CVE-2026-33750",
+            "https://www.cve.org/CVERecord?id=CVE-2026-33750"
+          ],
+          "PublishedDate": "2026-03-27T15:16:57.297Z",
+          "LastModifiedDate": "2026-04-22T14:23:19.11Z"
+        },
+        {
+          "VulnerabilityID": "CVE-2026-25896",
+          "VendorIDs": [
+            "GHSA-m7jm-9gc2-mpf2"
+          ],
+          "PkgID": "fast-xml-parser@5.2.5",
+          "PkgName": "fast-xml-parser",
+          "PkgPath": "app/node_modules/.pnpm/fast-xml-parser@5.2.5/node_modules/fast-xml-parser/package.json",
+          "PkgIdentifier": {
+            "PURL": "pkg:npm/fast-xml-parser@5.2.5",
+            "UID": "65531709a7fe9070"
+          },
+          "InstalledVersion": "5.2.5",
+          "FixedVersion": "5.3.5, 4.5.4",
+          "Status": "fixed",
+          "Layer": {
+            "DiffID": "sha256:a2d87d31aa41e8ae5466bf5df12ba3f1054f344f359f918e51539ac7076e9422"
+          },
+          "SeveritySource": "ghsa",
+          "PrimaryURL": "https://avd.aquasec.com/nvd/cve-2026-25896",
+          "DataSource": {
+            "ID": "ghsa",
+            "Name": "GitHub Security Advisory npm",
+            "URL": "https://github.com/advisories?query=type%3Areviewed+ecosystem%3Anpm"
+          },
+          "Custom": null,
+          "Title": "fast-xml-parser: fast-xml-parser: Cross-Site Scripting (XSS) due to improper DOCTYPE entity handling",
+          "Description": "fast-xml-parser allows users to validate XML, parse XML to JS object, or build XML from JS object without C/C++ based libraries and no callback. From 4.1.3to before 5.3.5, a dot (.) in a DOCTYPE entity name is treated as a regex wildcard during entity replacement, allowing an attacker to shadow built-in XML entities (\u0026lt;, \u0026gt;, \u0026amp;, \u0026quot;, \u0026apos;) with arbitrary values. This bypasses entity encoding and leads to XSS when parsed output is rendered. This vulnerability is fixed in 5.3.5.",
+          "Severity": "CRITICAL",
+          "CweIDs": [
+            "CWE-185"
+          ],
+          "VendorSeverity": {
+            "ghsa": 4,
+            "redhat": 3
+          },
+          "CVSS": {
+            "ghsa": {
+              "V3Vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:C/C:L/I:H/A:N",
+              "V3Score": 9.3
+            },
+            "redhat": {
+              "V3Vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:R/S:C/C:L/I:L/A:L",
+              "V3Score": 7.1
+            }
+          },
+          "References": [
+            "https://access.redhat.com/security/cve/CVE-2026-25896",
+            "https://github.com/NaturalIntelligence/fast-xml-parser",
+            "https://github.com/NaturalIntelligence/fast-xml-parser/commit/943ef0eb1b2d3284e72dd74f44a042ee9f07026e",
+            "https://github.com/NaturalIntelligence/fast-xml-parser/commit/ddcd0acf26ddd682cb0dc15a2bd6aa3b96bb1e69",
+            "https://github.com/NaturalIntelligence/fast-xml-parser/releases/tag/v5.3.5",
+            "https://github.com/NaturalIntelligence/fast-xml-parser/security/advisories/GHSA-m7jm-9gc2-mpf2",
+            "https://nvd.nist.gov/vuln/detail/CVE-2026-25896",
+            "https://www.cve.org/CVERecord?id=CVE-2026-25896"
+          ],
+          "PublishedDate": "2026-02-20T21:19:27.47Z",
+          "LastModifiedDate": "2026-03-02T14:54:02.76Z"
+        },
+        {
+          "VulnerabilityID": "CVE-2026-25128",
+          "VendorIDs": [
+            "GHSA-37qj-frw5-hhjh"
+          ],
+          "PkgID": "fast-xml-parser@5.2.5",
+          "PkgName": "fast-xml-parser",
+          "PkgPath": "app/node_modules/.pnpm/fast-xml-parser@5.2.5/node_modules/fast-xml-parser/package.json",
+          "PkgIdentifier": {
+            "PURL": "pkg:npm/fast-xml-parser@5.2.5",
+            "UID": "65531709a7fe9070"
+          },
+          "InstalledVersion": "5.2.5",
+          "FixedVersion": "5.3.4",
+          "Status": "fixed",
+          "Layer": {
+            "DiffID": "sha256:a2d87d31aa41e8ae5466bf5df12ba3f1054f344f359f918e51539ac7076e9422"
+          },
+          "SeveritySource": "ghsa",
+          "PrimaryURL": "https://avd.aquasec.com/nvd/cve-2026-25128",
+          "DataSource": {
+            "ID": "ghsa",
+            "Name": "GitHub Security Advisory npm",
+            "URL": "https://github.com/advisories?query=type%3Areviewed+ecosystem%3Anpm"
+          },
+          "Custom": null,
+          "Title": "fast-xml-parser: fast-xml-parser has RangeError DoS Numeric Entities Bug",
+          "Description": "fast-xml-parser allows users to validate XML, parse XML to JS object, or build XML from JS object without C/C++ based libraries and no callback. In versions 5.0.9 through 5.3.3, a RangeError vulnerability exists in the numeric entity processing of fast-xml-parser when parsing XML with out-of-range entity code points (e.g., `\u0026#9999999;` or `\u0026#xFFFFFF;`). This causes the parser to throw an uncaught exception, crashing any application that processes untrusted XML input. Version 5.3.4 fixes the issue.",
+          "Severity": "HIGH",
+          "CweIDs": [
+            "CWE-20",
+            "CWE-248"
+          ],
+          "VendorSeverity": {
+            "ghsa": 3,
+            "redhat": 2
+          },
+          "CVSS": {
+            "ghsa": {
+              "V3Vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H",
+              "V3Score": 7.5
+            },
+            "redhat": {
+              "V3Vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:L",
+              "V3Score": 5.3
+            }
+          },
+          "References": [
+            "https://access.redhat.com/security/cve/CVE-2026-25128",
+            "https://github.com/NaturalIntelligence/fast-xml-parser",
+            "https://github.com/NaturalIntelligence/fast-xml-parser/commit/4e387f61c4a5cef792f6a2f42467013290bf95dc",
+            "https://github.com/NaturalIntelligence/fast-xml-parser/releases/tag/v5.3.4",
+            "https://github.com/NaturalIntelligence/fast-xml-parser/security/advisories/GHSA-37qj-frw5-hhjh",
+            "https://nvd.nist.gov/vuln/detail/CVE-2026-25128",
+            "https://www.cve.org/CVERecord?id=CVE-2026-25128"
+          ],
+          "PublishedDate": "2026-01-30T16:16:14.123Z",
+          "LastModifiedDate": "2026-02-27T20:22:44.7Z"
+        },
+        {
+          "VulnerabilityID": "CVE-2026-26278",
+          "VendorIDs": [
+            "GHSA-jmr7-xgp7-cmfj"
+          ],
+          "PkgID": "fast-xml-parser@5.2.5",
+          "PkgName": "fast-xml-parser",
+          "PkgPath": "app/node_modules/.pnpm/fast-xml-parser@5.2.5/node_modules/fast-xml-parser/package.json",
+          "PkgIdentifier": {
+            "PURL": "pkg:npm/fast-xml-parser@5.2.5",
+            "UID": "65531709a7fe9070"
+          },
+          "InstalledVersion": "5.2.5",
+          "FixedVersion": "4.5.4, 5.3.6",
+          "Status": "fixed",
+          "Layer": {
+            "DiffID": "sha256:a2d87d31aa41e8ae5466bf5df12ba3f1054f344f359f918e51539ac7076e9422"
+          },
+          "SeveritySource": "ghsa",
+          "PrimaryURL": "https://avd.aquasec.com/nvd/cve-2026-26278",
+          "DataSource": {
+            "ID": "ghsa",
+            "Name": "GitHub Security Advisory npm",
+            "URL": "https://github.com/advisories?query=type%3Areviewed+ecosystem%3Anpm"
+          },
+          "Custom": null,
+          "Title": "fast-xml-parser: fast-xml-parser: Denial of Service via unlimited XML entity expansion",
+          "Description": "fast-xml-parser allows users to validate XML, parse XML to JS object, or build XML from JS object without C/C++ based libraries and no callback. In versions 4.1.3 through 5.3.5, the XML parser can be forced to do an unlimited amount of entity expansion. With a very small XML input, it’s possible to make the parser spend seconds or even minutes processing a single request, effectively freezing the application. Version 5.3.6 fixes the issue. As a workaround, avoid using DOCTYPE parsing by `processEntities: false` option.",
+          "Severity": "HIGH",
+          "CweIDs": [
+            "CWE-776"
+          ],
+          "VendorSeverity": {
+            "ghsa": 3,
+            "redhat": 3
+          },
+          "CVSS": {
+            "ghsa": {
+              "V3Vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H",
+              "V3Score": 7.5
+            },
+            "redhat": {
+              "V3Vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H",
+              "V3Score": 7.5
+            }
+          },
+          "References": [
+            "https://access.redhat.com/security/cve/CVE-2026-26278",
+            "https://github.com/NaturalIntelligence/fast-xml-parser",
+            "https://github.com/NaturalIntelligence/fast-xml-parser/commit/910dae5be2de2955e968558fadf6e8f74f117a77",
+            "https://github.com/NaturalIntelligence/fast-xml-parser/releases/tag/v5.3.6",
+            "https://github.com/NaturalIntelligence/fast-xml-parser/security/advisories/GHSA-jmr7-xgp7-cmfj",
+            "https://nvd.nist.gov/vuln/detail/CVE-2026-26278",
+            "https://www.cve.org/CVERecord?id=CVE-2026-26278"
+          ],
+          "PublishedDate": "2026-02-19T20:25:43.717Z",
+          "LastModifiedDate": "2026-02-23T19:30:26.017Z"
+        },
+        {
+          "VulnerabilityID": "CVE-2026-33036",
+          "VendorIDs": [
+            "GHSA-8gc5-j5rx-235r"
+          ],
+          "PkgID": "fast-xml-parser@5.2.5",
+          "PkgName": "fast-xml-parser",
+          "PkgPath": "app/node_modules/.pnpm/fast-xml-parser@5.2.5/node_modules/fast-xml-parser/package.json",
+          "PkgIdentifier": {
+            "PURL": "pkg:npm/fast-xml-parser@5.2.5",
+            "UID": "65531709a7fe9070"
+          },
+          "InstalledVersion": "5.2.5",
+          "FixedVersion": "5.5.6, 4.5.5",
+          "Status": "fixed",
+          "Layer": {
+            "DiffID": "sha256:a2d87d31aa41e8ae5466bf5df12ba3f1054f344f359f918e51539ac7076e9422"
+          },
+          "SeveritySource": "ghsa",
+          "PrimaryURL": "https://avd.aquasec.com/nvd/cve-2026-33036",
+          "DataSource": {
+            "ID": "ghsa",
+            "Name": "GitHub Security Advisory npm",
+            "URL": "https://github.com/advisories?query=type%3Areviewed+ecosystem%3Anpm"
+          },
+          "Custom": null,
+          "Title": "fast-xml-parser: fast-xml-parser: Denial of Service via XML entity expansion bypass",
+          "Description": "fast-xml-parser allows users to process XML from JS object without C/C++ based libraries or callbacks. Versions 4.0.0-beta.3 through 5.5.5 contain a bypass vulnerability where numeric character references (\u0026#NNN;, \u0026#xHH;) and standard XML entities completely evade the entity expansion limits (e.g., maxTotalExpansions, maxExpandedLength) added to fix CVE-2026-26278, enabling XML entity expansion Denial of Service. The root cause is that replaceEntitiesValue() in OrderedObjParser.js only enforces expansion counting on DOCTYPE-defined entities while the lastEntities loop handling numeric/standard entities performs no counting at all. An attacker supplying 1M numeric entity references like \u0026#65; can force ~147MB of memory allocation and heavy CPU usage, potentially crashing the process—even when developers have configured strict limits. This issue has been fixed in version 5.5.6.",
+          "Severity": "HIGH",
+          "CweIDs": [
+            "CWE-776"
+          ],
+          "VendorSeverity": {
+            "ghsa": 3,
+            "redhat": 2
+          },
+          "CVSS": {
+            "ghsa": {
+              "V3Vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H",
+              "V3Score": 7.5
+            },
+            "redhat": {
+              "V3Vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H",
+              "V3Score": 7.5
+            }
+          },
+          "References": [
+            "https://access.redhat.com/security/cve/CVE-2026-33036",
+            "https://github.com/NaturalIntelligence/fast-xml-parser",
+            "https://github.com/NaturalIntelligence/fast-xml-parser/commit/bd26122c838e6a55e7d7ac49b4ccc01a49999a01",
+            "https://github.com/NaturalIntelligence/fast-xml-parser/releases/tag/v4.5.5",
+            "https://github.com/NaturalIntelligence/fast-xml-parser/releases/tag/v5.5.6",
+            "https://github.com/NaturalIntelligence/fast-xml-parser/security/advisories/GHSA-8gc5-j5rx-235r",
+            "https://nvd.nist.gov/vuln/detail/CVE-2026-33036",
+            "https://www.cve.org/CVERecord?id=CVE-2026-33036"
+          ],
+          "PublishedDate": "2026-03-20T06:16:11.63Z",
+          "LastModifiedDate": "2026-03-23T16:28:10.93Z"
+        },
+        {
+          "VulnerabilityID": "CVE-2026-33349",
+          "VendorIDs": [
+            "GHSA-jp2q-39xq-3w4g"
+          ],
+          "PkgID": "fast-xml-parser@5.2.5",
+          "PkgName": "fast-xml-parser",
+          "PkgPath": "app/node_modules/.pnpm/fast-xml-parser@5.2.5/node_modules/fast-xml-parser/package.json",
+          "PkgIdentifier": {
+            "PURL": "pkg:npm/fast-xml-parser@5.2.5",
+            "UID": "65531709a7fe9070"
+          },
+          "InstalledVersion": "5.2.5",
+          "FixedVersion": "4.5.5, 5.5.7",
+          "Status": "fixed",
+          "Layer": {
+            "DiffID": "sha256:a2d87d31aa41e8ae5466bf5df12ba3f1054f344f359f918e51539ac7076e9422"
+          },
+          "SeveritySource": "ghsa",
+          "PrimaryURL": "https://avd.aquasec.com/nvd/cve-2026-33349",
+          "DataSource": {
+            "ID": "ghsa",
+            "Name": "GitHub Security Advisory npm",
+            "URL": "https://github.com/advisories?query=type%3Areviewed+ecosystem%3Anpm"
+          },
+          "Custom": null,
+          "Title": "fast-xml-parser: fast-xml-parser: Denial of Service via unbounded entity expansion due to incorrect configuration limit handling",
+          "Description": "fast-xml-parser allows users to process XML from JS object without C/C++ based libraries or callbacks. From version 4.0.0-beta.3 to before version 5.5.7, the DocTypeReader in fast-xml-parser uses JavaScript truthy checks to evaluate maxEntityCount and maxEntitySize configuration limits. When a developer explicitly sets either limit to 0 — intending to disallow all entities or restrict entity size to zero bytes — the falsy nature of 0 in JavaScript causes the guard conditions to short-circuit, completely bypassing the limits. An attacker who can supply XML input to such an application can trigger unbounded entity expansion, leading to memory exhaustion and denial of service. This issue has been patched in version 5.5.7.",
+          "Severity": "MEDIUM",
+          "CweIDs": [
+            "CWE-1284"
+          ],
+          "VendorSeverity": {
+            "ghsa": 2,
+            "redhat": 2
+          },
+          "CVSS": {
+            "ghsa": {
+              "V3Vector": "CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:N/I:N/A:H",
+              "V3Score": 5.9
+            },
+            "redhat": {
+              "V3Vector": "CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:N/I:N/A:H",
+              "V3Score": 5.9
+            }
+          },
+          "References": [
+            "https://access.redhat.com/security/cve/CVE-2026-33349",
+            "https://github.com/NaturalIntelligence/fast-xml-parser",
+            "https://github.com/NaturalIntelligence/fast-xml-parser/commit/239b64aa1fc5c5455ddebbbb54a187eb68c9fdb7",
+            "https://github.com/NaturalIntelligence/fast-xml-parser/commit/88d0936a23dabe51bfbf42255e2ce912dfee2221",
+            "https://github.com/NaturalIntelligence/fast-xml-parser/security/advisories/GHSA-jp2q-39xq-3w4g",
+            "https://nvd.nist.gov/vuln/detail/CVE-2026-33349",
+            "https://www.cve.org/CVERecord?id=CVE-2026-33349"
+          ],
+          "PublishedDate": "2026-03-24T20:16:29.407Z",
+          "LastModifiedDate": "2026-03-26T13:01:52.857Z"
+        },
+        {
+          "VulnerabilityID": "CVE-2026-41650",
+          "VendorIDs": [
+            "GHSA-gh4j-gqv2-49f6"
+          ],
+          "PkgID": "fast-xml-parser@5.2.5",
+          "PkgName": "fast-xml-parser",
+          "PkgPath": "app/node_modules/.pnpm/fast-xml-parser@5.2.5/node_modules/fast-xml-parser/package.json",
+          "PkgIdentifier": {
+            "PURL": "pkg:npm/fast-xml-parser@5.2.5",
+            "UID": "65531709a7fe9070"
+          },
+          "InstalledVersion": "5.2.5",
+          "FixedVersion": "5.7.0",
+          "Status": "fixed",
+          "Layer": {
+            "DiffID": "sha256:a2d87d31aa41e8ae5466bf5df12ba3f1054f344f359f918e51539ac7076e9422"
+          },
+          "SeveritySource": "ghsa",
+          "PrimaryURL": "https://avd.aquasec.com/nvd/cve-2026-41650",
+          "DataSource": {
+            "ID": "ghsa",
+            "Name": "GitHub Security Advisory npm",
+            "URL": "https://github.com/advisories?query=type%3Areviewed+ecosystem%3Anpm"
+          },
+          "Custom": null,
+          "Title": "fast-xml-parser XMLBuilder: XML Comment and CDATA Injection via Unescaped Delimiters",
+          "Description": "fast-xml-parser allows users to process XML from JS object without C/C++ based libraries or callbacks. Prior to version 5.7.0, XMLBuilder does not escape the \"--\u003e\" sequence in comment content or the \"]]\u003e\" sequence in CDATA sections when building XML from JavaScript objects. This allows XML injection when user-controlled data flows into comments or CDATA elements, leading to XSS, SOAP injection, or data manipulation. This issue has been patched in version 5.7.0.",
+          "Severity": "MEDIUM",
+          "CweIDs": [
+            "CWE-91"
+          ],
+          "VendorSeverity": {
+            "ghsa": 2
+          },
+          "CVSS": {
+            "ghsa": {
+              "V3Vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:R/S:C/C:L/I:L/A:N",
+              "V3Score": 6.1
+            }
+          },
+          "References": [
+            "https://github.com/NaturalIntelligence/fast-xml-parser",
+            "https://github.com/NaturalIntelligence/fast-xml-parser/releases/tag/v5.6.0",
+            "https://github.com/NaturalIntelligence/fast-xml-parser/security/advisories/GHSA-gh4j-gqv2-49f6",
+            "https://nvd.nist.gov/vuln/detail/CVE-2026-41650"
+          ],
+          "PublishedDate": "2026-05-07T15:16:07.767Z",
+          "LastModifiedDate": "2026-05-12T20:30:29.623Z"
+        },
+        {
+          "VulnerabilityID": "CVE-2026-27942",
+          "VendorIDs": [
+            "GHSA-fj3w-jwp8-x2g3"
+          ],
+          "PkgID": "fast-xml-parser@5.2.5",
+          "PkgName": "fast-xml-parser",
+          "PkgPath": "app/node_modules/.pnpm/fast-xml-parser@5.2.5/node_modules/fast-xml-parser/package.json",
+          "PkgIdentifier": {
+            "PURL": "pkg:npm/fast-xml-parser@5.2.5",
+            "UID": "65531709a7fe9070"
+          },
+          "InstalledVersion": "5.2.5",
+          "FixedVersion": "5.3.8, 4.5.4",
+          "Status": "fixed",
+          "Layer": {
+            "DiffID": "sha256:a2d87d31aa41e8ae5466bf5df12ba3f1054f344f359f918e51539ac7076e9422"
+          },
+          "SeveritySource": "ghsa",
+          "PrimaryURL": "https://avd.aquasec.com/nvd/cve-2026-27942",
+          "DataSource": {
+            "ID": "ghsa",
+            "Name": "GitHub Security Advisory npm",
+            "URL": "https://github.com/advisories?query=type%3Areviewed+ecosystem%3Anpm"
+          },
+          "Custom": null,
+          "Title": "fast-xml-parser: fast-xml-parser: Stack overflow leads to Denial of Service",
+          "Description": "fast-xml-parser allows users to validate XML, parse XML to JS object, or build XML from JS object without C/C++ based libraries and no callback. Prior to version 5.3.8, the application crashes with stack overflow when user use XML builder with `preserveOrder:true`. Version 5.3.8 fixes the issue. As a workaround, use XML builder with `preserveOrder:false` or check the input data before passing to builder.",
+          "Severity": "LOW",
+          "CweIDs": [
+            "CWE-120"
+          ],
+          "VendorSeverity": {
+            "ghsa": 1,
+            "nvd": 3,
+            "redhat": 2
+          },
+          "CVSS": {
+            "ghsa": {
+              "V40Vector": "CVSS:4.0/AV:N/AC:L/AT:N/PR:N/UI:N/VC:N/VI:N/VA:L/SC:N/SI:N/SA:N/E:U",
+              "V40Score": 2.7
+            },
+            "nvd": {
+              "V3Vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H",
+              "V3Score": 7.5
+            },
+            "redhat": {
+              "V3Vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H",
+              "V3Score": 7.5
+            }
+          },
+          "References": [
+            "https://access.redhat.com/security/cve/CVE-2026-27942",
+            "https://github.com/NaturalIntelligence/fast-xml-parser",
+            "https://github.com/NaturalIntelligence/fast-xml-parser/commit/c13a961910f14986295dd28484eee830fa1a0e8a",
+            "https://github.com/NaturalIntelligence/fast-xml-parser/pull/791",
+            "https://github.com/NaturalIntelligence/fast-xml-parser/security/advisories/GHSA-fj3w-jwp8-x2g3",
+            "https://nvd.nist.gov/vuln/detail/CVE-2026-27942",
+            "https://www.cve.org/CVERecord?id=CVE-2026-27942"
+          ],
+          "PublishedDate": "2026-02-26T02:16:22.357Z",
+          "LastModifiedDate": "2026-03-02T14:54:48.08Z"
+        },
+        {
+          "VulnerabilityID": "CVE-2026-42338",
+          "VendorIDs": [
+            "GHSA-v2v4-37r5-5v8g"
+          ],
+          "PkgID": "ip-address@10.1.0",
+          "PkgName": "ip-address",
+          "PkgPath": "usr/local/lib/node_modules/npm/node_modules/ip-address/package.json",
+          "PkgIdentifier": {
+            "PURL": "pkg:npm/ip-address@10.1.0",
+            "UID": "bb35f9c13d5dd1cb"
+          },
+          "InstalledVersion": "10.1.0",
+          "FixedVersion": "10.1.1",
+          "Status": "fixed",
+          "Layer": {
+            "DiffID": "sha256:1f8b21f3390a09b57b90b6c6d6f04a2f13f9208fb57b331d780e9cd4635cac54"
+          },
+          "SeveritySource": "ghsa",
+          "PrimaryURL": "https://avd.aquasec.com/nvd/cve-2026-42338",
+          "DataSource": {
+            "ID": "ghsa",
+            "Name": "GitHub Security Advisory npm",
+            "URL": "https://github.com/advisories?query=type%3Areviewed+ecosystem%3Anpm"
+          },
+          "Custom": null,
+          "Title": "ip-address has XSS in Address6 HTML-emitting methods",
+          "Description": "ip-address is a library for parsing and manipulating IPv4 and IPv6 addresses in JavaScript. Prior to 10.1.1, Address6.group() and Address6.link() do not HTML-escape attacker-controlled content before embedding it in the HTML strings they return, and AddressError.parseMessage (emitted by the Address6 constructor for invalid input) can contain unescaped attacker-controlled content in one branch. An application that (1) passes untrusted input to Address6 and (2) renders the output of these methods, or the thrown error's parseMessage, as HTML (e.g. via innerHTML) is vulnerable to cross-site scripting. This vulnerability is fixed in 10.1.1.",
+          "Severity": "MEDIUM",
+          "CweIDs": [
+            "CWE-79"
+          ],
+          "VendorSeverity": {
+            "ghsa": 2
+          },
+          "CVSS": {
+            "ghsa": {
+              "V40Vector": "CVSS:4.0/AV:N/AC:L/AT:N/PR:N/UI:P/VC:L/VI:L/VA:N/SC:N/SI:N/SA:N",
+              "V40Score": 5.3
+            }
+          },
+          "References": [
+            "https://github.com/beaugunderson/ip-address",
+            "https://github.com/beaugunderson/ip-address/security/advisories/GHSA-v2v4-37r5-5v8g"
+          ],
+          "PublishedDate": "2026-05-12T20:16:41.13Z",
+          "LastModifiedDate": "2026-05-12T20:16:41.13Z"
+        },
+        {
+          "VulnerabilityID": "CVE-2026-44573",
+          "VendorIDs": [
+            "GHSA-36qx-fr4f-26g5"
+          ],
+          "PkgID": "next@16.2.4",
+          "PkgName": "next",
+          "PkgPath": "app/node_modules/.pnpm/next@16.2.4_react-dom@19.2.5_react@19.2.5__react@19.2.5/node_modules/next/package.json",
+          "PkgIdentifier": {
+            "PURL": "pkg:npm/next@16.2.4",
+            "UID": "338413893bb3b099"
+          },
+          "InstalledVersion": "16.2.4",
+          "FixedVersion": "15.5.16, 16.2.5",
+          "Status": "fixed",
+          "Layer": {
+            "DiffID": "sha256:a2d87d31aa41e8ae5466bf5df12ba3f1054f344f359f918e51539ac7076e9422"
+          },
+          "SeveritySource": "ghsa",
+          "PrimaryURL": "https://avd.aquasec.com/nvd/cve-2026-44573",
+          "DataSource": {
+            "ID": "ghsa",
+            "Name": "GitHub Security Advisory npm",
+            "URL": "https://github.com/advisories?query=type%3Areviewed+ecosystem%3Anpm"
+          },
+          "Custom": null,
+          "Title": "Next.js has a Middleware / Proxy bypass in Pages Router applications using i18n",
+          "Description": "### Impact\n\nApplications using the Pages Router with `i18n` configured and middleware/proxy-based authorization can allow unauthorized access to protected page data through locale-less `/_next/data/\u003cbuildId\u003e/\u003cpage\u003e.json` requests. In affected configurations, middleware does not run for the unprefixed data route, allowing an attacker to retrieve SSR JSON for protected pages without passing the intended authorization checks.\n\n### Fix\nThe matcher logic was updated to perform the same match as it would on a non-i18n data route.\n\n### Workarounds\n\nIf you cannot upgrade immediately, enforce authorization in the page's server-side data path instead of relying solely on middleware.",
+          "Severity": "HIGH",
+          "VendorSeverity": {
+            "ghsa": 3
+          },
+          "CVSS": {
+            "ghsa": {
+              "V3Vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N",
+              "V3Score": 7.5
+            }
+          },
+          "References": [
+            "https://github.com/vercel/next.js",
+            "https://github.com/vercel/next.js/releases/tag/v15.5.16",
+            "https://github.com/vercel/next.js/releases/tag/v16.2.5",
+            "https://github.com/vercel/next.js/security/advisories/GHSA-36qx-fr4f-26g5"
+          ]
+        },
+        {
+          "VulnerabilityID": "CVE-2026-44574",
+          "VendorIDs": [
+            "GHSA-492v-c6pp-mqqv"
+          ],
+          "PkgID": "next@16.2.4",
+          "PkgName": "next",
+          "PkgPath": "app/node_modules/.pnpm/next@16.2.4_react-dom@19.2.5_react@19.2.5__react@19.2.5/node_modules/next/package.json",
+          "PkgIdentifier": {
+            "PURL": "pkg:npm/next@16.2.4",
+            "UID": "338413893bb3b099"
+          },
+          "InstalledVersion": "16.2.4",
+          "FixedVersion": "15.5.16, 16.2.5",
+          "Status": "fixed",
+          "Layer": {
+            "DiffID": "sha256:a2d87d31aa41e8ae5466bf5df12ba3f1054f344f359f918e51539ac7076e9422"
+          },
+          "SeveritySource": "ghsa",
+          "PrimaryURL": "https://avd.aquasec.com/nvd/cve-2026-44574",
+          "DataSource": {
+            "ID": "ghsa",
+            "Name": "GitHub Security Advisory npm",
+            "URL": "https://github.com/advisories?query=type%3Areviewed+ecosystem%3Anpm"
+          },
+          "Custom": null,
+          "Title": "Next.js has a Middleware / Proxy bypass through dynamic route parameter injection",
+          "Description": "### Impact\n\nApplications that rely on middleware to protect dynamic routes can be vulnerable to authorization bypass. In affected deployments, specially crafted query parameters can alter the dynamic route value seen by the page while leaving the visible path unchanged, which can allow protected content to be rendered without passing the expected middleware check.\n\n### Fix\n\nWe now only honor internal route-parameter normalization in trusted routing flows and ignore externally supplied parameter encodings that should never have been accepted from ordinary requests.\n\n### Workarounds\n\nIf you cannot upgrade immediately, enforce authorization in route or page logic instead of relying solely on middleware path matching.",
+          "Severity": "HIGH",
+          "VendorSeverity": {
+            "ghsa": 3
+          },
+          "CVSS": {
+            "ghsa": {
+              "V3Vector": "CVSS:3.1/AV:N/AC:L/PR:L/UI:N/S:U/C:H/I:H/A:N",
+              "V3Score": 8.1
+            }
+          },
+          "References": [
+            "https://github.com/vercel/next.js",
+            "https://github.com/vercel/next.js/releases/tag/v15.5.16",
+            "https://github.com/vercel/next.js/releases/tag/v16.2.5",
+            "https://github.com/vercel/next.js/security/advisories/GHSA-492v-c6pp-mqqv"
+          ]
+        },
+        {
+          "VulnerabilityID": "CVE-2026-44575",
+          "VendorIDs": [
+            "GHSA-267c-6grr-h53f"
+          ],
+          "PkgID": "next@16.2.4",
+          "PkgName": "next",
+          "PkgPath": "app/node_modules/.pnpm/next@16.2.4_react-dom@19.2.5_react@19.2.5__react@19.2.5/node_modules/next/package.json",
+          "PkgIdentifier": {
+            "PURL": "pkg:npm/next@16.2.4",
+            "UID": "338413893bb3b099"
+          },
+          "InstalledVersion": "16.2.4",
+          "FixedVersion": "15.5.16, 16.2.5",
+          "Status": "fixed",
+          "Layer": {
+            "DiffID": "sha256:a2d87d31aa41e8ae5466bf5df12ba3f1054f344f359f918e51539ac7076e9422"
+          },
+          "SeveritySource": "ghsa",
+          "PrimaryURL": "https://avd.aquasec.com/nvd/cve-2026-44575",
+          "DataSource": {
+            "ID": "ghsa",
+            "Name": "GitHub Security Advisory npm",
+            "URL": "https://github.com/advisories?query=type%3Areviewed+ecosystem%3Anpm"
+          },
+          "Custom": null,
+          "Title": "Next.js has a Middleware / Proxy bypass in App Router applications via segment-prefetch routes",
+          "Description": "### Impact\n\nApp Router applications that rely on middleware or proxy-based checks for authorization can allow unauthorized access through transport-specific route variants used for segment prefetching. In affected configurations, specially crafted `.rsc` and segment-prefetch URLs can resolve to the same page without being matched by the intended middleware rule, which can allow protected content to be reached without the expected authorization check.\n\n### Fix\n\nWe now include App Router transport variants when generating middleware matchers, so middleware protections are applied consistently to those requests as well as to the normal page URL.\n\n### Workarounds\n\nIf you cannot upgrade immediately, enforce authorization in the underlying route or page logic instead of relying solely on middleware.",
+          "Severity": "HIGH",
+          "VendorSeverity": {
+            "ghsa": 3
+          },
+          "CVSS": {
+            "ghsa": {
+              "V3Vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N",
+              "V3Score": 7.5
+            }
+          },
+          "References": [
+            "https://github.com/vercel/next.js",
+            "https://github.com/vercel/next.js/releases/tag/v15.5.16",
+            "https://github.com/vercel/next.js/releases/tag/v16.2.5",
+            "https://github.com/vercel/next.js/security/advisories/GHSA-267c-6grr-h53f"
+          ]
+        },
+        {
+          "VulnerabilityID": "CVE-2026-44578",
+          "VendorIDs": [
+            "GHSA-c4j6-fc7j-m34r"
+          ],
+          "PkgID": "next@16.2.4",
+          "PkgName": "next",
+          "PkgPath": "app/node_modules/.pnpm/next@16.2.4_react-dom@19.2.5_react@19.2.5__react@19.2.5/node_modules/next/package.json",
+          "PkgIdentifier": {
+            "PURL": "pkg:npm/next@16.2.4",
+            "UID": "338413893bb3b099"
+          },
+          "InstalledVersion": "16.2.4",
+          "FixedVersion": "15.5.16, 16.2.5",
+          "Status": "fixed",
+          "Layer": {
+            "DiffID": "sha256:a2d87d31aa41e8ae5466bf5df12ba3f1054f344f359f918e51539ac7076e9422"
+          },
+          "SeveritySource": "ghsa",
+          "PrimaryURL": "https://avd.aquasec.com/nvd/cve-2026-44578",
+          "DataSource": {
+            "ID": "ghsa",
+            "Name": "GitHub Security Advisory npm",
+            "URL": "https://github.com/advisories?query=type%3Areviewed+ecosystem%3Anpm"
+          },
+          "Custom": null,
+          "Title": "Next.js vulnerable to server-side request forgery in applications using WebSocket upgrades",
+          "Description": "### Impact\n\nSelf-hosted applications using the built-in Node.js server can be vulnerable to server-side request forgery through crafted WebSocket upgrade requests. An attacker can cause the server to proxy requests to arbitrary internal or external destinations, which may expose internal services or cloud metadata endpoints. Vercel-hosted deployments are not affected.\n\n### Fix\n\nWe now apply the same safety checks to WebSocket upgrade handling that already existed for normal HTTP requests, so upgrade requests are only proxied when routing has explicitly marked them as safe external rewrites.\n\n### Workarounds\n\nIf you cannot upgrade immediately, do not expose the origin server directly to untrusted networks. If WebSocket upgrades are not required, block them at your reverse proxy or load balancer, and restrict origin egress to internal networks and metadata services where possible.",
+          "Severity": "HIGH",
+          "VendorSeverity": {
+            "ghsa": 3
+          },
+          "CVSS": {
+            "ghsa": {
+              "V3Vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:C/C:H/I:N/A:N",
+              "V3Score": 8.6
+            }
+          },
+          "References": [
+            "https://github.com/vercel/next.js",
+            "https://github.com/vercel/next.js/releases/tag/v15.5.16",
+            "https://github.com/vercel/next.js/releases/tag/v16.2.5",
+            "https://github.com/vercel/next.js/security/advisories/GHSA-c4j6-fc7j-m34r"
+          ]
+        },
+        {
+          "VulnerabilityID": "CVE-2026-44579",
+          "VendorIDs": [
+            "GHSA-mg66-mrh9-m8jx"
+          ],
+          "PkgID": "next@16.2.4",
+          "PkgName": "next",
+          "PkgPath": "app/node_modules/.pnpm/next@16.2.4_react-dom@19.2.5_react@19.2.5__react@19.2.5/node_modules/next/package.json",
+          "PkgIdentifier": {
+            "PURL": "pkg:npm/next@16.2.4",
+            "UID": "338413893bb3b099"
+          },
+          "InstalledVersion": "16.2.4",
+          "FixedVersion": "15.5.16, 16.2.5",
+          "Status": "fixed",
+          "Layer": {
+            "DiffID": "sha256:a2d87d31aa41e8ae5466bf5df12ba3f1054f344f359f918e51539ac7076e9422"
+          },
+          "SeveritySource": "ghsa",
+          "PrimaryURL": "https://avd.aquasec.com/nvd/cve-2026-44579",
+          "DataSource": {
+            "ID": "ghsa",
+            "Name": "GitHub Security Advisory npm",
+            "URL": "https://github.com/advisories?query=type%3Areviewed+ecosystem%3Anpm"
+          },
+          "Custom": null,
+          "Title": "Next.js vulnerable to Denial of Service via connection exhaustion in applications using Cache Components",
+          "Description": "### Impact\n\nApplications using Partial Prerendering through the Cache Components feature can be vulnerable to connection exhaustion through crafted POST requests to a server action. In affected configurations, a malicious request can trigger a request-body handling deadlock that leaves connections open for an extended period, consuming file descriptors and server capacity until legitimate users are denied service.\n\n### Fix\n\nWe now treat the header used for resuming Partial Prerendered requests as an internal-only header and strip it from untrusted incoming requests. This header should never be accepted directly from external clients.\n\n### Workarounds\n\nIf you cannot upgrade immediately, block requests that would be handled by Next.js if they contain the `Next-Resume` header at the edge.",
+          "Severity": "HIGH",
+          "VendorSeverity": {
+            "ghsa": 3
+          },
+          "CVSS": {
+            "ghsa": {
+              "V3Vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H",
+              "V3Score": 7.5
+            }
+          },
+          "References": [
+            "https://github.com/vercel/next.js",
+            "https://github.com/vercel/next.js/releases/tag/v15.5.16",
+            "https://github.com/vercel/next.js/releases/tag/v16.2.5",
+            "https://github.com/vercel/next.js/security/advisories/GHSA-mg66-mrh9-m8jx"
+          ]
+        },
+        {
+          "VulnerabilityID": "CVE-2026-45109",
+          "VendorIDs": [
+            "GHSA-26hh-7cqf-hhc6"
+          ],
+          "PkgID": "next@16.2.4",
+          "PkgName": "next",
+          "PkgPath": "app/node_modules/.pnpm/next@16.2.4_react-dom@19.2.5_react@19.2.5__react@19.2.5/node_modules/next/package.json",
+          "PkgIdentifier": {
+            "PURL": "pkg:npm/next@16.2.4",
+            "UID": "338413893bb3b099"
+          },
+          "InstalledVersion": "16.2.4",
+          "FixedVersion": "15.5.18, 16.2.6",
+          "Status": "fixed",
+          "Layer": {
+            "DiffID": "sha256:a2d87d31aa41e8ae5466bf5df12ba3f1054f344f359f918e51539ac7076e9422"
+          },
+          "SeveritySource": "ghsa",
+          "PrimaryURL": "https://avd.aquasec.com/nvd/cve-2026-45109",
+          "DataSource": {
+            "ID": "ghsa",
+            "Name": "GitHub Security Advisory npm",
+            "URL": "https://github.com/advisories?query=type%3Areviewed+ecosystem%3Anpm"
+          },
+          "Custom": null,
+          "Title": "Next.js has a Middleware / Proxy bypass in App Router applications via segment-prefetch routes - Incomplete Fix Follow-Up",
+          "Description": "### Impact\n\n\nIt was found that the fix addressing [CVE-2026-44575](https://github.com/vercel/next.js/security/advisories/GHSA-267c-6grr-h53f) did not apply to `middleware.ts` with Turbopack. Refer to  [CVE-2026-44575](https://github.com/vercel/next.js/security/advisories/GHSA-267c-6grr-h53f) for further details.\n\n### References \n\n- [CVE CVE-2026-44575](https://github.com/vercel/next.js/security/advisories/GHSA-267c-6grr-h53f)",
+          "Severity": "HIGH",
+          "VendorSeverity": {
+            "ghsa": 3
+          },
+          "CVSS": {
+            "ghsa": {
+              "V3Vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N",
+              "V3Score": 7.5
+            }
+          },
+          "References": [
+            "https://github.com/vercel/next.js",
+            "https://github.com/vercel/next.js/releases/tag/v15.5.18",
+            "https://github.com/vercel/next.js/releases/tag/v16.2.6",
+            "https://github.com/vercel/next.js/security/advisories/GHSA-267c-6grr-h53f",
+            "https://github.com/vercel/next.js/security/advisories/GHSA-26hh-7cqf-hhc6"
+          ]
+        },
+        {
+          "VulnerabilityID": "GHSA-8h8q-6873-q5fj",
+          "PkgID": "next@16.2.4",
+          "PkgName": "next",
+          "PkgPath": "app/node_modules/.pnpm/next@16.2.4_react-dom@19.2.5_react@19.2.5__react@19.2.5/node_modules/next/package.json",
+          "PkgIdentifier": {
+            "PURL": "pkg:npm/next@16.2.4",
+            "UID": "338413893bb3b099"
+          },
+          "InstalledVersion": "16.2.4",
+          "FixedVersion": "15.5.16, 16.2.5",
+          "Status": "fixed",
+          "Layer": {
+            "DiffID": "sha256:a2d87d31aa41e8ae5466bf5df12ba3f1054f344f359f918e51539ac7076e9422"
+          },
+          "SeveritySource": "ghsa",
+          "PrimaryURL": "https://github.com/advisories/GHSA-8h8q-6873-q5fj",
+          "DataSource": {
+            "ID": "ghsa",
+            "Name": "GitHub Security Advisory npm",
+            "URL": "https://github.com/advisories?query=type%3Areviewed+ecosystem%3Anpm"
+          },
+          "Custom": null,
+          "Title": "Next.js Vulnerable to Denial of Service with Server Components",
+          "Description": "A vulnerability affects certain React Server Components packages for versions 19.x and frameworks that use the affected packages, including Next.js 13.x, 14.x, 15.x, and 16.x using the App Router. The issue is tracked upstream as [CVE-2026-23870](https://github.com/facebook/react/security/advisories/GHSA-rv78-f8rc-xrxh). \n\nA specially crafted HTTP request can be sent to any App Router Server Function endpoint that, when deserialized, may trigger excessive CPU usage. This can result in denial of service in unpatched environments.",
+          "Severity": "HIGH",
+          "VendorSeverity": {
+            "ghsa": 3
+          },
+          "CVSS": {
+            "ghsa": {
+              "V3Vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H",
+              "V3Score": 7.5
+            }
+          },
+          "References": [
+            "https://github.com/facebook/react/security/advisories/GHSA-rv78-f8rc-xrxh",
+            "https://github.com/vercel/next.js",
+            "https://github.com/vercel/next.js/security/advisories/GHSA-8h8q-6873-q5fj",
+            "https://github.com/vitejs/vite-plugin-react/security/advisories/GHSA-w94c-4vhp-22gx",
+            "https://nvd.nist.gov/vuln/detail/CVE-2026-23870"
+          ],
+          "PublishedDate": "2026-05-11T14:50:27Z",
+          "LastModifiedDate": "2026-05-11T14:50:27Z"
+        },
+        {
+          "VulnerabilityID": "CVE-2026-44576",
+          "VendorIDs": [
+            "GHSA-wfc6-r584-vfw7"
+          ],
+          "PkgID": "next@16.2.4",
+          "PkgName": "next",
+          "PkgPath": "app/node_modules/.pnpm/next@16.2.4_react-dom@19.2.5_react@19.2.5__react@19.2.5/node_modules/next/package.json",
+          "PkgIdentifier": {
+            "PURL": "pkg:npm/next@16.2.4",
+            "UID": "338413893bb3b099"
+          },
+          "InstalledVersion": "16.2.4",
+          "FixedVersion": "15.5.16, 16.2.5",
+          "Status": "fixed",
+          "Layer": {
+            "DiffID": "sha256:a2d87d31aa41e8ae5466bf5df12ba3f1054f344f359f918e51539ac7076e9422"
+          },
+          "SeveritySource": "ghsa",
+          "PrimaryURL": "https://avd.aquasec.com/nvd/cve-2026-44576",
+          "DataSource": {
+            "ID": "ghsa",
+            "Name": "GitHub Security Advisory npm",
+            "URL": "https://github.com/advisories?query=type%3Areviewed+ecosystem%3Anpm"
+          },
+          "Custom": null,
+          "Title": "Next.js vulnerable to cache poisoning in React Server Component responses",
+          "Description": "### Impact\n\nApplications using React Server Components can be vulnerable to cache poisoning when shared caches do not correctly partition response variants. Under affected conditions, an attacker can cause an RSC response to be served from the original URL and poison shared cache entries so later visitors receive component payloads instead of the expected HTML.\n\n### Fix\n\nWe now validate and interpret `RSC` request headers consistently across request classification and rendering, and we enforce the intended cache-busting behavior so RSC payloads are not unexpectedly served from the original URL.\n\n### Workarounds\n\nIf you cannot upgrade immediately, ensure your CDN or reverse proxy keys on the relevant RSC request headers and honors `Vary`, or disable shared caching for affected App Router and RSC responses.",
+          "Severity": "MEDIUM",
+          "VendorSeverity": {
+            "ghsa": 2
+          },
+          "CVSS": {
+            "ghsa": {
+              "V3Vector": "CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:C/C:N/I:L/A:L",
+              "V3Score": 5.4
+            }
+          },
+          "References": [
+            "https://github.com/vercel/next.js",
+            "https://github.com/vercel/next.js/releases/tag/v15.5.16",
+            "https://github.com/vercel/next.js/releases/tag/v16.2.5",
+            "https://github.com/vercel/next.js/security/advisories/GHSA-wfc6-r584-vfw7"
+          ]
+        },
+        {
+          "VulnerabilityID": "CVE-2026-44577",
+          "VendorIDs": [
+            "GHSA-h64f-5h5j-jqjh"
+          ],
+          "PkgID": "next@16.2.4",
+          "PkgName": "next",
+          "PkgPath": "app/node_modules/.pnpm/next@16.2.4_react-dom@19.2.5_react@19.2.5__react@19.2.5/node_modules/next/package.json",
+          "PkgIdentifier": {
+            "PURL": "pkg:npm/next@16.2.4",
+            "UID": "338413893bb3b099"
+          },
+          "InstalledVersion": "16.2.4",
+          "FixedVersion": "15.5.16, 16.2.5",
+          "Status": "fixed",
+          "Layer": {
+            "DiffID": "sha256:a2d87d31aa41e8ae5466bf5df12ba3f1054f344f359f918e51539ac7076e9422"
+          },
+          "SeveritySource": "ghsa",
+          "PrimaryURL": "https://avd.aquasec.com/nvd/cve-2026-44577",
+          "DataSource": {
+            "ID": "ghsa",
+            "Name": "GitHub Security Advisory npm",
+            "URL": "https://github.com/advisories?query=type%3Areviewed+ecosystem%3Anpm"
+          },
+          "Custom": null,
+          "Title": "Next.js has a Denial of Service in the Image Optimization API",
+          "Description": "### Impact\n\nWhen self-hosting Next.js with the default image loader, the Image Optimization API fetches local images entirely into memory without enforcing a maximum size limit. An attacker could cause out-of-memory conditions by requesting large local assets from the `/_next/image` endpoint that match the `images.localPatterns` configuration (by default, all patterns are allowed).\n\n- If you are using `images.localPatterns`, only the patterns in that array are impacted.\n- If you are using `images.unoptimized: true`, you are NOT impacted.\n- If you are using `images.loader: 'custom'`, you are NOT impacted.\n- If you are using Vercel, you are NOT impacted.\n\n### Fix\n\nWe now apply response size limits consistently to internal image fetches, not just external ones, and fail oversized responses before they can exhaust process memory.\n\nThis can be adjusted using the `images.maximumResponseBody` configuration.\n\n### Workarounds\n\nIf you cannot upgrade immediately, avoid routing large local assets through `/_next/image`, disable image optimization for large or untrusted local files, or block image optimization access to those assets at the edge.\n\nYou can disable using the `images.localPatterns: []` configuration. This will still allow fetching remote images (which is not impacted).",
+          "Severity": "MEDIUM",
+          "VendorSeverity": {
+            "ghsa": 2
+          },
+          "CVSS": {
+            "ghsa": {
+              "V3Vector": "CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:N/I:N/A:H",
+              "V3Score": 5.9
+            }
+          },
+          "References": [
+            "https://github.com/vercel/next.js",
+            "https://github.com/vercel/next.js/releases/tag/v15.5.16",
+            "https://github.com/vercel/next.js/releases/tag/v16.2.5",
+            "https://github.com/vercel/next.js/security/advisories/GHSA-h64f-5h5j-jqjh"
+          ]
+        },
+        {
+          "VulnerabilityID": "CVE-2026-44580",
+          "VendorIDs": [
+            "GHSA-gx5p-jg67-6x7h"
+          ],
+          "PkgID": "next@16.2.4",
+          "PkgName": "next",
+          "PkgPath": "app/node_modules/.pnpm/next@16.2.4_react-dom@19.2.5_react@19.2.5__react@19.2.5/node_modules/next/package.json",
+          "PkgIdentifier": {
+            "PURL": "pkg:npm/next@16.2.4",
+            "UID": "338413893bb3b099"
+          },
+          "InstalledVersion": "16.2.4",
+          "FixedVersion": "15.5.16, 16.2.5",
+          "Status": "fixed",
+          "Layer": {
+            "DiffID": "sha256:a2d87d31aa41e8ae5466bf5df12ba3f1054f344f359f918e51539ac7076e9422"
+          },
+          "SeveritySource": "ghsa",
+          "PrimaryURL": "https://avd.aquasec.com/nvd/cve-2026-44580",
+          "DataSource": {
+            "ID": "ghsa",
+            "Name": "GitHub Security Advisory npm",
+            "URL": "https://github.com/advisories?query=type%3Areviewed+ecosystem%3Anpm"
+          },
+          "Custom": null,
+          "Title": "Next.js has cross-site scripting in beforeInteractive scripts with untrusted input",
+          "Description": "### Impact\n\nApplications that use `beforeInteractive` scripts together with untrusted content can be vulnerable to cross-site scripting. In affected versions, serialized script content was not escaped safely before being embedded into the document, which could allow attacker-controlled input to break out of the intended script context and execute arbitrary JavaScript in a visitor's browser.\n\n### Fix\n\nWe now HTML-escape serialized `beforeInteractive` script content before embedding it into the page, preventing attacker-controlled content from breaking out of the inline script boundary.\n\n### Workarounds\n\nIf you cannot upgrade immediately, do not pass untrusted data into `beforeInteractive` scripts. If that pattern is unavoidable, sanitize or escape the content before embedding it.",
+          "Severity": "MEDIUM",
+          "VendorSeverity": {
+            "ghsa": 2
+          },
+          "CVSS": {
+            "ghsa": {
+              "V3Vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:R/S:C/C:L/I:L/A:N",
+              "V3Score": 6.1
+            }
+          },
+          "References": [
+            "https://github.com/vercel/next.js",
+            "https://github.com/vercel/next.js/releases/tag/v15.5.16",
+            "https://github.com/vercel/next.js/releases/tag/v16.2.5",
+            "https://github.com/vercel/next.js/security/advisories/GHSA-gx5p-jg67-6x7h"
+          ]
+        },
+        {
+          "VulnerabilityID": "CVE-2026-44581",
+          "VendorIDs": [
+            "GHSA-ffhc-5mcf-pf4q"
+          ],
+          "PkgID": "next@16.2.4",
+          "PkgName": "next",
+          "PkgPath": "app/node_modules/.pnpm/next@16.2.4_react-dom@19.2.5_react@19.2.5__react@19.2.5/node_modules/next/package.json",
+          "PkgIdentifier": {
+            "PURL": "pkg:npm/next@16.2.4",
+            "UID": "338413893bb3b099"
+          },
+          "InstalledVersion": "16.2.4",
+          "FixedVersion": "15.5.16, 16.2.5",
+          "Status": "fixed",
+          "Layer": {
+            "DiffID": "sha256:a2d87d31aa41e8ae5466bf5df12ba3f1054f344f359f918e51539ac7076e9422"
+          },
+          "SeveritySource": "ghsa",
+          "PrimaryURL": "https://avd.aquasec.com/nvd/cve-2026-44581",
+          "DataSource": {
+            "ID": "ghsa",
+            "Name": "GitHub Security Advisory npm",
+            "URL": "https://github.com/advisories?query=type%3Areviewed+ecosystem%3Anpm"
+          },
+          "Custom": null,
+          "Title": "Next.js vulnerable to cross-site scripting in App Router applications using CSP nonces",
+          "Description": "### Impact\n\nApp Router applications that rely on CSP nonces can be vulnerable to stored cross-site scripting when deployed behind shared caches. In affected versions, malformed nonce values derived from request headers could be reflected into rendered HTML in an unsafe way, allowing an attacker to poison cached responses and cause script execution for later visitors.\n\n### Fix\n\nWe now reject or ignore malformed nonce values before they are embedded into HTML and apply stricter nonce sanitization so request-derived nonce data cannot break out of the intended attribute context.\n\n### Workarounds\n\nIf you cannot upgrade immediately, strip inbound `Content-Security-Policy` request headers from untrusted traffic.",
+          "Severity": "MEDIUM",
+          "VendorSeverity": {
+            "ghsa": 2
+          },
+          "CVSS": {
+            "ghsa": {
+              "V3Vector": "CVSS:3.1/AV:N/AC:H/PR:N/UI:R/S:C/C:L/I:L/A:N",
+              "V3Score": 4.7
+            }
+          },
+          "References": [
+            "https://github.com/vercel/next.js",
+            "https://github.com/vercel/next.js/releases/tag/v15.5.16",
+            "https://github.com/vercel/next.js/releases/tag/v16.2.5",
+            "https://github.com/vercel/next.js/security/advisories/GHSA-ffhc-5mcf-pf4q"
+          ]
+        },
+        {
+          "VulnerabilityID": "CVE-2026-44572",
+          "VendorIDs": [
+            "GHSA-3g8h-86w9-wvmq"
+          ],
+          "PkgID": "next@16.2.4",
+          "PkgName": "next",
+          "PkgPath": "app/node_modules/.pnpm/next@16.2.4_react-dom@19.2.5_react@19.2.5__react@19.2.5/node_modules/next/package.json",
+          "PkgIdentifier": {
+            "PURL": "pkg:npm/next@16.2.4",
+            "UID": "338413893bb3b099"
+          },
+          "InstalledVersion": "16.2.4",
+          "FixedVersion": "15.5.16, 16.2.5",
+          "Status": "fixed",
+          "Layer": {
+            "DiffID": "sha256:a2d87d31aa41e8ae5466bf5df12ba3f1054f344f359f918e51539ac7076e9422"
+          },
+          "SeveritySource": "ghsa",
+          "PrimaryURL": "https://avd.aquasec.com/nvd/cve-2026-44572",
+          "DataSource": {
+            "ID": "ghsa",
+            "Name": "GitHub Security Advisory npm",
+            "URL": "https://github.com/advisories?query=type%3Areviewed+ecosystem%3Anpm"
+          },
+          "Custom": null,
+          "Title": "Next.js's Middleware / Proxy redirects can be cache-poisoned",
+          "Description": "### Impact\n\nNext.js uses the `x-nextjs-data` request header for internal data requests. On affected versions, an external client could send this header on a normal request to a path handled by middleware that returns a redirect.\n\nWhen that happened, the middleware/proxy could treat the request as a data request and replace the standard `Location` redirect header with the internal `x-nextjs-redirect` header. Browsers do not follow `x-nextjs-redirect`, so the response became an unusable redirect for normal clients.\n\nIf the application was deployed behind a CDN or reverse proxy that caches 3xx responses without varying on this header, a single attacker request could poison the cached redirect response for the affected path. Subsequent visitors could then receive a cached redirect response without a `Location` header, causing a denial of service for that redirect path until the cache entry expired or was purged.\n\n### Affected scenarios\n\nThis affects applications that:\n- use middleware or proxy redirects\n- are deployed behind a caching CDN or reverse proxy\n- allow 3xx responses on those paths to be cached without differentiating internal data requests from normal requests\n\n### Fix\n\nThe fix stops trusting `x-nextjs-data` by itself for middleware redirect handling. A request is now treated as an internal data request only when it is validated as such by internal routing state, preserving legitimate data-request redirect behavior while preventing external header injection from changing normal redirect responses.\n\n### Workarounds\n\nBefore upgrading, users can reduce risk by:\n- configuring the CDN or reverse proxy to vary its cache key on `x-nextjs-data` for affected responses",
+          "Severity": "LOW",
+          "VendorSeverity": {
+            "ghsa": 1
+          },
+          "CVSS": {
+            "ghsa": {
+              "V3Vector": "CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:N/I:N/A:L",
+              "V3Score": 3.7
+            }
+          },
+          "References": [
+            "https://github.com/vercel/next.js",
+            "https://github.com/vercel/next.js/releases/tag/v15.5.16",
+            "https://github.com/vercel/next.js/releases/tag/v16.2.5",
+            "https://github.com/vercel/next.js/security/advisories/GHSA-3g8h-86w9-wvmq"
+          ]
+        },
+        {
+          "VulnerabilityID": "CVE-2026-44582",
+          "VendorIDs": [
+            "GHSA-vfv6-92ff-j949"
+          ],
+          "PkgID": "next@16.2.4",
+          "PkgName": "next",
+          "PkgPath": "app/node_modules/.pnpm/next@16.2.4_react-dom@19.2.5_react@19.2.5__react@19.2.5/node_modules/next/package.json",
+          "PkgIdentifier": {
+            "PURL": "pkg:npm/next@16.2.4",
+            "UID": "338413893bb3b099"
+          },
+          "InstalledVersion": "16.2.4",
+          "FixedVersion": "15.5.16, 16.2.5",
+          "Status": "fixed",
+          "Layer": {
+            "DiffID": "sha256:a2d87d31aa41e8ae5466bf5df12ba3f1054f344f359f918e51539ac7076e9422"
+          },
+          "SeveritySource": "ghsa",
+          "PrimaryURL": "https://avd.aquasec.com/nvd/cve-2026-44582",
+          "DataSource": {
+            "ID": "ghsa",
+            "Name": "GitHub Security Advisory npm",
+            "URL": "https://github.com/advisories?query=type%3Areviewed+ecosystem%3Anpm"
+          },
+          "Custom": null,
+          "Title": "Next.js vulnerable to cache poisoning via collisions in React Server Component cache-busting",
+          "Description": "### Impact\n\nReact Server Component responses can be vulnerable to cache poisoning in deployments that rely on shared caches with insufficient response partitioning. In affected conditions, collisions in the `_rsc` cache-busting value can allow an attacker to poison cache entries so users receive the wrong response variant for a given URL.\n\n### Fix\n\nWe strengthened the `_rsc` cache-busting mechanism to make practical collisions significantly harder and to better separate response variants that should not share cache entries.\n\n### Workarounds\n\nIf you cannot upgrade immediately, ensure intermediary caches correctly honor `Vary` for RSC-related request headers, or disable shared caching for affected RSC responses until you can deploy a patched release.",
+          "Severity": "LOW",
+          "VendorSeverity": {
+            "ghsa": 1
+          },
+          "CVSS": {
+            "ghsa": {
+              "V3Vector": "CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:N/I:L/A:N",
+              "V3Score": 3.7
+            }
+          },
+          "References": [
+            "https://github.com/vercel/next.js",
+            "https://github.com/vercel/next.js/releases/tag/v15.5.16",
+            "https://github.com/vercel/next.js/releases/tag/v16.2.5",
+            "https://github.com/vercel/next.js/security/advisories/GHSA-vfv6-92ff-j949"
+          ]
+        },
+        {
+          "VulnerabilityID": "CVE-2026-33671",
+          "VendorIDs": [
+            "GHSA-c2c7-rcm5-vvqj"
+          ],
+          "PkgID": "picomatch@4.0.3",
+          "PkgName": "picomatch",
+          "PkgPath": "usr/local/lib/node_modules/npm/node_modules/picomatch/package.json",
+          "PkgIdentifier": {
+            "PURL": "pkg:npm/picomatch@4.0.3",
+            "UID": "317a06b4bb8f45b4"
+          },
+          "InstalledVersion": "4.0.3",
+          "FixedVersion": "4.0.4, 3.0.2, 2.3.2",
+          "Status": "fixed",
+          "Layer": {
+            "DiffID": "sha256:1f8b21f3390a09b57b90b6c6d6f04a2f13f9208fb57b331d780e9cd4635cac54"
+          },
+          "SeveritySource": "ghsa",
+          "PrimaryURL": "https://avd.aquasec.com/nvd/cve-2026-33671",
+          "DataSource": {
+            "ID": "ghsa",
+            "Name": "GitHub Security Advisory npm",
+            "URL": "https://github.com/advisories?query=type%3Areviewed+ecosystem%3Anpm"
+          },
+          "Custom": null,
+          "Title": "picomatch: Picomatch: Regular Expression Denial of Service via crafted extglob patterns",
+          "Description": "Picomatch is a glob matcher written JavaScript. Versions prior to 4.0.4, 3.0.2, and 2.3.2 are vulnerable to Regular Expression Denial of Service (ReDoS) when processing crafted extglob patterns. Certain patterns using extglob quantifiers such as `+()` and `*()`, especially when combined with overlapping alternatives or nested extglobs, are compiled into regular expressions that can exhibit catastrophic backtracking on non-matching input. Applications are impacted when they allow untrusted users to supply glob patterns that are passed to `picomatch` for compilation or matching. In those cases, an attacker can cause excessive CPU consumption and block the Node.js event loop, resulting in a denial of service. Applications that only use trusted, developer-controlled glob patterns are much less likely to be exposed in a security-relevant way. This issue is fixed in picomatch 4.0.4, 3.0.2 and 2.3.2. Users should upgrade to one of these versions or later, depending on their supported release line. If upgrading is not immediately possible, avoid passing untrusted glob patterns to `picomatch`. Possible mitigations include disabling extglob support for untrusted patterns by using `noextglob: true`, rejecting or sanitizing patterns containing nested extglobs or extglob quantifiers such as `+()` and `*()`, enforcing strict allowlists for accepted pattern syntax, running matching in an isolated worker or separate process with time and resource limits, and applying application-level request throttling and input validation for any endpoint that accepts glob patterns.",
+          "Severity": "HIGH",
+          "CweIDs": [
+            "CWE-1333"
+          ],
+          "VendorSeverity": {
+            "azure": 3,
+            "ghsa": 3,
+            "redhat": 2
+          },
+          "CVSS": {
+            "ghsa": {
+              "V3Vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H",
+              "V3Score": 7.5
+            },
+            "redhat": {
+              "V3Vector": "CVSS:3.1/AV:N/AC:L/PR:L/UI:N/S:U/C:N/I:N/A:H",
+              "V3Score": 6.5
+            }
+          },
+          "References": [
+            "https://access.redhat.com/security/cve/CVE-2026-33671",
+            "https://github.com/micromatch/picomatch",
+            "https://github.com/micromatch/picomatch/commit/5eceecd27543b8e056b9307d69e105ea03618a7d",
+            "https://github.com/micromatch/picomatch/security/advisories/GHSA-c2c7-rcm5-vvqj",
+            "https://nvd.nist.gov/vuln/detail/CVE-2026-33671",
+            "https://www.cve.org/CVERecord?id=CVE-2026-33671"
+          ],
+          "PublishedDate": "2026-03-26T22:16:30.21Z",
+          "LastModifiedDate": "2026-04-01T13:45:11.687Z"
+        },
+        {
+          "VulnerabilityID": "CVE-2026-33672",
+          "VendorIDs": [
+            "GHSA-3v7f-55p6-f55p"
+          ],
+          "PkgID": "picomatch@4.0.3",
+          "PkgName": "picomatch",
+          "PkgPath": "usr/local/lib/node_modules/npm/node_modules/picomatch/package.json",
+          "PkgIdentifier": {
+            "PURL": "pkg:npm/picomatch@4.0.3",
+            "UID": "317a06b4bb8f45b4"
+          },
+          "InstalledVersion": "4.0.3",
+          "FixedVersion": "4.0.4, 3.0.2, 2.3.2",
+          "Status": "fixed",
+          "Layer": {
+            "DiffID": "sha256:1f8b21f3390a09b57b90b6c6d6f04a2f13f9208fb57b331d780e9cd4635cac54"
+          },
+          "SeveritySource": "ghsa",
+          "PrimaryURL": "https://avd.aquasec.com/nvd/cve-2026-33672",
+          "DataSource": {
+            "ID": "ghsa",
+            "Name": "GitHub Security Advisory npm",
+            "URL": "https://github.com/advisories?query=type%3Areviewed+ecosystem%3Anpm"
+          },
+          "Custom": null,
+          "Title": "picomatch: Picomatch: Data integrity compromised via method injection with crafted POSIX bracket expressions",
+          "Description": "Picomatch is a glob matcher written JavaScript. Versions prior to 4.0.4, 3.0.2, and 2.3.2 are vulnerable to a method injection vulnerability affecting the `POSIX_REGEX_SOURCE` object. Because the object inherits from `Object.prototype`, specially crafted POSIX bracket expressions (e.g., `[[:constructor:]]`) can reference inherited method names. These methods are implicitly converted to strings and injected into the generated regular expression. This leads to incorrect glob matching behavior (integrity impact), where patterns may match unintended filenames. The issue does not enable remote code execution, but it can cause security-relevant logic errors in applications that rely on glob matching for filtering, validation, or access control. All users of affected `picomatch` versions that process untrusted or user-controlled glob patterns are potentially impacted. This issue is fixed in picomatch 4.0.4, 3.0.2 and 2.3.2. Users should upgrade to one of these versions or later, depending on their supported release line. If upgrading is not immediately possible, avoid passing untrusted glob patterns to picomatch. Possible mitigations include sanitizing or rejecting untrusted glob patterns, especially those containing POSIX character classes like `[[:...:]]`; avoiding the use of POSIX bracket expressions if user input is involved; and manually patching the library by modifying `POSIX_REGEX_SOURCE` to use a null prototype.",
+          "Severity": "MEDIUM",
+          "CweIDs": [
+            "CWE-1321"
+          ],
+          "VendorSeverity": {
+            "azure": 2,
+            "ghsa": 2,
+            "redhat": 2
+          },
+          "CVSS": {
+            "ghsa": {
+              "V3Vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:L/A:N",
+              "V3Score": 5.3
+            },
+            "redhat": {
+              "V3Vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:L/A:N",
+              "V3Score": 5.3
+            }
+          },
+          "References": [
+            "https://access.redhat.com/security/cve/CVE-2026-33672",
+            "https://github.com/micromatch/picomatch",
+            "https://github.com/micromatch/picomatch/commit/4516eb521f13a46b2fe1a1d2c9ef6b20ddc0e903",
+            "https://github.com/micromatch/picomatch/security/advisories/GHSA-3v7f-55p6-f55p",
+            "https://nvd.nist.gov/vuln/detail/CVE-2026-33672",
+            "https://www.cve.org/CVERecord?id=CVE-2026-33672"
+          ],
+          "PublishedDate": "2026-03-26T22:16:30.387Z",
+          "LastModifiedDate": "2026-04-01T13:44:53.397Z"
+        },
+        {
+          "VulnerabilityID": "CVE-2026-41305",
+          "VendorIDs": [
+            "GHSA-qx2v-qp2m-jg93"
+          ],
+          "PkgID": "postcss@8.4.31",
+          "PkgName": "postcss",
+          "PkgPath": "app/node_modules/.pnpm/postcss@8.4.31/node_modules/postcss/package.json",
+          "PkgIdentifier": {
+            "PURL": "pkg:npm/postcss@8.4.31",
+            "UID": "36789e056d626d55"
+          },
+          "InstalledVersion": "8.4.31",
+          "FixedVersion": "8.5.10",
+          "Status": "fixed",
+          "Layer": {
+            "DiffID": "sha256:a2d87d31aa41e8ae5466bf5df12ba3f1054f344f359f918e51539ac7076e9422"
+          },
+          "SeveritySource": "ghsa",
+          "PrimaryURL": "https://avd.aquasec.com/nvd/cve-2026-41305",
+          "DataSource": {
+            "ID": "ghsa",
+            "Name": "GitHub Security Advisory npm",
+            "URL": "https://github.com/advisories?query=type%3Areviewed+ecosystem%3Anpm"
+          },
+          "Custom": null,
+          "Title": "postcss: PostCSS: Cross-Site Scripting (XSS) via improper escaping of style closing tags",
+          "Description": "PostCSS takes a CSS file and provides an API to analyze and modify its rules by transforming the rules into an Abstract Syntax Tree. Versions prior to 8.5.10 do not escape `\u003c/style\u003e` sequences when stringifying CSS ASTs. When user-submitted CSS is parsed and re-stringified for embedding in HTML `\u003cstyle\u003e` tags, `\u003c/style\u003e` in CSS values breaks out of the style context, enabling XSS. Version 8.5.10 fixes the issue.",
+          "Severity": "MEDIUM",
+          "CweIDs": [
+            "CWE-79"
+          ],
+          "VendorSeverity": {
+            "ghsa": 2,
+            "redhat": 2
+          },
+          "CVSS": {
+            "ghsa": {
+              "V3Vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:R/S:C/C:L/I:L/A:N",
+              "V3Score": 6.1
+            },
+            "redhat": {
+              "V3Vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:R/S:C/C:L/I:L/A:N",
+              "V3Score": 6.1
+            }
+          },
+          "References": [
+            "https://access.redhat.com/security/cve/CVE-2026-41305",
+            "https://github.com/postcss/postcss",
+            "https://github.com/postcss/postcss/releases/tag/8.5.10",
+            "https://github.com/postcss/postcss/security/advisories/GHSA-qx2v-qp2m-jg93",
+            "https://nvd.nist.gov/vuln/detail/CVE-2026-41305",
+            "https://www.cve.org/CVERecord?id=CVE-2026-41305"
+          ],
+          "PublishedDate": "2026-04-24T03:16:11.547Z",
+          "LastModifiedDate": "2026-04-24T17:16:21.5Z"
+        },
+        {
+          "VulnerabilityID": "CVE-2026-44289",
+          "VendorIDs": [
+            "GHSA-685m-2w69-288q"
+          ],
+          "PkgID": "protobufjs@7.5.5",
+          "PkgName": "protobufjs",
+          "PkgPath": "app/node_modules/.pnpm/protobufjs@7.5.5/node_modules/protobufjs/package.json",
+          "PkgIdentifier": {
+            "PURL": "pkg:npm/protobufjs@7.5.5",
+            "UID": "47ed8e9c2732b4e8"
+          },
+          "InstalledVersion": "7.5.5",
+          "FixedVersion": "7.5.6, 8.0.2",
+          "Status": "fixed",
+          "Layer": {
+            "DiffID": "sha256:a2d87d31aa41e8ae5466bf5df12ba3f1054f344f359f918e51539ac7076e9422"
+          },
+          "SeveritySource": "ghsa",
+          "PrimaryURL": "https://avd.aquasec.com/nvd/cve-2026-44289",
+          "DataSource": {
+            "ID": "ghsa",
+            "Name": "GitHub Security Advisory npm",
+            "URL": "https://github.com/advisories?query=type%3Areviewed+ecosystem%3Anpm"
+          },
+          "Custom": null,
+          "Title": "protobuf.js: Denial of service through unbounded protobuf recursion",
+          "Description": "## Summary\n\nprotobufjs could recurse without a depth limit while decoding nested protobuf data. This affected both skipping unknown group fields and generated decoding of nested message fields.\n\nA crafted protobuf binary payload could cause the JavaScript call stack to be exhausted during decoding.\n\n## Impact\n\nAn attacker who can provide protobuf binary data decoded by an application may be able to crash the process or otherwise cause decoding to fail with a stack overflow.\n\nThis affects applications that decode untrusted protobuf binary input with affected versions.\n\n## Preconditions\n\n- The application must decode protobuf binary data influenced by an attacker.\n- The crafted input must contain deeply nested protobuf structures, such as nested group tags or nested message fields.\n- The affected decoder path must process the crafted input.\n\n## Workarounds\n\nAvoid decoding untrusted protobuf binary data with affected versions. If immediate upgrade is not possible, reject excessively nested messages at an outer protocol boundary where feasible, or isolate protobuf decoding in a process that can be safely restarted.",
+          "Severity": "HIGH",
+          "VendorSeverity": {
+            "ghsa": 3
+          },
+          "CVSS": {
+            "ghsa": {
+              "V3Vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H",
+              "V3Score": 7.5
+            }
+          },
+          "References": [
+            "https://github.com/protobufjs/protobuf.js",
+            "https://github.com/protobufjs/protobuf.js/releases/tag/protobufjs-v7.5.6",
+            "https://github.com/protobufjs/protobuf.js/releases/tag/protobufjs-v8.0.2",
+            "https://github.com/protobufjs/protobuf.js/security/advisories/GHSA-685m-2w69-288q"
+          ]
+        },
+        {
+          "VulnerabilityID": "CVE-2026-44290",
+          "VendorIDs": [
+            "GHSA-jvwf-75h9-cwgg"
+          ],
+          "PkgID": "protobufjs@7.5.5",
+          "PkgName": "protobufjs",
+          "PkgPath": "app/node_modules/.pnpm/protobufjs@7.5.5/node_modules/protobufjs/package.json",
+          "PkgIdentifier": {
+            "PURL": "pkg:npm/protobufjs@7.5.5",
+            "UID": "47ed8e9c2732b4e8"
+          },
+          "InstalledVersion": "7.5.5",
+          "FixedVersion": "7.5.6, 8.0.2",
+          "Status": "fixed",
+          "Layer": {
+            "DiffID": "sha256:a2d87d31aa41e8ae5466bf5df12ba3f1054f344f359f918e51539ac7076e9422"
+          },
+          "SeveritySource": "ghsa",
+          "PrimaryURL": "https://avd.aquasec.com/nvd/cve-2026-44290",
+          "DataSource": {
+            "ID": "ghsa",
+            "Name": "GitHub Security Advisory npm",
+            "URL": "https://github.com/advisories?query=type%3Areviewed+ecosystem%3Anpm"
+          },
+          "Custom": null,
+          "Title": "protobuf.js: Process-wide denial of service through unsafe option paths",
+          "Description": "## Summary\n\nprotobufjs allowed certain schema option paths to traverse through inherited object properties while applying options. A crafted protobuf schema or JSON descriptor could cause option handling to write to properties on global JavaScript constructors, corrupting process-wide built-in functionality.\n\n## Impact\n\nAn attacker who can provide or influence protobuf schemas or JSON descriptors may be able to corrupt built-in process state in a way that causes subsequent application code or protobufjs code to fail. This can result in a persistent denial of service for the lifetime of the affected process.\n\nThis issue affects applications that parse or load protobuf schemas or descriptors from untrusted sources. Applications that use bundled, generated, or otherwise trusted schemas to decode untrusted protobuf message payloads are not directly affected.\n\nThe issue is not known to allow code execution by itself.\n\n## Preconditions\n\n- The application must allow an attacker to control or influence a protobuf schema or JSON descriptor.\n- The application must parse or load that schema through protobufjs reflection APIs such as `parse`, `Root.load`, `Root.loadSync`, or `Root.fromJSON`.\n- The crafted input must contain option paths that reach unsafe inherited properties during option processing.\n\n## Workarounds\n\nDo not parse or load protobuf schemas or JSON descriptors from untrusted sources with affected versions. If untrusted schemas must be accepted, validate or reject option names containing unsafe property path components before loading them, and run schema processing in an isolated process.",
+          "Severity": "HIGH",
+          "VendorSeverity": {
+            "ghsa": 3
+          },
+          "CVSS": {
+            "ghsa": {
+              "V3Vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H",
+              "V3Score": 7.5
+            }
+          },
+          "References": [
+            "https://github.com/protobufjs/protobuf.js",
+            "https://github.com/protobufjs/protobuf.js/releases/tag/protobufjs-v7.5.6",
+            "https://github.com/protobufjs/protobuf.js/releases/tag/protobufjs-v8.0.2",
+            "https://github.com/protobufjs/protobuf.js/security/advisories/GHSA-jvwf-75h9-cwgg"
+          ]
+        },
+        {
+          "VulnerabilityID": "CVE-2026-44291",
+          "VendorIDs": [
+            "GHSA-75px-5xx7-5xc7"
+          ],
+          "PkgID": "protobufjs@7.5.5",
+          "PkgName": "protobufjs",
+          "PkgPath": "app/node_modules/.pnpm/protobufjs@7.5.5/node_modules/protobufjs/package.json",
+          "PkgIdentifier": {
+            "PURL": "pkg:npm/protobufjs@7.5.5",
+            "UID": "47ed8e9c2732b4e8"
+          },
+          "InstalledVersion": "7.5.5",
+          "FixedVersion": "7.5.6, 8.0.2",
+          "Status": "fixed",
+          "Layer": {
+            "DiffID": "sha256:a2d87d31aa41e8ae5466bf5df12ba3f1054f344f359f918e51539ac7076e9422"
+          },
+          "SeveritySource": "ghsa",
+          "PrimaryURL": "https://avd.aquasec.com/nvd/cve-2026-44291",
+          "DataSource": {
+            "ID": "ghsa",
+            "Name": "GitHub Security Advisory npm",
+            "URL": "https://github.com/advisories?query=type%3Areviewed+ecosystem%3Anpm"
+          },
+          "Custom": null,
+          "Title": "protobuf.js: Code generation gadget after prototype pollution",
+          "Description": "## Summary\n\nprotobufjs used plain objects with inherited prototypes for internal type lookup tables used by generated encode and decode functions. If `Object.prototype` had already been polluted, those lookup tables could resolve attacker-controlled inherited properties as valid protobuf type information.\n\nThis could cause attacker-controlled strings to be emitted into generated JavaScript code.\n\n## Impact\n\nAn attacker who can first trigger a prototype pollution vulnerability may be able to influence generated protobufjs encode or decode functions in a way that can lead to arbitrary JavaScript execution.\n\nThis issue requires a separate prototype pollution primitive before protobufjs is invoked.\n\nApplications without a reachable prototype pollution primitive are not directly exploitable through this issue alone.\n\n## Preconditions\n\n- The application or one of its dependencies must allow an attacker to pollute `Object.prototype`.\n- The polluted property must affect protobufjs internal type lookup behavior.\n- The application must use protobufjs functionality that generates encode or decode code for affected types.\n- The generated code path must be reached after the prototype pollution has occurred.\n\n## Workarounds\n\nAvoid running affected versions in applications where attacker-controlled input can pollute `Object.prototype`. If immediate upgrade is not possible, remove or mitigate reachable prototype pollution primitives and isolate schema/message processing from untrusted application state.",
+          "Severity": "HIGH",
+          "VendorSeverity": {
+            "ghsa": 3
+          },
+          "CVSS": {
+            "ghsa": {
+              "V3Vector": "CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:H/I:H/A:H",
+              "V3Score": 8.1
+            }
+          },
+          "References": [
+            "https://github.com/protobufjs/protobuf.js",
+            "https://github.com/protobufjs/protobuf.js/releases/tag/protobufjs-v7.5.6",
+            "https://github.com/protobufjs/protobuf.js/releases/tag/protobufjs-v8.0.2",
+            "https://github.com/protobufjs/protobuf.js/security/advisories/GHSA-75px-5xx7-5xc7"
+          ]
+        },
+        {
+          "VulnerabilityID": "CVE-2026-44293",
+          "VendorIDs": [
+            "GHSA-66ff-xgx4-vchm"
+          ],
+          "PkgID": "protobufjs@7.5.5",
+          "PkgName": "protobufjs",
+          "PkgPath": "app/node_modules/.pnpm/protobufjs@7.5.5/node_modules/protobufjs/package.json",
+          "PkgIdentifier": {
+            "PURL": "pkg:npm/protobufjs@7.5.5",
+            "UID": "47ed8e9c2732b4e8"
+          },
+          "InstalledVersion": "7.5.5",
+          "FixedVersion": "7.5.6, 8.0.2",
+          "Status": "fixed",
+          "Layer": {
+            "DiffID": "sha256:a2d87d31aa41e8ae5466bf5df12ba3f1054f344f359f918e51539ac7076e9422"
+          },
+          "SeveritySource": "ghsa",
+          "PrimaryURL": "https://avd.aquasec.com/nvd/cve-2026-44293",
+          "DataSource": {
+            "ID": "ghsa",
+            "Name": "GitHub Security Advisory npm",
+            "URL": "https://github.com/advisories?query=type%3Areviewed+ecosystem%3Anpm"
+          },
+          "Custom": null,
+          "Title": "protobuf.js: Code injection through bytes field defaults in generated toObject code",
+          "Description": "## Summary\n\nprotobufjs generated JavaScript for `toObject` conversion could include an unsafe expression derived from a schema-controlled `bytes` field default value. A crafted descriptor with a non-string default value for a `bytes` field could cause attacker-controlled code to be emitted into the generated conversion function.\n\n## Impact\n\nAn attacker who can provide or influence a protobuf descriptor may be able to execute arbitrary JavaScript in the context of the process using protobufjs.\n\nThis requires the application to load an attacker-controlled schema or descriptor and then convert a message of the affected type with defaults enabled. Applications that only use trusted, application-defined schemas are not directly affected by this issue.\n\n## Preconditions\n\n- The application must allow an attacker to control or influence a protobuf JSON descriptor or equivalent reflected schema.\n- The descriptor must define a `bytes` field with an attacker-controlled default value.\n- The application must call `toObject` with defaults enabled for the affected type.\n\n## Workarounds\n\nDo not load protobuf schemas or JSON descriptors from untrusted sources with affected versions. If untrusted schemas must be accepted, validate or restrict field options before loading them and run schema processing in an isolated environment.",
+          "Severity": "HIGH",
+          "VendorSeverity": {
+            "ghsa": 3
+          },
+          "CVSS": {
+            "ghsa": {
+              "V40Vector": "CVSS:4.0/AV:N/AC:L/AT:P/PR:L/UI:N/VC:H/VI:H/VA:H/SC:N/SI:N/SA:N",
+              "V40Score": 7.7
+            }
+          },
+          "References": [
+            "https://github.com/protobufjs/protobuf.js",
+            "https://github.com/protobufjs/protobuf.js/releases/tag/protobufjs-v7.5.6",
+            "https://github.com/protobufjs/protobuf.js/releases/tag/protobufjs-v8.0.2",
+            "https://github.com/protobufjs/protobuf.js/security/advisories/GHSA-66ff-xgx4-vchm"
+          ]
+        },
+        {
+          "VulnerabilityID": "CVE-2026-44288",
+          "VendorIDs": [
+            "GHSA-q6x5-8v7m-xcrf"
+          ],
+          "PkgID": "protobufjs@7.5.5",
+          "PkgName": "protobufjs",
+          "PkgPath": "app/node_modules/.pnpm/protobufjs@7.5.5/node_modules/protobufjs/package.json",
+          "PkgIdentifier": {
+            "PURL": "pkg:npm/protobufjs@7.5.5",
+            "UID": "47ed8e9c2732b4e8"
+          },
+          "InstalledVersion": "7.5.5",
+          "FixedVersion": "7.5.6, 8.0.2",
+          "Status": "fixed",
+          "Layer": {
+            "DiffID": "sha256:a2d87d31aa41e8ae5466bf5df12ba3f1054f344f359f918e51539ac7076e9422"
+          },
+          "SeveritySource": "ghsa",
+          "PrimaryURL": "https://avd.aquasec.com/nvd/cve-2026-44288",
+          "DataSource": {
+            "ID": "ghsa",
+            "Name": "GitHub Security Advisory npm",
+            "URL": "https://github.com/advisories?query=type%3Areviewed+ecosystem%3Anpm"
+          },
+          "Custom": null,
+          "Title": "protobufjs has overlong UTF-8 decoding",
+          "Description": "## Summary\n\nprotobufjs includes a minimal UTF-8 decoder used in non-Node and fallback decoding paths. The affected decoder accepted overlong UTF-8 byte sequences and decoded them to their canonical characters instead of replacing them.\n\nThe issue concerns overlong encodings and code points outside the Unicode range. protobufjs may still accept some non-strict UTF-8 input for compatibility, so applications should not rely on protobufjs as a general-purpose strict UTF-8 validator.\n\n## Impact\n\nAn attacker who can provide protobuf binary data decoded through the affected UTF-8 path may be able to bypass application-level checks that inspect raw bytes before protobuf string decoding. For example, bytes that do not contain certain ASCII characters could decode to strings containing those characters.\n\nThe practical impact depends on downstream application validation and how decoded strings are used. Node.js Buffer-backed decoding paths are not directly affected when they use Node's native UTF-8 decoding.\n\n## Preconditions\n\n- The application must decode protobuf binary data influenced by an attacker.\n- The affected protobuf string field must be decoded through protobufjs's minimal UTF-8 decoder rather than a native UTF-8 decoder.\n- The application must rely on byte-level filtering or validation before protobuf string decoding.\n- The decoded string must then be used in a security-sensitive context.\n\n## Workarounds\n\nAvoid relying only on byte-level filtering before protobuf string decoding with affected versions. Validate decoded strings at the point where they are used, and prefer runtime paths that use native UTF-8 decoding where necessary.",
+          "Severity": "MEDIUM",
+          "VendorSeverity": {
+            "ghsa": 2
+          },
+          "CVSS": {
+            "ghsa": {
+              "V3Vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:L/A:N",
+              "V3Score": 5.3
+            }
+          },
+          "References": [
+            "https://github.com/protobufjs/protobuf.js",
+            "https://github.com/protobufjs/protobuf.js/releases/tag/protobufjs-v7.5.6",
+            "https://github.com/protobufjs/protobuf.js/releases/tag/protobufjs-v8.0.2",
+            "https://github.com/protobufjs/protobuf.js/security/advisories/GHSA-q6x5-8v7m-xcrf"
+          ]
+        },
+        {
+          "VulnerabilityID": "CVE-2026-44292",
+          "VendorIDs": [
+            "GHSA-fx83-v9x8-x52w"
+          ],
+          "PkgID": "protobufjs@7.5.5",
+          "PkgName": "protobufjs",
+          "PkgPath": "app/node_modules/.pnpm/protobufjs@7.5.5/node_modules/protobufjs/package.json",
+          "PkgIdentifier": {
+            "PURL": "pkg:npm/protobufjs@7.5.5",
+            "UID": "47ed8e9c2732b4e8"
+          },
+          "InstalledVersion": "7.5.5",
+          "FixedVersion": "7.5.6, 8.0.2",
+          "Status": "fixed",
+          "Layer": {
+            "DiffID": "sha256:a2d87d31aa41e8ae5466bf5df12ba3f1054f344f359f918e51539ac7076e9422"
+          },
+          "SeveritySource": "ghsa",
+          "PrimaryURL": "https://avd.aquasec.com/nvd/cve-2026-44292",
+          "DataSource": {
+            "ID": "ghsa",
+            "Name": "GitHub Security Advisory npm",
+            "URL": "https://github.com/advisories?query=type%3Areviewed+ecosystem%3Anpm"
+          },
+          "Custom": null,
+          "Title": "protobuf.js: Prototype injection in generated message constructors",
+          "Description": "## Summary\n\nprotobufjs generated message constructors copied enumerable properties from a provided properties object without filtering the `__proto__` key. If an application constructed a message from an attacker-controlled plain object, an own enumerable `__proto__` property could alter the prototype of that individual message instance.\n\n## Impact\n\nAn attacker who can control the properties object passed to a generated protobufjs message constructor or creation helper may be able to modify the prototype chain of the resulting message instance.\n\nThis is a per-instance prototype injection issue. It does not pollute `Object.prototype` or other global prototypes. The impact depends on downstream application behavior, such as relying on inherited properties, prototype methods, or `instanceof` checks for message objects.\n\nApplications that only decode binary protobuf data, or that construct messages from trusted application-defined objects, are not directly affected by this issue.\n\n## Preconditions\n\n- The application must allow an attacker to control or influence a plain object used to construct a protobufjs message.\n- The object must contain an own enumerable `__proto__` property, for example from parsed JSON input.\n- The application must pass that object to a generated message constructor or creation helper that copies arbitrary enumerable properties.\n\n## Workarounds\n\nDo not pass attacker-controlled plain objects directly to generated message constructors with affected versions. If untrusted JSON input must be accepted, validate or sanitize object keys before constructing messages, and reject `__proto__` properties.",
+          "Severity": "MEDIUM",
+          "VendorSeverity": {
+            "ghsa": 2
+          },
+          "CVSS": {
+            "ghsa": {
+              "V3Vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:L/A:N",
+              "V3Score": 5.3
+            }
+          },
+          "References": [
+            "https://github.com/protobufjs/protobuf.js",
+            "https://github.com/protobufjs/protobuf.js/releases/tag/protobufjs-v7.5.6",
+            "https://github.com/protobufjs/protobuf.js/releases/tag/protobufjs-v8.0.2",
+            "https://github.com/protobufjs/protobuf.js/security/advisories/GHSA-fx83-v9x8-x52w"
+          ]
+        },
+        {
+          "VulnerabilityID": "CVE-2026-44294",
+          "VendorIDs": [
+            "GHSA-2pr8-phx7-x9h3"
+          ],
+          "PkgID": "protobufjs@7.5.5",
+          "PkgName": "protobufjs",
+          "PkgPath": "app/node_modules/.pnpm/protobufjs@7.5.5/node_modules/protobufjs/package.json",
+          "PkgIdentifier": {
+            "PURL": "pkg:npm/protobufjs@7.5.5",
+            "UID": "47ed8e9c2732b4e8"
+          },
+          "InstalledVersion": "7.5.5",
+          "FixedVersion": "7.5.6, 8.0.2",
+          "Status": "fixed",
+          "Layer": {
+            "DiffID": "sha256:a2d87d31aa41e8ae5466bf5df12ba3f1054f344f359f918e51539ac7076e9422"
+          },
+          "SeveritySource": "ghsa",
+          "PrimaryURL": "https://avd.aquasec.com/nvd/cve-2026-44294",
+          "DataSource": {
+            "ID": "ghsa",
+            "Name": "GitHub Security Advisory npm",
+            "URL": "https://github.com/advisories?query=type%3Areviewed+ecosystem%3Anpm"
+          },
+          "Custom": null,
+          "Title": "protobuf.js: Denial of service from crafted field names in generated code",
+          "Description": "## Summary\n\nprotobufjs generated JavaScript property accessors from schema-controlled field and oneof names. Certain control characters in field names were not escaped before being embedded into generated function bodies. A crafted schema or JSON descriptor could therefore cause generated encode, decode, verify, or conversion functions to fail during compilation.\n\n## Impact\n\nAn attacker who can provide or influence a protobuf schema or JSON descriptor may be able to make affected message types unusable by causing protobufjs runtime code generation to throw a syntax error.\n\nThis is a denial of service issue for applications that load untrusted schemas or descriptors. Applications that only use trusted, application-defined schemas are not directly affected by this issue.\n\nThe issue is not known to allow code execution by itself.\n\n## Preconditions\n\n- The application must allow an attacker to control or influence a protobuf schema or JSON descriptor.\n- The crafted input must define a field name containing control characters that reach generated JavaScript property access.\n- The application must perform an operation that triggers protobufjs code generation for the affected type, such as encode, decode, verify, `fromObject`, or `toObject`.\n\n## Workarounds\n\nDo not load protobuf schemas or JSON descriptors from untrusted sources with affected versions. If untrusted schemas must be accepted, validate field names before loading them and reject names containing control characters.",
+          "Severity": "MEDIUM",
+          "VendorSeverity": {
+            "ghsa": 2
+          },
+          "CVSS": {
+            "ghsa": {
+              "V3Vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:L",
+              "V3Score": 5.3
+            }
+          },
+          "References": [
+            "https://github.com/protobufjs/protobuf.js",
+            "https://github.com/protobufjs/protobuf.js/releases/tag/protobufjs-v7.5.6",
+            "https://github.com/protobufjs/protobuf.js/releases/tag/protobufjs-v8.0.2",
+            "https://github.com/protobufjs/protobuf.js/security/advisories/GHSA-2pr8-phx7-x9h3"
+          ]
+        },
+        {
+          "VulnerabilityID": "CVE-2026-26318",
+          "VendorIDs": [
+            "GHSA-5vv4-hvf7-2h46"
+          ],
+          "PkgID": "systeminformation@5.30.8",
+          "PkgName": "systeminformation",
+          "PkgPath": "app/node_modules/.pnpm/systeminformation@5.30.8/node_modules/systeminformation/package.json",
+          "PkgIdentifier": {
+            "PURL": "pkg:npm/systeminformation@5.30.8",
+            "UID": "a63a1366c918c7a5"
+          },
+          "InstalledVersion": "5.30.8",
+          "FixedVersion": "5.31.0",
+          "Status": "fixed",
+          "Layer": {
+            "DiffID": "sha256:a2d87d31aa41e8ae5466bf5df12ba3f1054f344f359f918e51539ac7076e9422"
+          },
+          "SeveritySource": "ghsa",
+          "PrimaryURL": "https://avd.aquasec.com/nvd/cve-2026-26318",
+          "DataSource": {
+            "ID": "ghsa",
+            "Name": "GitHub Security Advisory npm",
+            "URL": "https://github.com/advisories?query=type%3Areviewed+ecosystem%3Anpm"
+          },
+          "Custom": null,
+          "Title": "systeminformation: systeminformation: Arbitrary code execution via unsanitized `locate` output",
+          "Description": "systeminformation is a System and OS information library for node.js. Versions prior to 5.31.0 are vulnerable to command injection via unsanitized `locate` output in `versions()`. Version 5.31.0 fixes the issue.",
+          "Severity": "HIGH",
+          "CweIDs": [
+            "CWE-78"
+          ],
+          "VendorSeverity": {
+            "ghsa": 3,
+            "redhat": 3
+          },
+          "CVSS": {
+            "ghsa": {
+              "V3Vector": "CVSS:3.1/AV:L/AC:L/PR:L/UI:N/S:C/C:H/I:H/A:H",
+              "V3Score": 8.8
+            },
+            "redhat": {
+              "V3Vector": "CVSS:3.1/AV:L/AC:L/PR:L/UI:N/S:C/C:H/I:H/A:H",
+              "V3Score": 8.8
+            }
+          },
+          "References": [
+            "https://access.redhat.com/security/cve/CVE-2026-26318",
+            "https://github.com/sebhildebrandt/systeminformation",
+            "https://github.com/sebhildebrandt/systeminformation/commit/b67d3715eec881038ccbaace2f2711419ac3e107",
+            "https://github.com/sebhildebrandt/systeminformation/security/advisories/GHSA-5vv4-hvf7-2h46",
+            "https://nvd.nist.gov/vuln/detail/CVE-2026-26318",
+            "https://www.cve.org/CVERecord?id=CVE-2026-26318"
+          ],
+          "PublishedDate": "2026-02-19T20:25:44.063Z",
+          "LastModifiedDate": "2026-02-20T19:51:20.58Z"
+        },
+        {
+          "VulnerabilityID": "CVE-2025-54798",
+          "VendorIDs": [
+            "GHSA-52f5-9888-hmc6"
+          ],
+          "PkgID": "tmp@0.2.3",
+          "PkgName": "tmp",
+          "PkgPath": "app/node_modules/.pnpm/tmp@0.2.3/node_modules/tmp/package.json",
+          "PkgIdentifier": {
+            "PURL": "pkg:npm/tmp@0.2.3",
+            "UID": "bc545a9c7119adba"
+          },
+          "InstalledVersion": "0.2.3",
+          "FixedVersion": "0.2.4",
+          "Status": "fixed",
+          "Layer": {
+            "DiffID": "sha256:a2d87d31aa41e8ae5466bf5df12ba3f1054f344f359f918e51539ac7076e9422"
+          },
+          "SeveritySource": "ghsa",
+          "PrimaryURL": "https://avd.aquasec.com/nvd/cve-2025-54798",
+          "DataSource": {
+            "ID": "ghsa",
+            "Name": "GitHub Security Advisory npm",
+            "URL": "https://github.com/advisories?query=type%3Areviewed+ecosystem%3Anpm"
+          },
+          "Custom": null,
+          "Title": "tmp: tmp Symbolic Link Write Vulnerability",
+          "Description": "tmp is a temporary file and directory creator for node.js. In versions 0.2.3 and below, tmp is vulnerable to an arbitrary temporary file / directory write via symbolic link dir parameter. This is fixed in version 0.2.4.",
+          "Severity": "LOW",
+          "CweIDs": [
+            "CWE-59"
+          ],
+          "VendorSeverity": {
+            "ghsa": 1,
+            "nvd": 2,
+            "redhat": 1
+          },
+          "CVSS": {
+            "ghsa": {
+              "V3Vector": "CVSS:3.1/AV:L/AC:H/PR:L/UI:N/S:U/C:N/I:L/A:N",
+              "V3Score": 2.5
+            },
+            "nvd": {
+              "V3Vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:L/A:N",
+              "V3Score": 5.3
+            },
+            "redhat": {
+              "V3Vector": "CVSS:3.1/AV:L/AC:H/PR:L/UI:N/S:U/C:N/I:L/A:N",
+              "V3Score": 2.5
+            }
+          },
+          "References": [
+            "https://access.redhat.com/security/cve/CVE-2025-54798",
+            "https://github.com/raszi/node-tmp",
+            "https://github.com/raszi/node-tmp/commit/188b25e529496e37adaf1a1d9dccb40019a08b1b",
+            "https://github.com/raszi/node-tmp/issues/207",
+            "https://github.com/raszi/node-tmp/security/advisories/GHSA-52f5-9888-hmc6",
+            "https://lists.debian.org/debian-lts-announce/2025/08/msg00007.html",
+            "https://nvd.nist.gov/vuln/detail/CVE-2025-54798",
+            "https://www.cve.org/CVERecord?id=CVE-2025-54798"
+          ],
+          "PublishedDate": "2025-08-07T01:15:26.203Z",
+          "LastModifiedDate": "2025-11-03T20:19:15.177Z"
+        }
+      ]
+    }
+  ]
+}

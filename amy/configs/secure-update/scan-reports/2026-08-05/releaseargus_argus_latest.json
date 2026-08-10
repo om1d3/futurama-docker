@@ -1,0 +1,200 @@
+{
+  "SchemaVersion": 2,
+  "CreatedAt": "2026-08-05T04:30:12.537103362-04:00",
+  "ArtifactName": "releaseargus/argus:latest",
+  "ArtifactType": "container_image",
+  "Metadata": {
+    "Size": 64156672,
+    "OS": {
+      "Family": "alpine",
+      "Name": "3.24.1"
+    },
+    "ImageID": "sha256:d9b85c9b60828e1f5720713c72db1536ca9d81a0532c94125c6cbdab0a2bbf39",
+    "DiffIDs": [
+      "sha256:34884abbe92863fce933ed7c39c0e045631af0ed86d5cc0dfbdf9fdca426ce3c",
+      "sha256:32bc2e3309c3689bbed50bbe5e2ea7d8c9a338e97ffaf0132b5376fa26911268",
+      "sha256:055e14d78ee054f1a74b4634e5486915d8ddcaa285ddd6a19a2535b7894cde09",
+      "sha256:0ecc2b64741ae3a79749569d0c491e62dd75fd13b0ab2a33e7546788e0b20989",
+      "sha256:985842ec9eb8dfeb73a4eb1280f2d4fa9726c268380cb4146e2fa6fb63cc4c07",
+      "sha256:4a87964bff544d5b7eb89f89a2265c7cc3cf460b2e24ffc087e3639b02950fb7",
+      "sha256:e11ea6049f8df1ad4edd96feb48b91f09083b90831752a1679c9372c4b853004",
+      "sha256:4acab59ecdd9841cee6249f85c86900138dbbd0752dccdabc7c6be4305eb0ca0",
+      "sha256:5f70bf18a086007016e948b04aed3b82103a36bea41755b6cddfaf10ace3c6ef"
+    ],
+    "RepoTags": [
+      "releaseargus/argus:latest"
+    ],
+    "RepoDigests": [
+      "releaseargus/argus@sha256:1a148ccadbd2add90c4845ec9b42feff601947f9b7150a809461a53d26b20f70"
+    ],
+    "ImageConfig": {
+      "architecture": "amd64",
+      "created": "2026-08-04T02:45:44.984605566Z",
+      "history": [
+        {
+          "created": "2026-06-16T00:01:29Z",
+          "created_by": "ADD alpine-minirootfs-3.24.1-x86_64.tar.gz / # buildkit",
+          "comment": "buildkit.dockerfile.v0"
+        },
+        {
+          "created": "2026-06-16T00:01:29Z",
+          "created_by": "CMD [\"/bin/sh\"]",
+          "comment": "buildkit.dockerfile.v0",
+          "empty_layer": true
+        },
+        {
+          "created": "2026-08-04T02:43:51Z",
+          "created_by": "LABEL maintainer=The Argus Authors \u003cdevelopers@release-argus.io\u003e",
+          "comment": "buildkit.dockerfile.v0",
+          "empty_layer": true
+        },
+        {
+          "created": "2026-08-04T02:43:51Z",
+          "created_by": "RUN /bin/sh -c apk update \u0026\u0026   apk add --no-cache     ca-certificates     curl     musl-dev     su-exec \u0026\u0026   rm -rf     /tmp/*     /var/cache/* # buildkit",
+          "comment": "buildkit.dockerfile.v0"
+        },
+        {
+          "created": "2026-08-04T02:43:52Z",
+          "created_by": "COPY entrypoint.sh /entrypoint.sh # buildkit",
+          "comment": "buildkit.dockerfile.v0"
+        },
+        {
+          "created": "2026-08-04T02:45:44Z",
+          "created_by": "COPY /build/argus /usr/bin/argus # buildkit",
+          "comment": "buildkit.dockerfile.v0"
+        },
+        {
+          "created": "2026-08-04T02:45:44Z",
+          "created_by": "COPY /build/healthcheck /healthcheck # buildkit",
+          "comment": "buildkit.dockerfile.v0"
+        },
+        {
+          "created": "2026-08-04T02:45:44Z",
+          "created_by": "COPY /build/config.yml.example /app/config.yml # buildkit",
+          "comment": "buildkit.dockerfile.v0"
+        },
+        {
+          "created": "2026-08-04T02:45:44Z",
+          "created_by": "COPY /build/LICENSE /LICENSE # buildkit",
+          "comment": "buildkit.dockerfile.v0"
+        },
+        {
+          "created": "2026-08-04T02:45:44Z",
+          "created_by": "RUN /bin/sh -c addgroup -g 911 -S argus \u0026\u0026   adduser -u 911 -S -D -h /app -s /bin/false argus -G argus \u0026\u0026   mkdir -p     /app     /app/data \u0026\u0026   chown -R argus:argus /app # buildkit",
+          "comment": "buildkit.dockerfile.v0"
+        },
+        {
+          "created": "2026-08-04T02:45:44Z",
+          "created_by": "WORKDIR /app",
+          "comment": "buildkit.dockerfile.v0"
+        },
+        {
+          "created": "2026-08-04T02:45:44Z",
+          "created_by": "EXPOSE [8080/tcp]",
+          "comment": "buildkit.dockerfile.v0",
+          "empty_layer": true
+        },
+        {
+          "created": "2026-08-04T02:45:44Z",
+          "created_by": "VOLUME [/app/data]",
+          "comment": "buildkit.dockerfile.v0",
+          "empty_layer": true
+        },
+        {
+          "created": "2026-08-04T02:45:44Z",
+          "created_by": "ENTRYPOINT [\"/entrypoint.sh\"]",
+          "comment": "buildkit.dockerfile.v0",
+          "empty_layer": true
+        }
+      ],
+      "os": "linux",
+      "rootfs": {
+        "type": "layers",
+        "diff_ids": [
+          "sha256:34884abbe92863fce933ed7c39c0e045631af0ed86d5cc0dfbdf9fdca426ce3c",
+          "sha256:32bc2e3309c3689bbed50bbe5e2ea7d8c9a338e97ffaf0132b5376fa26911268",
+          "sha256:055e14d78ee054f1a74b4634e5486915d8ddcaa285ddd6a19a2535b7894cde09",
+          "sha256:0ecc2b64741ae3a79749569d0c491e62dd75fd13b0ab2a33e7546788e0b20989",
+          "sha256:985842ec9eb8dfeb73a4eb1280f2d4fa9726c268380cb4146e2fa6fb63cc4c07",
+          "sha256:4a87964bff544d5b7eb89f89a2265c7cc3cf460b2e24ffc087e3639b02950fb7",
+          "sha256:e11ea6049f8df1ad4edd96feb48b91f09083b90831752a1679c9372c4b853004",
+          "sha256:4acab59ecdd9841cee6249f85c86900138dbbd0752dccdabc7c6be4305eb0ca0",
+          "sha256:5f70bf18a086007016e948b04aed3b82103a36bea41755b6cddfaf10ace3c6ef"
+        ]
+      },
+      "config": {
+        "Entrypoint": [
+          "/entrypoint.sh"
+        ],
+        "Env": [
+          "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+        ],
+        "Labels": {
+          "maintainer": "The Argus Authors \u003cdevelopers@release-argus.io\u003e"
+        },
+        "Volumes": {
+          "/app/data": {}
+        },
+        "WorkingDir": "/app",
+        "ExposedPorts": {
+          "8080/tcp": {}
+        }
+      }
+    },
+    "Layers": [
+      {
+        "Size": 8697856,
+        "DiffID": "sha256:34884abbe92863fce933ed7c39c0e045631af0ed86d5cc0dfbdf9fdca426ce3c"
+      },
+      {
+        "Size": 16060416,
+        "DiffID": "sha256:32bc2e3309c3689bbed50bbe5e2ea7d8c9a338e97ffaf0132b5376fa26911268"
+      },
+      {
+        "Size": 3072,
+        "DiffID": "sha256:055e14d78ee054f1a74b4634e5486915d8ddcaa285ddd6a19a2535b7894cde09"
+      },
+      {
+        "Size": 30859776,
+        "DiffID": "sha256:0ecc2b64741ae3a79749569d0c491e62dd75fd13b0ab2a33e7546788e0b20989"
+      },
+      {
+        "Size": 8506880,
+        "DiffID": "sha256:985842ec9eb8dfeb73a4eb1280f2d4fa9726c268380cb4146e2fa6fb63cc4c07"
+      },
+      {
+        "Size": 2560,
+        "DiffID": "sha256:4a87964bff544d5b7eb89f89a2265c7cc3cf460b2e24ffc087e3639b02950fb7"
+      },
+      {
+        "Size": 13312,
+        "DiffID": "sha256:e11ea6049f8df1ad4edd96feb48b91f09083b90831752a1679c9372c4b853004"
+      },
+      {
+        "Size": 11776,
+        "DiffID": "sha256:4acab59ecdd9841cee6249f85c86900138dbbd0752dccdabc7c6be4305eb0ca0"
+      },
+      {
+        "Size": 1024,
+        "DiffID": "sha256:5f70bf18a086007016e948b04aed3b82103a36bea41755b6cddfaf10ace3c6ef"
+      }
+    ]
+  },
+  "Results": [
+    {
+      "Target": "releaseargus/argus:latest (alpine 3.24.1)",
+      "Class": "os-pkgs",
+      "Type": "alpine"
+    },
+    {
+      "Target": "healthcheck",
+      "Class": "lang-pkgs",
+      "Type": "gobinary"
+    },
+    {
+      "Target": "usr/bin/argus",
+      "Class": "lang-pkgs",
+      "Type": "gobinary"
+    }
+  ]
+}

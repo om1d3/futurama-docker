@@ -1,0 +1,177 @@
+{
+  "SchemaVersion": 2,
+  "CreatedAt": "2026-05-20T04:45:21.318779482-04:00",
+  "ArtifactName": "miniflux/miniflux:latest",
+  "ArtifactType": "container_image",
+  "Metadata": {
+    "Size": 34353664,
+    "OS": {
+      "Family": "alpine",
+      "Name": "3.23.4"
+    },
+    "ImageID": "sha256:147be51951aaa67627e5c6117ea7e9b4df64cf3b8e103e4e54cd2bab9c3f56e7",
+    "DiffIDs": [
+      "sha256:29df493baa13de438d6d2ece3a8333032e0b7b9b9d8cce4ee82194da255f61e1",
+      "sha256:859cefc5720512fd7501059c8964747e9383b5ab981729513b18e1eb3455bed0",
+      "sha256:306e54f3ce5f972bce0441d8a650ff76c99a7f772a0db1b378995a07199511f5"
+    ],
+    "RepoTags": [
+      "miniflux/miniflux:latest"
+    ],
+    "RepoDigests": [
+      "miniflux/miniflux@sha256:65266db84761d09d999946218adfc91fd7abbd4a1086f74b3ad0e51083e30df2"
+    ],
+    "ImageConfig": {
+      "architecture": "amd64",
+      "created": "2026-05-15T23:23:49.891774453Z",
+      "history": [
+        {
+          "created": "2026-04-15T20:01:40Z",
+          "created_by": "ADD alpine-minirootfs-3.23.4-x86_64.tar.gz / # buildkit",
+          "comment": "buildkit.dockerfile.v0"
+        },
+        {
+          "created": "2026-04-15T20:01:40Z",
+          "created_by": "CMD [\"/bin/sh\"]",
+          "comment": "buildkit.dockerfile.v0",
+          "empty_layer": true
+        },
+        {
+          "created": "2026-05-15T23:20:41Z",
+          "created_by": "LABEL org.opencontainers.image.title=Miniflux",
+          "comment": "buildkit.dockerfile.v0",
+          "empty_layer": true
+        },
+        {
+          "created": "2026-05-15T23:20:41Z",
+          "created_by": "LABEL org.opencontainers.image.description=Miniflux is a minimalist and opinionated feed reader",
+          "comment": "buildkit.dockerfile.v0",
+          "empty_layer": true
+        },
+        {
+          "created": "2026-05-15T23:20:41Z",
+          "created_by": "LABEL org.opencontainers.image.vendor=Frédéric Guillot",
+          "comment": "buildkit.dockerfile.v0",
+          "empty_layer": true
+        },
+        {
+          "created": "2026-05-15T23:20:41Z",
+          "created_by": "LABEL org.opencontainers.image.licenses=Apache-2.0",
+          "comment": "buildkit.dockerfile.v0",
+          "empty_layer": true
+        },
+        {
+          "created": "2026-05-15T23:20:41Z",
+          "created_by": "LABEL org.opencontainers.image.url=https://miniflux.app",
+          "comment": "buildkit.dockerfile.v0",
+          "empty_layer": true
+        },
+        {
+          "created": "2026-05-15T23:20:41Z",
+          "created_by": "LABEL org.opencontainers.image.source=https://github.com/miniflux/v2",
+          "comment": "buildkit.dockerfile.v0",
+          "empty_layer": true
+        },
+        {
+          "created": "2026-05-15T23:20:41Z",
+          "created_by": "LABEL org.opencontainers.image.documentation=https://miniflux.app/docs/",
+          "comment": "buildkit.dockerfile.v0",
+          "empty_layer": true
+        },
+        {
+          "created": "2026-05-15T23:20:41Z",
+          "created_by": "EXPOSE [8080/tcp]",
+          "comment": "buildkit.dockerfile.v0",
+          "empty_layer": true
+        },
+        {
+          "created": "2026-05-15T23:20:41Z",
+          "created_by": "ENV LISTEN_ADDR=0.0.0.0:8080",
+          "comment": "buildkit.dockerfile.v0",
+          "empty_layer": true
+        },
+        {
+          "created": "2026-05-15T23:20:41Z",
+          "created_by": "RUN /bin/sh -c apk --no-cache add ca-certificates tzdata # buildkit",
+          "comment": "buildkit.dockerfile.v0"
+        },
+        {
+          "created": "2026-05-15T23:23:49Z",
+          "created_by": "COPY /go/src/app/miniflux /usr/bin/miniflux # buildkit",
+          "comment": "buildkit.dockerfile.v0"
+        },
+        {
+          "created": "2026-05-15T23:23:49Z",
+          "created_by": "USER 65534",
+          "comment": "buildkit.dockerfile.v0",
+          "empty_layer": true
+        },
+        {
+          "created": "2026-05-15T23:23:49Z",
+          "created_by": "CMD [\"/usr/bin/miniflux\"]",
+          "comment": "buildkit.dockerfile.v0",
+          "empty_layer": true
+        }
+      ],
+      "os": "linux",
+      "rootfs": {
+        "type": "layers",
+        "diff_ids": [
+          "sha256:29df493baa13de438d6d2ece3a8333032e0b7b9b9d8cce4ee82194da255f61e1",
+          "sha256:859cefc5720512fd7501059c8964747e9383b5ab981729513b18e1eb3455bed0",
+          "sha256:306e54f3ce5f972bce0441d8a650ff76c99a7f772a0db1b378995a07199511f5"
+        ]
+      },
+      "config": {
+        "Cmd": [
+          "/usr/bin/miniflux"
+        ],
+        "Env": [
+          "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+          "LISTEN_ADDR=0.0.0.0:8080"
+        ],
+        "Labels": {
+          "org.opencontainers.image.description": "Miniflux is a minimalist and opinionated feed reader",
+          "org.opencontainers.image.documentation": "https://miniflux.app/docs/",
+          "org.opencontainers.image.licenses": "Apache-2.0",
+          "org.opencontainers.image.source": "https://github.com/miniflux/v2",
+          "org.opencontainers.image.title": "Miniflux",
+          "org.opencontainers.image.url": "https://miniflux.app",
+          "org.opencontainers.image.vendor": "Frédéric Guillot"
+        },
+        "User": "65534",
+        "WorkingDir": "/",
+        "ExposedPorts": {
+          "8080/tcp": {}
+        },
+        "ArgsEscaped": true
+      }
+    },
+    "Layers": [
+      {
+        "Size": 8732160,
+        "DiffID": "sha256:29df493baa13de438d6d2ece3a8333032e0b7b9b9d8cce4ee82194da255f61e1"
+      },
+      {
+        "Size": 1665024,
+        "DiffID": "sha256:859cefc5720512fd7501059c8964747e9383b5ab981729513b18e1eb3455bed0"
+      },
+      {
+        "Size": 23956480,
+        "DiffID": "sha256:306e54f3ce5f972bce0441d8a650ff76c99a7f772a0db1b378995a07199511f5"
+      }
+    ]
+  },
+  "Results": [
+    {
+      "Target": "miniflux/miniflux:latest (alpine 3.23.4)",
+      "Class": "os-pkgs",
+      "Type": "alpine"
+    },
+    {
+      "Target": "usr/bin/miniflux",
+      "Class": "lang-pkgs",
+      "Type": "gobinary"
+    }
+  ]
+}

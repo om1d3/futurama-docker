@@ -1,0 +1,250 @@
+{
+  "SchemaVersion": 2,
+  "CreatedAt": "2026-05-06T04:36:21.374284098-04:00",
+  "ArtifactName": "amir20/dozzle:latest",
+  "ArtifactType": "container_image",
+  "Metadata": {
+    "Size": 65246208,
+    "ImageID": "sha256:8650d16b6968230705829fb3be428ae323184b023678d38fefd267d4a1c79929",
+    "DiffIDs": [
+      "sha256:18339348d2720ebb8f4be4df72d9f2567de823b060bd232b49d1e2ec6ffca49a",
+      "sha256:475eb46200ab9a2c52794033ea59285b0a5f8c6d3248c09795ae9b2dd090a244",
+      "sha256:55ba2b6e224584639f3f06c24915447e3bd01ad53183e0f4a99e72e303ec63f7",
+      "sha256:3e44d54dcf22839f10db1c1a9eee1a960b91ded950839c9d41b1a769a0745326"
+    ],
+    "RepoTags": [
+      "amir20/dozzle:latest"
+    ],
+    "RepoDigests": [
+      "amir20/dozzle@sha256:2d0d65846bc436861aaf4053ece35a9cffef8d3501c58711f8cc4a3687ad8273"
+    ],
+    "ImageConfig": {
+      "architecture": "amd64",
+      "created": "2026-05-05T23:23:11.229729958Z",
+      "history": [
+        {
+          "created": "2025-11-09T15:53:53Z",
+          "created_by": "COPY /data /data # buildkit",
+          "comment": "buildkit.dockerfile.v0"
+        },
+        {
+          "created": "2025-11-09T15:53:53Z",
+          "created_by": "COPY /tmp /tmp # buildkit",
+          "comment": "buildkit.dockerfile.v0"
+        },
+        {
+          "created": "2026-04-16T22:24:20Z",
+          "created_by": "COPY /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt # buildkit",
+          "comment": "buildkit.dockerfile.v0"
+        },
+        {
+          "created": "2026-05-05T23:23:11Z",
+          "created_by": "COPY /dozzle/dozzle /dozzle # buildkit",
+          "comment": "buildkit.dockerfile.v0"
+        },
+        {
+          "created": "2026-05-05T23:23:11Z",
+          "created_by": "EXPOSE [8080/tcp]",
+          "comment": "buildkit.dockerfile.v0",
+          "empty_layer": true
+        },
+        {
+          "created": "2026-05-05T23:23:11Z",
+          "created_by": "ENTRYPOINT [\"/dozzle\"]",
+          "comment": "buildkit.dockerfile.v0",
+          "empty_layer": true
+        }
+      ],
+      "os": "linux",
+      "rootfs": {
+        "type": "layers",
+        "diff_ids": [
+          "sha256:18339348d2720ebb8f4be4df72d9f2567de823b060bd232b49d1e2ec6ffca49a",
+          "sha256:475eb46200ab9a2c52794033ea59285b0a5f8c6d3248c09795ae9b2dd090a244",
+          "sha256:55ba2b6e224584639f3f06c24915447e3bd01ad53183e0f4a99e72e303ec63f7",
+          "sha256:3e44d54dcf22839f10db1c1a9eee1a960b91ded950839c9d41b1a769a0745326"
+        ]
+      },
+      "config": {
+        "Entrypoint": [
+          "/dozzle"
+        ],
+        "Env": [
+          "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+        ],
+        "Labels": {
+          "org.opencontainers.image.created": "2026-05-05T23:19:40.270Z",
+          "org.opencontainers.image.description": "Realtime log viewer for containers.  Supports Docker, Swarm and K8s.",
+          "org.opencontainers.image.licenses": "MIT",
+          "org.opencontainers.image.revision": "eca7008e1f6bb7f79bacf3dc95c279b08d00434b",
+          "org.opencontainers.image.source": "https://github.com/amir20/dozzle",
+          "org.opencontainers.image.title": "dozzle",
+          "org.opencontainers.image.url": "https://github.com/amir20/dozzle",
+          "org.opencontainers.image.version": "v10.5.2"
+        },
+        "WorkingDir": "/",
+        "ExposedPorts": {
+          "8080/tcp": {}
+        }
+      }
+    },
+    "Layers": [
+      {
+        "Size": 1536,
+        "DiffID": "sha256:18339348d2720ebb8f4be4df72d9f2567de823b060bd232b49d1e2ec6ffca49a"
+      },
+      {
+        "Size": 1536,
+        "DiffID": "sha256:475eb46200ab9a2c52794033ea59285b0a5f8c6d3248c09795ae9b2dd090a244"
+      },
+      {
+        "Size": 221184,
+        "DiffID": "sha256:55ba2b6e224584639f3f06c24915447e3bd01ad53183e0f4a99e72e303ec63f7"
+      },
+      {
+        "Size": 65021952,
+        "DiffID": "sha256:3e44d54dcf22839f10db1c1a9eee1a960b91ded950839c9d41b1a769a0745326"
+      }
+    ]
+  },
+  "Results": [
+    {
+      "Target": "dozzle",
+      "Class": "lang-pkgs",
+      "Type": "gobinary",
+      "Vulnerabilities": [
+        {
+          "VulnerabilityID": "CVE-2026-34040",
+          "VendorIDs": [
+            "GHSA-x744-4wpc-v9h2"
+          ],
+          "PkgID": "github.com/docker/docker@v28.5.2+incompatible",
+          "PkgName": "github.com/docker/docker",
+          "PkgIdentifier": {
+            "PURL": "pkg:golang/github.com/docker/docker@v28.5.2%2Bincompatible",
+            "UID": "e0723c6e47383ba2"
+          },
+          "InstalledVersion": "v28.5.2+incompatible",
+          "FixedVersion": "29.3.1",
+          "Status": "fixed",
+          "Layer": {
+            "DiffID": "sha256:3e44d54dcf22839f10db1c1a9eee1a960b91ded950839c9d41b1a769a0745326"
+          },
+          "SeveritySource": "ghsa",
+          "PrimaryURL": "https://avd.aquasec.com/nvd/cve-2026-34040",
+          "DataSource": {
+            "ID": "ghsa",
+            "Name": "GitHub Security Advisory Go",
+            "URL": "https://github.com/advisories?query=type%3Areviewed+ecosystem%3Ago"
+          },
+          "Custom": null,
+          "Title": "Moby: Moby: Authorization bypass vulnerability",
+          "Description": "Moby is an open source container framework. Prior to version 29.3.1, a security vulnerability has been detected that allows attackers to bypass authorization plugins (AuthZ). This issue has been patched in version 29.3.1.",
+          "Severity": "HIGH",
+          "CweIDs": [
+            "CWE-288"
+          ],
+          "VendorSeverity": {
+            "amazon": 3,
+            "ghsa": 3,
+            "nvd": 3,
+            "photon": 3,
+            "redhat": 2
+          },
+          "CVSS": {
+            "ghsa": {
+              "V3Vector": "CVSS:3.1/AV:L/AC:L/PR:L/UI:N/S:C/C:H/I:H/A:H",
+              "V3Score": 8.8
+            },
+            "nvd": {
+              "V3Vector": "CVSS:3.1/AV:L/AC:L/PR:L/UI:N/S:U/C:H/I:H/A:H",
+              "V3Score": 7.8
+            },
+            "redhat": {
+              "V3Vector": "CVSS:3.1/AV:L/AC:L/PR:L/UI:N/S:C/C:H/I:H/A:N",
+              "V3Score": 8.4
+            }
+          },
+          "References": [
+            "https://access.redhat.com/security/cve/CVE-2026-34040",
+            "https://docs.docker.com/engine/extend/plugins_authorization",
+            "https://github.com/moby/moby",
+            "https://github.com/moby/moby/commit/e89edb19ad7de0407a5d31e3111cb01aa10b5a38",
+            "https://github.com/moby/moby/releases/tag/docker-v29.3.1",
+            "https://github.com/moby/moby/security/advisories/GHSA-v23v-6jw2-98fq",
+            "https://github.com/moby/moby/security/advisories/GHSA-x744-4wpc-v9h2",
+            "https://nvd.nist.gov/vuln/detail/CVE-2026-34040",
+            "https://www.cve.org/CVERecord?id=CVE-2026-34040"
+          ],
+          "PublishedDate": "2026-03-31T03:15:57.883Z",
+          "LastModifiedDate": "2026-04-03T16:51:28.67Z"
+        },
+        {
+          "VulnerabilityID": "CVE-2026-33997",
+          "VendorIDs": [
+            "GHSA-pxq6-2prw-chj9"
+          ],
+          "PkgID": "github.com/docker/docker@v28.5.2+incompatible",
+          "PkgName": "github.com/docker/docker",
+          "PkgIdentifier": {
+            "PURL": "pkg:golang/github.com/docker/docker@v28.5.2%2Bincompatible",
+            "UID": "e0723c6e47383ba2"
+          },
+          "InstalledVersion": "v28.5.2+incompatible",
+          "FixedVersion": "29.3.1",
+          "Status": "fixed",
+          "Layer": {
+            "DiffID": "sha256:3e44d54dcf22839f10db1c1a9eee1a960b91ded950839c9d41b1a769a0745326"
+          },
+          "SeveritySource": "ghsa",
+          "PrimaryURL": "https://avd.aquasec.com/nvd/cve-2026-33997",
+          "DataSource": {
+            "ID": "ghsa",
+            "Name": "GitHub Security Advisory Go",
+            "URL": "https://github.com/advisories?query=type%3Areviewed+ecosystem%3Ago"
+          },
+          "Custom": null,
+          "Title": "moby: docker: github.com/moby/moby: Moby: Privilege validation bypass during plugin installation",
+          "Description": "Moby is an open source container framework. Prior to version 29.3.1, a security vulnerability has been detected that allows plugins privilege validation to be bypassed during docker plugin install. Due to an error in the daemon's privilege comparison logic, the daemon may incorrectly accept a privilege set that differs from the one approved by the user. Plugins that request exactly one privilege are also affected, because no comparison is performed at all. This issue has been patched in version 29.3.1.",
+          "Severity": "MEDIUM",
+          "CweIDs": [
+            "CWE-193"
+          ],
+          "VendorSeverity": {
+            "amazon": 2,
+            "ghsa": 2,
+            "nvd": 3,
+            "photon": 3,
+            "redhat": 3
+          },
+          "CVSS": {
+            "ghsa": {
+              "V3Vector": "CVSS:3.1/AV:N/AC:H/PR:N/UI:R/S:U/C:H/I:H/A:N",
+              "V3Score": 6.8
+            },
+            "nvd": {
+              "V3Vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:R/S:U/C:H/I:H/A:N",
+              "V3Score": 8.1
+            },
+            "redhat": {
+              "V3Vector": "CVSS:3.1/AV:N/AC:L/PR:H/UI:R/S:C/C:H/I:H/A:H",
+              "V3Score": 8.4
+            }
+          },
+          "References": [
+            "https://access.redhat.com/security/cve/CVE-2026-33997",
+            "https://docs.docker.com/engine/extend/legacy_plugins",
+            "https://github.com/moby/moby",
+            "https://github.com/moby/moby/commit/f4d6f25bf0c3fa12d4968320a45685947756a22a",
+            "https://github.com/moby/moby/releases/tag/docker-v29.3.1",
+            "https://github.com/moby/moby/security/advisories/GHSA-pxq6-2prw-chj9",
+            "https://nvd.nist.gov/vuln/detail/CVE-2026-33997",
+            "https://www.cve.org/CVERecord?id=CVE-2026-33997"
+          ],
+          "PublishedDate": "2026-03-31T03:15:57.523Z",
+          "LastModifiedDate": "2026-04-03T17:23:21.307Z"
+        }
+      ]
+    }
+  ]
+}

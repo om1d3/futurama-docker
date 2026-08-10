@@ -2,9 +2,9 @@
 
 ## complete file system layout
 
-**document version:** 3.0
-**infrastructure version:** 109
-**last updated:** february 2026
+**document version:** 5.0
+**infrastructure version:** 20260809
+**last updated:** august 2026
 
 ---
 
@@ -12,7 +12,7 @@
 
 1. [overview](#overview)
 2. [docker-compose directory](#docker-compose-directory)
-3. [container configurations — configs/](#container-configurations--configs)
+3. [container configurations – configs/](#container-configurations--configs)
 4. [build contexts](#build-contexts)
 5. [media libraries](#media-libraries)
 6. [immich data](#immich-data)
@@ -32,7 +32,7 @@ all of bender's container data lives under a single ZFS path: `/mnt/BIG/filme/`.
 
 | path | purpose |
 |------|---------|
-| `/mnt/BIG/filme/docker-compose/` | compose file, .env, scripts |
+| `/mnt/BIG/filme/docker-compose/` | compose file, .env, scripts, secure-update state |
 | `/mnt/BIG/filme/configs/` | per-service configuration volumes |
 | `/mnt/BIG/filme/immich/` | immich photos, database, redis, ML cache |
 | `/mnt/BIG/filme/filme/` | movie library |
@@ -48,7 +48,9 @@ all of bender's container data lives under a single ZFS path: `/mnt/BIG/filme/`.
 | `/mnt/BIG/filme/jdownloader/` | jdownloader output |
 | `/mnt/BIG/filme/spotdl/` | spotify downloads |
 
-the naming convention (`/mnt/BIG/filme/filme/` for movies) is historical — `filme` is the Romanian word for "films/movies". the outer `filme` is the ZFS dataset name, the inner `filme` is the movie library directory.
+the naming convention (`/mnt/BIG/filme/filme/` for movies) is historical – `filme` is the Romanian word for "films/movies". the outer `filme` is the ZFS dataset name, the inner `filme` is the movie library directory.
+
+**nothing operational lives under `/root` or the OS filesystem.** TrueNAS upgrades wipe or reset those locations (the HeavyScript loss is the standing precedent). every script, config, and state file belongs on the pool.
 
 ---
 
@@ -56,40 +58,63 @@ the naming convention (`/mnt/BIG/filme/filme/` for movies) is historical — `fi
 
 ```
 /mnt/BIG/filme/docker-compose/
-├── docker-compose.yaml             # v109 — main compose file (36 services)
-├── .env                            # environment variables (28 variables)
-└── scripts/
-    ├── secure-container-update.sh  # v1.2 — automated update orchestration
-    ├── health-checks.sh            # v1.2 — post-update health verification
-    ├── rollback.sh                 # v1.1 — rollback helper
-    └── pihole-dns-update.sh        # v3.0 — reference copy (executable at /root/)
+├── docker-compose.yaml             # 20260809 – main compose file (42 defined, 41 active)
+├── .env                            # environment variables (31 active variables, 16 secrets)
+├── scripts/
+│   ├── secure-container-update.sh  # v1.3 – update orchestration (postgres + gluetun critical)
+│   ├── secure-container-update.sh-v1.2.backup
+│   ├── secure-container-update.sh.v1.1.backup
+│   ├── health-checks.sh            # v1.2 – post-update health verification
+│   ├── rollback.sh                 # v1.1 – rollback helper
+│   ├── pihole-dns-update.sh        # v3.2 – DNS auto-population (hourly cron)
+│   ├── smart-test.sh               # v1.1 – middleware-free SMART testing + alerting
+│   └── bender-replicate.sh         # v1.0 – nightly critical-data replication to amy
+├── configs/secure-update/
+│   ├── critical-containers.json    # critical service definitions (postgres, gluetun)
+│   ├── critical-containers_v1.2.json  # pre-v1.3 version (versioned-backup convention)
+│   ├── retry-queue.json            # containers blocked by vulnerability scans
+│   ├── logs/                       # daily update + replicate- + smart- logs (180-day retention)
+│   ├── scan-reports/               # trivy JSON reports by date (180-day retention)
+│   └── smart-state/                # SMART baselines keyed by model_serial
+└── reports/weekly-reports/         # markdown update summaries (180-day retention)
 ```
 
-> **note:** on TrueNAS, scripts under `/mnt/` cannot be executed directly due to filesystem restrictions. the secure-container-update.sh cron job copies the script to `/tmp/` before execution. the pihole-dns-update.sh executable lives at `/root/pihole-dns-update.sh`.
+superseded script versions are kept beside the live script with a versioned suffix rather than `.bak` – the same convention applies to rewritten config JSONs (`critical-containers_v1.2.json`).
+
+> **known wart – dual configs trees:** a second, near-empty configs tree exists at `/mnt/BIG/filme/docker-compose/configs/` (diun, jellyfin-themerr, secure-update, trivy remnants). **canonical for service configs is `/mnt/BIG/filme/configs/`**; the secure-update state tree is canonical under `docker-compose/configs/secure-update/`. cleanup is deferred until after the K8s migration – do not "tidy" it mid-flight.
+
+> **note:** the pool is mounted noexec – scripts under `/mnt/` cannot be executed directly. every invocation, scheduled or manual, uses the `bash /mnt/BIG/filme/docker-compose/scripts/<script>.sh` form. the legacy pattern of copying scripts to `/tmp/` before execution was retired in 2026-07; if you find it in a cron entry or muscle memory, replace it.
+
+all six scripts are scheduled through TrueNAS UI cron jobs (System → Advanced → Cron Jobs) – UI-defined jobs survive TrueNAS upgrades; `crontab -e` entries do not. see [07-MAINTENANCE.md](./07-MAINTENANCE.md) for the full seven-job table.
 
 ---
 
-## container configurations — configs/
+## container configurations – configs/
 
 ```
 /mnt/BIG/filme/configs/
 ├── audiobookshelf/             # audiobookshelf config
+├── baikal/                     # v110: CalDAV/CardDAV server
+│   ├── config/                 # baikal configuration
+│   └── data/                   # baikal Specific/ data
 ├── bazarr/                     # subtitle manager config
 ├── diun/                       # image update notifier data
 ├── dockwatch/                  # container management config
 ├── epub2tts-edge/              # v108: epub2tts-edge build context
-│   └── Dockerfile
+│   ├── Dockerfile
+│   └── patch_epub2tts.py
+├── forgejo/                    # v115: git forge data (repos + config; chown 1000:1000)
 ├── gluetun/                    # VPN client state
 ├── hedgedoc/
 │   └── uploads/                # hedgedoc uploaded files
 ├── jdownloader/                # jdownloader config
 ├── jellyfin/                   # media server config + cache
 ├── keepalived/
-│   └── keepalived.conf         # VRRP master config (bond0, priority 200)
+│   └── keepalived.conf         # VRRP master config (ens1f0, priority 200, VIP 10.30.0.2)
 ├── lidarr/                     # music automation config
 ├── pihole/
-│   ├── etc-pihole/             # pihole config (includes pihole.toml)
-│   └── etc-dnsmasq.d/         # dnsmasq config
+│   ├── etc-pihole/             # pihole config (pihole.toml + .dns-state)
+│   └── etc-dnsmasq.d/          # dnsmasq config
 ├── postgres/
 │   └── init/                   # init scripts (read-only mount)
 ├── prowlarr/                   # indexer manager config
@@ -97,18 +122,25 @@ the naming convention (`/mnt/BIG/filme/filme/` for movies) is historical — `fi
 ├── readarr/                    # ebook automation config
 ├── sonarr/                     # tv automation config
 ├── transmission/               # v108: custom build context
-│   ├── Dockerfile              # pre-baked Flood UI build
+│   ├── Dockerfile              # pre-baked Flood UI build (base pinned 4.0.5)
 │   └── ...                     # transmission config files
 ├── trivy/                      # vulnerability scanner cache
 ├── tsdproxy/
 │   ├── data/tailscale/         # tailscale state
 │   └── config/                 # tsdproxy config
-├── tts-pipeline/               # v108: tts-pipeline build context
+├── audiobook-foundry/          # 20260729: git checkout, replaces tts-pipeline
+├── tts-pipeline/               # RETIRED 20260729 – archive after first good conversion
+├── influxdb/ -> NOT here       # 20260807: data lives at /mnt/BIG/filme/influxdb
+├── meshcentral/                # 20260729: meshcentral-data holds AMT credentials
 │   ├── Dockerfile              # Flask web UI + pipeline.sh
 │   ├── pipeline.sh             # filesystem watcher script
+│   ├── preprocess.py           # input preprocessing
+│   ├── patch_epub2tts.py       # epub2tts patching
 │   ├── webapp.py               # v109: Flask web interface
 │   └── start.sh                # v109: entrypoint (starts both watcher + web)
-└── vaultwarden/                # password manager data
+├── vaultwarden/                # password manager data
+└── vikunja/                    # v111: task management
+    └── files/                  # vikunja file attachments (chown 1000)
 ```
 
 ---
@@ -120,8 +152,10 @@ three containers use `build:` directives instead of pre-built images. their Dock
 | container | build context | key files |
 |-----------|--------------|-----------|
 | transmission | `/mnt/BIG/filme/configs/transmission/` | Dockerfile (base: lscr.io/linuxserver/transmission:4.0.5, adds Flood UI) |
-| tts-pipeline | `/mnt/BIG/filme/configs/tts-pipeline/` | Dockerfile, pipeline.sh, webapp.py, start.sh |
-| epub2tts-edge | `/mnt/BIG/filme/configs/epub2tts-edge/` | Dockerfile (profiles: tools, on-demand only) |
+| audiobook-foundry | `/mnt/BIG/filme/configs/audiobook-foundry/` | Dockerfile, pipeline.sh, webapp.py, start.sh, preprocess.py, patch_epub2tts.py. this is a git checkout of a public repository. |
+| epub2tts-edge | `/mnt/BIG/filme/configs/epub2tts-edge/` | Dockerfile, patch_epub2tts.py (profiles: tools, on-demand only) |
+
+the build context moved in 20260729. it is now `configs/audiobook-foundry/`, a git checkout rather than a loose directory. so `git log` answers which version is deployed. `configs/tts-pipeline/` is retired and should be archived after the first successful conversion on the new image.
 
 to rebuild after changes:
 
@@ -157,7 +191,7 @@ docker compose up -d <service_name>
 /mnt/BIG/filme/immich/
 ├── photos/                         # original uploaded photos
 │                                   # consumer: immich_server (/usr/src/app/upload)
-├── postgresql/                     # CRITICAL — immich database
+├── postgresql/                     # CRITICAL – shared database (5 tenants)
 │                                   # consumer: postgres (/var/lib/postgresql/data)
 ├── redis/                          # redis persistent data
 │                                   # consumer: immich_redis (/data)
@@ -165,7 +199,7 @@ docker compose up -d <service_name>
                                     # consumer: immich_machine_learning (/cache)
 ```
 
-> **CRITICAL:** `/mnt/BIG/filme/immich/postgresql` contains the actual immich database with all photo metadata. this path is the most critical data on bender. it is backed up daily by postgres-backup and receives pre-upgrade dumps before any postgres updates.
+> **CRITICAL:** `/mnt/BIG/filme/immich/postgresql` is the shared postgres data directory carrying **all five** tenant databases: immich (photo metadata), hedgedoc, baikal, vikunja, and forgejo. the path name is historical – it long ago outgrew "immich only". it is the most critical data on bender: backed up daily by postgres-backup, dumped pre-upgrade by the update system, and its dumps replicated nightly to amy.
 
 ---
 
@@ -178,19 +212,20 @@ docker compose up -d <service_name>
     ├── ro-alina/                   # → ro-RO-AlinaNeural (Romanian female)
     ├── en-ryan/                    # → en-GB-RyanNeural (British male)
     └── en-sonia/                   # → en-GB-SoniaNeural (British female)
-                                    # consumer: tts-pipeline (/input)
+                                    # consumers: lrrr (/input), epub2tts-edge (/input)
 
 /mnt/BIG/filme/audiobookshelf/
 ├── audiobooks/                     # audiobook library
 │   └── cărți/                      # TTS output goes here for automatic pickup
-│                                   # consumers: audiobookshelf (/audiobooks), tts-pipeline (/audiobooks)
+│                                   # consumers: audiobookshelf (/audiobooks), lrrr (/audiobooks),
+│                                   #            epub2tts-edge (/audiobooks)
 ├── podcasts/                       # podcast library
 │                                   # consumer: audiobookshelf (/podcasts)
 └── metadata/                       # audiobookshelf metadata
                                     # consumer: audiobookshelf (/metadata)
 ```
 
-the tts-pipeline watches all 4 input directories and auto-selects the voice based on which directory the file is placed in. output M4B files go to `/audiobooks/cărți/` where audiobookshelf picks them up automatically.
+lrrr watches all 4 input directories and auto-selects the voice based on which directory the file is placed in. output M4B files go to `/audiobooks/cărți/` where audiobookshelf picks them up automatically.
 
 ---
 
@@ -223,13 +258,26 @@ the tts-pipeline watches all 4 input directories and auto-selects the voice base
 
 ```
 /mnt/BIG/filme/backups/
-└── postgres/                       # postgresql backups
+└── postgres/                       # postgresql backups (all 5 databases)
     ├── pre-upgrade/                # pre-upgrade dumps (created by secure-container-update.sh)
     └── ...                         # daily/weekly/monthly from postgres-backup container
                                     # consumer: postgres-backup (/backups)
 ```
 
 retention policy: 7 daily, 4 weekly, 6 monthly backups.
+
+### off-host replica (amy)
+
+bender-replicate.sh rsyncs the critical trees to amy nightly at 03:30:
+
+```
+amy:/docker/backups/bender-replica/
+├── configs/                        # everything under /mnt/BIG/filme/configs/
+├── backups/postgres/               # the database dumps above
+└── docker-compose/                 # compose, .env, scripts, secure-update state
+```
+
+7-day retention on amy; regenerable bulk (media libraries, downloads, ML caches) is excluded. the replica intentionally includes the replication script itself – the backup system backs up its own code.
 
 ---
 
@@ -270,11 +318,15 @@ retention policy: 7 daily, 4 weekly, 6 monthly backups.
 | spotdl | spotdl | /music | rw |
 | hedgedoc | configs/hedgedoc/uploads | /hedgedoc/public/uploads | rw |
 | vaultwarden | configs/vaultwarden | /data | rw |
+| baikal | configs/baikal/config | /var/www/baikal/config | rw |
+| baikal | configs/baikal/data | /var/www/baikal/Specific | rw |
+| vikunja | configs/vikunja/files | /app/vikunja/files | rw |
+| forgejo | configs/forgejo | /data | rw |
 | unpackerr | transmission | /downloads | rw |
 | flaresolverr | (none) | | |
 | edge-tts | (none) | | |
-| tts-pipeline | tts/input | /input | rw |
-| tts-pipeline | audiobookshelf/audiobooks | /audiobooks | rw |
+| audiobook-foundry | tts/input | /input | rw |
+| audiobook-foundry | audiobookshelf/audiobooks | /audiobooks | rw |
 | cadvisor | / | /rootfs | ro |
 | cadvisor | /var/run | /var/run | ro |
 | cadvisor | /sys | /sys | ro |
@@ -321,7 +373,14 @@ retention policy: 7 daily, 4 weekly, 6 monthly backups.
 
 ### services with no volumes
 
-nebula-sync, flaresolverr, edge-tts — no persistent volumes.
+nebula-sync, flaresolverr, edge-tts – no persistent volumes.
+
+### tools-profile services
+
+| container | host path | container path | mode |
+|-----------|-----------|---------------|------|
+| epub2tts-edge | audiobookshelf/audiobooks | /audiobooks | rw |
+| epub2tts-edge | tts/input | /input | rw |
 
 ---
 
@@ -329,7 +388,7 @@ nebula-sync, flaresolverr, edge-tts — no persistent volumes.
 
 | mode | services |
 |------|----------|
-| bridge (media-network) | tsdproxy, dockwatch, dockerproxy, diun, trivy, gluetun, pihole, nebula-sync, postgres, postgres-backup, immich_redis, immich_server, immich_machine_learning, jellyfin, audiobookshelf, metube, spotdl, hedgedoc, vaultwarden, unpackerr, flaresolverr, edge-tts, tts-pipeline, cadvisor |
+| bridge (media-network) | tsdproxy, dockwatch, dockerproxy, diun, trivy, meshcentral, gluetun, pihole, nebula-sync, postgres, postgres-backup, immich_redis, influxdb, immich_server, immich_machine_learning, jellyfin, audiobookshelf, metube, spotdl, hedgedoc, vaultwarden, baikal, vikunja, forgejo, unpackerr, flaresolverr, edge-tts, audiobook-foundry, cadvisor, epub2tts-edge (profiles: tools) |
 | host | keepalived, syncthing, beszel-agent |
 | service:gluetun | transmission, jdownloader, prowlarr, sonarr, radarr, lidarr, readarr, bazarr |
 | standalone | autoheal |
@@ -343,34 +402,43 @@ nebula-sync, flaresolverr, edge-tts — no persistent volumes.
 | all host paths are relative to `/mnt/BIG/filme/` | `configs/jellyfin` → `/mnt/BIG/filme/configs/jellyfin` |
 | config volumes go under `configs/<service>/` | `/mnt/BIG/filme/configs/sonarr` |
 | data volumes have their own top-level directories | `/mnt/BIG/filme/filme/`, `/mnt/BIG/filme/music/` |
-| build contexts go under `configs/<service>/` | `/mnt/BIG/filme/configs/tts-pipeline/` |
+| build contexts go under `configs/<service>/` | `/mnt/BIG/filme/configs/audiobook-foundry/` (a git checkout since 20260729) |
 | backup data goes under `backups/` | `/mnt/BIG/filme/backups/postgres/` |
+| scripts + operational state under `docker-compose/` | `/mnt/BIG/filme/docker-compose/scripts/`, `.../configs/secure-update/` |
+| nothing under /root or the OS filesystem | TrueNAS upgrades reset those locations |
 
 ---
 
 ## TrueNAS-specific notes
 
-### script execution
+### script execution (noexec pool)
 
-TrueNAS does not allow executing scripts from `/mnt/` paths. workarounds:
-
-- **secure-container-update.sh**: cron copies to `/tmp/` before execution
-- **pihole-dns-update.sh**: executable copy lives at `/root/pihole-dns-update.sh`
-- **health-checks.sh and rollback.sh**: copy to `/tmp/` for manual use
+TrueNAS mounts the pool noexec – scripts under `/mnt/` cannot be executed directly. the `bash <path>` invocation form is used everywhere (cron and manual):
 
 ```bash
 # example: run health checks
-cp /mnt/BIG/filme/docker-compose/scripts/health-checks.sh /tmp/
-bash /tmp/health-checks.sh postgres
-rm /tmp/health-checks.sh
+bash /mnt/BIG/filme/docker-compose/scripts/health-checks.sh postgres
+
+# example: manual rollback listing
+bash /mnt/BIG/filme/docker-compose/scripts/rollback.sh list jellyfin
 ```
+
+the `chmod +x` on scripts is convention, not function – noexec makes the execute bit inert. the historical copy-to-/tmp pattern is retired; it added failure modes (partial copies, stale /tmp versions) for no benefit.
+
+### cron persistence
+
+only TrueNAS **UI-defined** cron jobs (System → Advanced → Cron Jobs) survive upgrades. root's `crontab -e` was silently emptied by an upgrade (discovered 2026-07); all seven schedules now live in the UI. after every TrueNAS upgrade, verify the seven jobs against the table in [07-MAINTENANCE.md](./07-MAINTENANCE.md).
+
+### apt / developer mode
+
+TrueNAS blocks apt by default (symlinks to `pkg_mgmt_disabled`). it was unlocked via `install-dev-tools`, with the Debian **bookworm** repository added (25.10.x is bookworm-based). an idempotent Pre Init script (timeout 900) re-applies developer mode and the repo after upgrades. if apt fails with a policy error after an upgrade, run the post-init script manually and retry.
 
 ### ZFS considerations
 
 - **snapshots**: ZFS snapshots provide point-in-time recovery for the entire `/mnt/BIG/filme/` dataset. this is the recommended backup strategy for media libraries
-- **I/O patterns**: aggressive random I/O (such as qBittorrent hash checking) can overwhelm ZFS on the HP MicroServer Gen8. transmission with conservative settings is used instead (v107)
-- **pool monitoring**: monitor ZFS pool health with `zpool status BIG`
-- **intel_iommu**: set to `off` in GRUB to prevent DMAR faults from escalating I/O stalls into hard freezes (v107)
+- **I/O patterns**: aggressive random I/O (qBittorrent hash checking v102, unconstrained immich ML v112) can overwhelm ZFS on the 4-disk array. transmission and immich run with conservative limits
+- **pool monitoring**: `zpool status BIG`; disk health via smart-test.sh (see [07-MAINTENANCE.md](./07-MAINTENANCE.md))
+- **intel_iommu**: set to `off` in the MicroSD GRUB config to prevent DMAR faults from escalating I/O stalls into hard freezes (v107). the MicroSD is a single point of failure – imaging a spare is backlog 04-A
 
 ---
 

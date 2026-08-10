@@ -1,12 +1,140 @@
 # ============================================
 # amy (Intel i3-2310M, 16GB RAM) - Utilities & Services
-# Version: 100 - Added tax-calculator service
+# Version: 20260810.2 - keepalived digest pin, homepage allowed hosts
 # ============================================
 # Host: Intel i3-2310M
-# IP: 192.168.21.130
+# IP: 10.30.0.11
 # RAM: 16GB
 # Data path: /docker/
 # ============================================
+# 20260810.2 CHANGES (2026-08-10, same day):
+#   - CORRECTION to the 20260810 entry below. That entry called the
+#     keepalived pin to 2.0.20 "a no-op pin" because :latest had pointed at
+#     2.0.20 for years. That claim was false and was never verified.
+#     amy's :latest is keepalived 2.3.4. It reads its configuration from
+#     /etc/keepalived/keepalived.conf, which is where amy mounts it.
+#     Version 2.0.20 reads /usr/local/etc/keepalived/keepalived.conf
+#     instead. So the pin was a downgrade across a breaking change.
+#     keepalived then loaded the image's own example configuration,
+#     reported "interface eth0 doesn't exist" and static addresses
+#     192.168.1.231 and 192.168.1.232, and entered a restart loop.
+#     DNS never failed, because bender holds the VIP as MASTER.
+#   - PINNED: keepalived by digest instead of by tag.
+#     osixia/keepalived@sha256:190269186850de7b2892129691a3ddea4c1aa27ed8fa4f2c3e1ad770251ffd39
+#     A digest freezes what actually runs, 2.3.4, and needs no trust in a
+#     tag name. Same approach as tsdproxy.
+#     NOTE: amy and bender now run different keepalived versions by
+#     different mechanisms. VRRP is a protocol, so 2.3.4 and 2.0.20
+#     interoperate correctly. Version parity would require changing amy's
+#     mount path as well, which is a real change and not a no-op.
+#     VERIFIED: log shows "(PIHOLE_VIP) Entering BACKUP STATE (init)" and
+#     "VRRP_Script(chk_pihole) succeeded". amy does not hold the VIP.
+#   - ADDED: HOMEPAGE_ALLOWED_HOSTS to homepage.
+#     REASON: homepage 16.2.6 refuses any request whose Host header is not
+#     in that list. Only localhost:3000 and 127.0.0.1:3000 are allowed by
+#     default. Every access returned "Host validation failed. See logs for
+#     more details." Three entries are required, because homepage is
+#     reached three ways: by IP, by LAN name through Pi-hole, and by
+#     tailnet name through tsdproxy.
+#   - CONFIRMED: the homepage mount change in 20260810 was correct.
+#     Host validation had masked the test. Once it passed, the dashboard
+#     rendered empty, which proved /docker/homepage/config holds no
+#     service definitions. The mount reads /docker/homepage and the tiles
+#     now appear.
+#   - ALSO (outside this file): /docker/homepage/services.yaml corrected.
+#     Stirling PDF container: stirling-pdf -> stirling
+#     Vaultwarden server: amy -> bender (it moved to bender in v92)
+#     Vaultwarden href: http://10.30.0.11:8222 -> http://10.30.0.12:8484
+#     File Browser icon: sh-filebrowser -> sh-file-browser
+#     LubeLogger href port: 8987 -> 8989
+#     Backup kept at /docker/homepage/services.yaml.pre-20260810.backup
+#   - NOTE: three tiles report NOT FOUND correctly, because their
+#     containers were removed when the services were parked: LubeLogger,
+#     Limdius, SpendSpentSpent. The tiles are kept on purpose, so the
+#     dashboard shows what is parked.
+#   - NOTE: homepage monitors both hosts through docker.yaml. The bender
+#     endpoint is dockerproxy on 10.30.0.12:2375, unauthenticated with a
+#     read-only socket. So it cannot start or stop containers, but anyone
+#     on the LAN can enumerate them. Acceptable today. It belongs behind a
+#     rule when the management VLAN decision lands.
+#   - REQUIRED: none. This version records what is already running.
+# 20260810 CHANGES (2026-08-10):
+#   - CHANGED: version scheme to date-based YYYYMMDD, harmonized with bender.
+#     Same-day edits append .2. This completes the change drafted for
+#     20260721, which was delivered as a patch script and never applied.
+#   - PINNED: keepalived from :latest to osixia/keepalived:2.0.20
+#     REASON: parity with bender and determinism. :latest has pointed at
+#     2.0.20 for years, so this is a no-op pin that prevents a surprise
+#     future move.
+#   - ADDED: pihole healthcheck, matching bender's dig-based test.
+#   - DOCUMENTED: tsdproxy pinned to a digest on 2026-08-08.
+#     almeidapaulopt/tsdproxy@sha256:e75357d5...
+#     REASON: :latest resolves to 3.0.0-beta.1. Both hosts now run that
+#     beta and it works, so the pin freezes what runs rather than
+#     downgrading. Rolling back to 1.x is now the risky direction, because
+#     the beta may have migrated its data format.
+#     The edit was applied by hand and is recorded here for the first time.
+#   - DOCUMENTED: oxidized pinned to oxidized/oxidized:0.36.0 on 2026-08-08.
+#     REASON: 0.37.0 passes max_window_size to Net::SSH.start, and the
+#     bundled net-ssh 7.3.0 rejects unknown options with ArgumentError. So
+#     every device fetch died. The image had silently moved from 0.36.0 to
+#     0.37.0 between May and July, and oxidized produced no backups from
+#     2026-06-10 until the pin. A stale /tmp/oxidized.pid then held the
+#     container in a restart loop.
+#     The edit was applied by hand and is recorded here for the first time.
+#   - ADDED: profiles: ["parked"] to six services that are intentionally
+#     stopped: limdius, lubelogger, playwright-chrome, spendspentspent,
+#     tax-calculator, wallos.
+#     REASON: they were stopped by hand on 2026-08-08, so every
+#     `docker compose up -d` restarted them. The profile makes the parked
+#     state part of the configuration instead of a manual act.
+#     USAGE: `docker compose up -d` starts the 25 production services.
+#            `docker compose up -d tax-calculator` starts one parked service.
+#            `docker compose --profile parked up -d` starts all six.
+#     CAUTION: `docker compose start <name>` does NOT enable the profile.
+#     Use `up -d` for parked services.
+#   - CHANGED: homepage mount from /docker/homepage/config to /docker/homepage
+#     REASON: the authored configuration lives in /docker/homepage
+#     (services.yaml, bookmarks.yaml, widgets.yaml, docker.yaml,
+#     proxmox.yaml, custom.css, custom.js). The mounted config/ subdirectory
+#     held only kubernetes.yaml and settings.yaml, which appear to be
+#     defaults homepage generated itself. So homepage could not read the
+#     real dashboard definition.
+#     VERIFY AFTER DEPLOY: if the dashboard previously showed your tiles,
+#     revert this one line, because homepage was reading them some other
+#     way and this change would replace working content with older files.
+#   - NOTE: indentation was normalized in several service blocks. The
+#     previous file transferred with broken indent on dockwatch's labels,
+#     dozzle's networks, postgres's ports, atuin's container_name,
+#     lubelogger's container_name, tax-calculator's image, beszel's image,
+#     cadvisor's container_name, netalertx's environment and diun's labels.
+#     Those were transfer artifacts, not live edits. Diff before deploying.
+#   - REQUIRED: docker compose up -d --remove-orphans
+#     The six parked containers already exist in a stopped state. Compose
+#     now treats them as out of the active set, so clear them explicitly.
+#   - ALSO (in .env, same version): header bumped to 20260810, the
+#     Tailscale expiry comment updated to 2026 October 29, and a plaintext
+#     credential removed from a comment.
+# v104 CHANGES (2026-06-03):
+#   - ADDED TS_AUTHKEY=${TSDPROXY_AUTHKEY} to tsdproxy environment
+#   - Fixes tsnet nodes failing to re-authenticate after reboot
+#   - FIXED AMY_HOST_IP in .env from 192.168.21.130 to 10.30.0.11
+#   - Fixes all tsdproxy proxies routing to dead old IP after network migration
+# v103 CHANGES (2026-05-21):
+#   - ADDED BASE_URL=http://rss.home.arpa:8385 to miniflux
+#   - ADDED DISABLE_HTTP_ORIGIN_CHECK=1 to miniflux
+#   - Fixes "cross-origin request detected" and missing Sec-Fetch-Site header errors
+# v102 CHANGES (2026-05-14):
+#   - ADDED oxidized service (nod Cisco 3750X config backup to GitHub)
+#   - Backs up nod running config hourly to om1d3/nod-config (private)
+#   - Config: /docker/oxidized/config
+#   - Device list: /docker/oxidized/router.db
+#   - REST API on port 8889:8888
+#   - REQUIRED: Create /docker/oxidized/ with config and router.db
+#   - NOTE: Regenerate amy-oxidized PAT after initial setup
+# v101 CHANGES (2026-05-09):
+#   - ADDED TSNET_FORCE_LOGIN=1 to tsdproxy environment
+#   - Forces Tailscale login prompt instead of silent auth failure
 # v100 CHANGES (2026-02-23):
 #   - ADDED tax-calculator service (nginx:alpine serving static tax calculator)
 #   - Ontario T1 Income Tax Calculator for 2024 & 2025 tax years
@@ -17,7 +145,7 @@
 # v99 CHANGES (2026-02-11):
 #   - FIXED atuin command from "server start" to "start"
 #   - Upstream changed binary from "atuin" to "atuin-server" (entrypoint)
-#   - "server" subcommand no longer exists — "start" is now a direct subcommand
+#   - "server" subcommand no longer exists - "start" is now a direct subcommand
 # v98 CHANGES (2026-02-07):
 #   - ADDED telegraf service (consolidated from /portainer/telegraf/docker-compose.yml)
 #   - Telegraf monitors Cisco 3750X switch and Brother MFC-L3710CW printer via SNMP
@@ -51,25 +179,47 @@
 #   - miniflux (v94: fixed MINIFLUX_ADMIN_USERNAME)
 #   - mealie (v85.3: migrated to PostgreSQL, v94: Python healthcheck, v96: fixed image)
 #   - filebrowser (v94: removed curl healthcheck, fixed volume paths)
-#   - tsdproxy (v94: removed wget healthcheck)
+#   - tsdproxy (v94: removed wget healthcheck, v101: TSNET_FORCE_LOGIN=1, v104: TS_AUTHKEY,
+#     20260810: digest pin)
 #   - argus (v85.3: fixed image to releaseargus/argus:latest)
 #   - limdius (v85.3: fixed image to python:3.11-slim)
 #   - lubelogger (v91: removed unauthorized SMTP config)
 #   - stirling (v96: fixed image to stirlingtools/stirling-pdf:latest, v97: added SYSTEM_MAXDPI)
 #   - atuin (v99: fixed command for new atuin-server binary)
 #   - tax-calculator (v100: added, nginx:alpine static site)
-#   - All services (v93: added DNS anchor 192.168.21.100)
+#   - oxidized (v102: added, nod config backup to GitHub, 20260810: pinned 0.36.0)
+#   - keepalived (20260810: pinned 2.0.20)
+#   - pihole (20260810: healthcheck added)
+#   - keepalived (20260810.2: digest pin, 2.3.4)
+#   - homepage (20260810: mount corrected, 20260810.2: allowed hosts)
+#   - All services (v93: added DNS anchor, migrated to 10.30.0.2)
 # ============================================
 # !! DO NOT REMOVE WATCHTOWER - Keep as fallback !!
 # ============================================
 # !! IMPORTANT - DO NOT MODIFY PORTS OR TSDPROXY NAMES !!
 # These are LOCKED production values. Any changes require explicit approval.
 # ============================================
+# OPEN ITEMS, flagged not changed:
+#   - postgres-backup lists "stirling" in POSTGRES_DB, but stirling has no
+#     database environment variables and keeps an H2 file at
+#     /docker/stirling/configs/stirling-pdf-DB-*.mv.db. So that entry
+#     probably fails nightly. Check the postgres-backup logs.
+#   - mealie uses BASE_URL=https://mealie.${TAILSCALE_DOMAIN}. That is the
+#     pattern that broke vikunja's sessions on bender, fixed in v114 by
+#     matching the browsed origin. Expect the same fault if mealie is
+#     reached by a LAN name.
+#   - keepalived mounts to /etc/keepalived/keepalived.conf here, but bender
+#     mounts to /container/service/keepalived/assets/keepalived.conf with
+#     command: --copy-service. Both work, by different mechanisms.
+#   - log rotation is not configured. A tsdproxy error loop produced a
+#     211 MB json log on 2026-08-08. The fix is max-size and max-file in
+#     /etc/docker/daemon.json, which needs a docker restart.
+# ============================================
 
 # DNS anchor for all services on utility-network
 x-dns: &default-dns
   dns:
-    - 192.168.21.100
+    - 10.30.0.2
 
 services:
 
@@ -81,8 +231,16 @@ services:
   # LOCKED PORT: 8085:8080 - DO NOT CHANGE
   # ✅ VERIFIED WORKING 2026-01-20 - DO NOT MODIFY WITHOUT APPROVAL
   # v94: removed wget healthcheck (not available in container)
+  # v101: added TSNET_FORCE_LOGIN=1
+  # v104: added TS_AUTHKEY to fix tsnet re-auth after reboot
+  # 20260810: pinned to a digest. :latest resolves to 3.0.0-beta.1.
+  #   NOTE: the Tailscale auth key exists in THREE places that must agree -
+  #   TSDPROXY_AUTHKEY and TS_AUTHKEY in .env, and authKey in
+  #   /docker/tsdproxy/config/tsdproxy.yaml. The v3 beta reads the yaml.
+  #   NOTE: /portainer/tsdproxy/ is a DECOY from the Portainer era. It looks
+  #   plausible and nothing reads it. The live path is /docker/tsdproxy/.
   tsdproxy:
-    image: almeidapaulopt/tsdproxy:latest
+    image: almeidapaulopt/tsdproxy@sha256:e75357d559066a6d0a8242b6d64f8e295adfa6024d3cf1c9a3e3f1ecb00c0bb1
     container_name: tsdproxy
     restart: unless-stopped
     <<: *default-dns
@@ -93,9 +251,11 @@ services:
       tsdproxy.dash.icon: "sh/tailscale"
     environment:
       - TSDPROXY_AUTHKEY=${TSDPROXY_AUTHKEY}
+      - TS_AUTHKEY=${TSDPROXY_AUTHKEY}
       - TSDPROXY_HOSTNAME=${AMY_HOST_IP}
       - TSDPROXY_DATADIR=/data
       - DOCKER_HOST=unix:///var/run/docker.sock
+      - TSNET_FORCE_LOGIN=1
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - /docker/tsdproxy/data:/data
@@ -151,12 +311,47 @@ services:
       - utility-network
 
   # ============================================
+  # NETWORK CONFIG BACKUP
+  # ============================================
+
+  # v102: Oxidized - Automated nod config backup to GitHub
+  # Backs up nod (Cisco Catalyst 3750X) running config hourly
+  # Config: /docker/oxidized/config
+  # Device list: /docker/oxidized/router.db
+  # GitHub repo: https://github.com/om1d3/nod-config (private)
+  # REST API available at http://10.30.0.11:8889
+  # 20260810: PINNED to 0.36.0. Do NOT move to 0.37.0 - it passes
+  #   max_window_size to Net::SSH.start and net-ssh 7.3.0 rejects it, so
+  #   every fetch dies with ArgumentError. Check the crash files at
+  #   /docker/oxidized/crashes/ before changing this pin.
+  # NOTE: the config file holds a GitHub PAT and nod's credentials in
+  #   plaintext. It is an early candidate for the SOPS layer.
+  # LOCKED PORT: 8889:8888 - DO NOT CHANGE
+  oxidized:
+    image: oxidized/oxidized:0.36.0
+    container_name: oxidized
+    restart: unless-stopped
+    <<: *default-dns
+    labels:
+      tsdproxy.enable: "false"
+    environment:
+      - TZ=${TIMEZONE}
+      - CONFIG_RELOAD_INTERVAL=3600
+    volumes:
+      - /docker/oxidized:/home/oxidized/.config/oxidized
+    ports:
+      - "8889:8888"
+    networks:
+      - utility-network
+
+  # ============================================
   # DNS & HIGH AVAILABILITY
   # ============================================
 
   # LOCKED tsdproxy.name: "pihole-amy" - DO NOT CHANGE
   # LOCKED PORT: 53:53, 8053:80 - DO NOT CHANGE
   # NOTE: pihole does NOT use default-dns (it IS the DNS server)
+  # 20260810: healthcheck added, matching bender
   pihole:
     image: pihole/pihole:latest
     container_name: pihole
@@ -173,9 +368,9 @@ services:
       - DNSSEC=true
       - REV_SERVER=true
       - REV_SERVER_DOMAIN=lan
-      - REV_SERVER_TARGET=192.168.21.1
-      - REV_SERVER_CIDR=192.168.21.0/24
-      - FTLCONF_LOCAL_IPV4=192.168.21.130
+      - REV_SERVER_TARGET=10.30.0.1
+      - REV_SERVER_CIDR=10.30.0.0/24
+      - FTLCONF_LOCAL_IPV4=10.30.0.11
     volumes:
       - /docker/pihole/etc-pihole:/etc/pihole
       - /docker/pihole/etc-dnsmasq.d:/etc/dnsmasq.d
@@ -187,11 +382,27 @@ services:
       - utility-network
     cap_add:
       - NET_ADMIN
+    healthcheck:
+      test: ["CMD", "dig", "+norecurse", "+retry=0", "@127.0.0.1", "pi.hole"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
 
   # KEEPALIVED - High Availability VIP (BACKUP role)
   # NOTE: keepalived uses network_mode: host, so no DNS config needed
+  # 20260810.2: PINNED BY DIGEST to what runs, keepalived 2.3.4.
+  #   Do NOT pin to the 2.0.20 tag. That version reads its config from
+  #   /usr/local/etc/keepalived/keepalived.conf, not /etc/keepalived/,
+  #   so it ignores this mount and enters a restart loop.
+  # NOTE: the mount target differs from bender, which uses
+  #   /container/service/keepalived/assets/keepalived.conf with
+  #   command: --copy-service. Both mechanisms work.
+  # NOTE: keepalived.conf holds auth_pass in plaintext. VRRP requires the
+  #   same secret on both peers, so a rotation must edit both files and
+  #   restart the BACKUP first, then the MASTER.
   keepalived:
-    image: osixia/keepalived:latest
+    image: osixia/keepalived@sha256:190269186850de7b2892129691a3ddea4c1aa27ed8fa4f2c3e1ad770251ffd39
     container_name: keepalived
     restart: unless-stopped
     cap_add:
@@ -202,7 +413,7 @@ services:
     labels:
       tsdproxy.enable: "false"
     volumes:
-      - /docker/keepalived:/container/service/keepalived/assets
+      - /docker/keepalived/keepalived.conf:/etc/keepalived/keepalived.conf
 
   # ============================================
   # DATABASES
@@ -234,6 +445,10 @@ services:
       timeout: 10s
       retries: 5
 
+  # NOTE: POSTGRES_DB lists "stirling", but stirling has no database
+  #   environment variables and keeps an H2 file in its own config
+  #   directory. That entry probably fails every night. Verify with
+  #   docker logs postgres-backup before removing it.
   postgres-backup:
     image: prodrigestivill/postgres-backup-local:17
     container_name: postgres-backup
@@ -281,6 +496,12 @@ services:
 
   # LOCKED tsdproxy.name: "ntfy" - DO NOT CHANGE
   # LOCKED PORT: 8888:80 - DO NOT CHANGE
+  # NOTE: this is the notification endpoint for bender's diun, bender's
+  #   audiobook-foundry, secure-container-update.sh on both hosts, and
+  #   bender-replicate.sh. Topics in use include container-updates-bender,
+  #   tts-pipeline and bender-backup. Subscribe to ALL of them - four
+  #   high-priority backup failures went unseen in July because the
+  #   bender-backup topic had no subscriber.
   ntfy:
     image: binwiederhier/ntfy:latest
     container_name: ntfy
@@ -337,6 +558,13 @@ services:
 
   # LOCKED tsdproxy.name: "home" - DO NOT CHANGE
   # LOCKED PORT: 3003:3000 - DO NOT CHANGE
+  # 20260810: mount CHANGED from /docker/homepage/config to /docker/homepage
+  #   REASON: the authored files (services.yaml, bookmarks.yaml,
+  #   widgets.yaml, docker.yaml, proxmox.yaml, custom.css, custom.js) sit in
+  #   /docker/homepage. The config/ subdirectory held only kubernetes.yaml
+  #   and settings.yaml, which look like generated defaults.
+  #   VERIFY: if the dashboard previously showed your tiles, revert this
+  #   line. Homepage was then reading them another way.
   homepage:
     image: ghcr.io/gethomepage/homepage:latest
     container_name: homepage
@@ -349,8 +577,12 @@ services:
       tsdproxy.dash.icon: "mdi/home"
     environment:
       - TZ=${TIMEZONE}
+      # 20260810.2: REQUIRED. homepage refuses any Host header not listed
+      # here. Only localhost:3000 and 127.0.0.1:3000 are allowed by
+      # default. Add an entry for every way homepage is reached.
+      - HOMEPAGE_ALLOWED_HOSTS=10.30.0.11:3003,home.arpa:3003,home.bunny-enigmatic.ts.net
     volumes:
-      - /docker/homepage/config:/app/config
+      - /docker/homepage:/app/config
       - /docker/homepage/images:/app/public/images
       - /var/run/docker.sock:/var/run/docker.sock:ro
     ports:
@@ -389,6 +621,7 @@ services:
 
   # ✅ VERIFIED WORKING 2026-01-20 - DO NOT MODIFY WITHOUT APPROVAL
   # v94: fixed MINIFLUX_ADMIN_USERNAME variable name
+  # v103: added BASE_URL and DISABLE_HTTP_ORIGIN_CHECK=1 to fix cross-origin login error
   miniflux:
     image: miniflux/miniflux:latest
     container_name: miniflux
@@ -405,6 +638,8 @@ services:
       - CREATE_ADMIN=1
       - ADMIN_USERNAME=${MINIFLUX_ADMIN_USERNAME}
       - ADMIN_PASSWORD=${MINIFLUX_ADMIN_PASSWORD}
+      - BASE_URL=http://rss.home.arpa:8385
+      - DISABLE_HTTP_ORIGIN_CHECK=1
     ports:
       - "8385:8080"
     networks:
@@ -457,11 +692,13 @@ services:
 
   # LOCKED tsdproxy.name: "wallos" - DO NOT CHANGE
   # LOCKED PORT: 8283:80 - DO NOT CHANGE
+  # 20260810: PARKED. Intentionally stopped on 2026-08-08.
   wallos:
     image: bellamy/wallos:latest
     container_name: wallos
     restart: unless-stopped
     <<: *default-dns
+    profiles: ["parked"]
     labels:
       tsdproxy.enable: "true"
       tsdproxy.name: "wallos"
@@ -479,6 +716,9 @@ services:
   # ✅ VERIFIED WORKING 2026-01-20 - DO NOT MODIFY WITHOUT APPROVAL
   # v85.3: migrated to PostgreSQL, v94: Python healthcheck
   # v96: fixed image from hkotel/mealie:latest to ghcr.io/mealie-recipes/mealie:latest
+  # NOTE: BASE_URL uses the tailscale domain. If mealie is reached by a LAN
+  #   name, expect the session fault that hit vikunja on bender, fixed in
+  #   v114 by matching BASE_URL to the browsed origin.
   mealie:
     image: ghcr.io/mealie-recipes/mealie:latest
     container_name: mealie
@@ -525,6 +765,7 @@ services:
       tsdproxy.container_port: "8080"
       tsdproxy.dash.icon: "mdi/eye-outline"
     volumes:
+      - /docker/argus/config.yml:/app/config.yml
       - /docker/argus:/app/data
     ports:
       - "8282:8080"
@@ -533,11 +774,13 @@ services:
 
   # ✅ VERIFIED WORKING 2026-01-20 - DO NOT MODIFY WITHOUT APPROVAL
   # v91: removed unauthorized SMTP config
+  # 20260810: PARKED. Intentionally stopped on 2026-08-08.
   lubelogger:
     image: ghcr.io/hargata/lubelogger:latest
     container_name: lubelogger
     restart: unless-stopped
     <<: *default-dns
+    profiles: ["parked"]
     labels:
       tsdproxy.enable: "true"
       tsdproxy.name: "lube"
@@ -567,11 +810,13 @@ services:
   # v95: added /config mount, v86: fixed /files mount, SSS_SALT variable
   # LOCKED tsdproxy.name: "money" - DO NOT CHANGE
   # LOCKED PORT: 9021:9001 - DO NOT CHANGE
+  # 20260810: PARKED. Intentionally stopped on 2026-08-08.
   spendspentspent:
     image: gonzague/spendspentspent:latest
     container_name: spendspentspent
     restart: unless-stopped
     <<: *default-dns
+    profiles: ["parked"]
     labels:
       tsdproxy.enable: "true"
       tsdproxy.name: "money"
@@ -600,15 +845,17 @@ services:
         condition: service_healthy
 
   # v100: ADDED - Ontario T1 Income Tax Calculator (2024 & 2025)
-  # Static HTML served by nginx:alpine — no backend, no state
+  # Static HTML served by nginx:alpine - no backend, no state
   # Multi-T4 support, CPP/EI overpayment detection, CRA-confirmed rates
   # LOCKED tsdproxy.name: "tax" - DO NOT CHANGE
   # LOCKED PORT: 8484:80 - DO NOT CHANGE
+  # 20260810: PARKED. Intentionally stopped on 2026-08-08.
   tax-calculator:
     image: nginx:alpine
     container_name: tax-calculator
     restart: unless-stopped
     <<: *default-dns
+    profiles: ["parked"]
     labels:
       tsdproxy.enable: "true"
       tsdproxy.name: "tax"
@@ -629,11 +876,16 @@ services:
 
   # ✅ VERIFIED WORKING 2026-01-20 - DO NOT MODIFY WITHOUT APPROVAL
   # v85.3: fixed image to python:3.11-slim
+  # 20260810: PARKED. Intentionally stopped on 2026-08-08.
+  # NOTE: the container installs its Python dependencies at every start and
+  #   runs /docker/limdius/limdius.py from the mount. That script is
+  #   authored code and belongs in a backup scope.
   limdius:
     image: python:3.11-slim
     container_name: limdius
     restart: unless-stopped
     <<: *default-dns
+    profiles: ["parked"]
     labels:
       tsdproxy.enable: "true"
       tsdproxy.name: "limdius"
@@ -652,11 +904,13 @@ services:
       sh -c "pip install --no-cache-dir requests flask playwright &&
              python -u /app/limdius.py"
 
+  # 20260810: PARKED. Intentionally stopped on 2026-08-08.
   playwright-chrome:
     image: browserless/chrome:latest
     container_name: playwright-chrome
     restart: unless-stopped
     <<: *default-dns
+    profiles: ["parked"]
     labels:
       tsdproxy.enable: "false"
     environment:
@@ -758,6 +1012,8 @@ services:
   # Monitors Cisco 3750X switch and Brother MFC-L3710CW printer via SNMP
   # Config: /portainer/telegraf/config/telegraf.conf
   # NOTE: telegraf uses network_mode: host, so no DNS config needed
+  # NOTE: that config file is authored and holds SNMP community strings. It
+  #   sits outside /docker, so confirm it is inside a backup scope.
   telegraf:
     image: telegraf:latest
     container_name: telegraf

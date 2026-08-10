@@ -1,0 +1,198 @@
+{
+  "SchemaVersion": 2,
+  "CreatedAt": "2026-07-15T04:45:18.957408559-04:00",
+  "ArtifactName": "binwiederhier/ntfy:latest",
+  "ArtifactType": "container_image",
+  "Metadata": {
+    "Size": 83424256,
+    "OS": {
+      "Family": "alpine",
+      "Name": "3.24.1"
+    },
+    "ImageID": "sha256:ac6be5814dbfcb5f730cdce4c20f49dcc2c657349d9ee2d49056958d400ad9c9",
+    "DiffIDs": [
+      "sha256:34884abbe92863fce933ed7c39c0e045631af0ed86d5cc0dfbdf9fdca426ce3c",
+      "sha256:442dfacd16fa1d8e5aa807292e053f75306aa72b4aafc9ede5cff5d91435aa6b",
+      "sha256:4bbae6f5c07989887b6de303b556f663ac95d3ec8bc79ef28f7863293e328de6"
+    ],
+    "RepoTags": [
+      "binwiederhier/ntfy:latest"
+    ],
+    "RepoDigests": [
+      "binwiederhier/ntfy@sha256:a6d335064ae927c4dbef118e1fa39656b3d2e01472b2a82af5915d5cebfe815f"
+    ],
+    "ImageConfig": {
+      "architecture": "amd64",
+      "created": "2026-07-09T18:45:42.984988047Z",
+      "history": [
+        {
+          "created": "2026-06-16T00:01:29Z",
+          "created_by": "ADD alpine-minirootfs-3.24.1-x86_64.tar.gz / # buildkit",
+          "comment": "buildkit.dockerfile.v0"
+        },
+        {
+          "created": "2026-06-16T00:01:29Z",
+          "created_by": "CMD [\"/bin/sh\"]",
+          "comment": "buildkit.dockerfile.v0",
+          "empty_layer": true
+        },
+        {
+          "created": "2026-07-09T18:45:42Z",
+          "created_by": "LABEL org.opencontainers.image.authors=philipp.heckel@gmail.com",
+          "comment": "buildkit.dockerfile.v0",
+          "empty_layer": true
+        },
+        {
+          "created": "2026-07-09T18:45:42Z",
+          "created_by": "LABEL org.opencontainers.image.url=https://ntfy.sh/",
+          "comment": "buildkit.dockerfile.v0",
+          "empty_layer": true
+        },
+        {
+          "created": "2026-07-09T18:45:42Z",
+          "created_by": "LABEL org.opencontainers.image.documentation=https://docs.ntfy.sh/",
+          "comment": "buildkit.dockerfile.v0",
+          "empty_layer": true
+        },
+        {
+          "created": "2026-07-09T18:45:42Z",
+          "created_by": "LABEL org.opencontainers.image.source=https://github.com/binwiederhier/ntfy",
+          "comment": "buildkit.dockerfile.v0",
+          "empty_layer": true
+        },
+        {
+          "created": "2026-07-09T18:45:42Z",
+          "created_by": "LABEL org.opencontainers.image.vendor=Philipp C. Heckel",
+          "comment": "buildkit.dockerfile.v0",
+          "empty_layer": true
+        },
+        {
+          "created": "2026-07-09T18:45:42Z",
+          "created_by": "LABEL org.opencontainers.image.licenses=Apache-2.0, GPL-2.0",
+          "comment": "buildkit.dockerfile.v0",
+          "empty_layer": true
+        },
+        {
+          "created": "2026-07-09T18:45:42Z",
+          "created_by": "LABEL org.opencontainers.image.title=ntfy",
+          "comment": "buildkit.dockerfile.v0",
+          "empty_layer": true
+        },
+        {
+          "created": "2026-07-09T18:45:42Z",
+          "created_by": "LABEL org.opencontainers.image.description=Send push notifications to your phone or desktop using PUT/POST",
+          "comment": "buildkit.dockerfile.v0",
+          "empty_layer": true
+        },
+        {
+          "created": "2026-07-09T18:45:42Z",
+          "created_by": "RUN /bin/sh -c apk add --no-cache tzdata # buildkit",
+          "comment": "buildkit.dockerfile.v0"
+        },
+        {
+          "created": "2026-07-09T18:45:42Z",
+          "created_by": "COPY ntfy /usr/bin # buildkit",
+          "comment": "buildkit.dockerfile.v0"
+        },
+        {
+          "created": "2026-07-09T18:45:42Z",
+          "created_by": "EXPOSE map[80/tcp:{}]",
+          "comment": "buildkit.dockerfile.v0",
+          "empty_layer": true
+        },
+        {
+          "created": "2026-07-09T18:45:42Z",
+          "created_by": "ENTRYPOINT [\"ntfy\"]",
+          "comment": "buildkit.dockerfile.v0",
+          "empty_layer": true
+        }
+      ],
+      "os": "linux",
+      "rootfs": {
+        "type": "layers",
+        "diff_ids": [
+          "sha256:34884abbe92863fce933ed7c39c0e045631af0ed86d5cc0dfbdf9fdca426ce3c",
+          "sha256:442dfacd16fa1d8e5aa807292e053f75306aa72b4aafc9ede5cff5d91435aa6b",
+          "sha256:4bbae6f5c07989887b6de303b556f663ac95d3ec8bc79ef28f7863293e328de6"
+        ]
+      },
+      "config": {
+        "Entrypoint": [
+          "ntfy"
+        ],
+        "Env": [
+          "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+        ],
+        "Labels": {
+          "org.opencontainers.image.authors": "philipp.heckel@gmail.com",
+          "org.opencontainers.image.description": "Send push notifications to your phone or desktop using PUT/POST",
+          "org.opencontainers.image.documentation": "https://docs.ntfy.sh/",
+          "org.opencontainers.image.licenses": "Apache-2.0, GPL-2.0",
+          "org.opencontainers.image.source": "https://github.com/binwiederhier/ntfy",
+          "org.opencontainers.image.title": "ntfy",
+          "org.opencontainers.image.url": "https://ntfy.sh/",
+          "org.opencontainers.image.vendor": "Philipp C. Heckel"
+        },
+        "WorkingDir": "/",
+        "ExposedPorts": {
+          "80/tcp": {}
+        }
+      }
+    },
+    "Layers": [
+      {
+        "Size": 8697856,
+        "DiffID": "sha256:34884abbe92863fce933ed7c39c0e045631af0ed86d5cc0dfbdf9fdca426ce3c"
+      },
+      {
+        "Size": 918016,
+        "DiffID": "sha256:442dfacd16fa1d8e5aa807292e053f75306aa72b4aafc9ede5cff5d91435aa6b"
+      },
+      {
+        "Size": 73808384,
+        "DiffID": "sha256:4bbae6f5c07989887b6de303b556f663ac95d3ec8bc79ef28f7863293e328de6"
+      }
+    ]
+  },
+  "Results": [
+    {
+      "Target": "binwiederhier/ntfy:latest (alpine 3.24.1)",
+      "Class": "os-pkgs",
+      "Type": "alpine"
+    },
+    {
+      "Target": "usr/bin/ntfy",
+      "Class": "lang-pkgs",
+      "Type": "gobinary",
+      "Vulnerabilities": [
+        {
+          "VulnerabilityID": "GO-2026-5932",
+          "PkgID": "golang.org/x/crypto@v0.53.0",
+          "PkgName": "golang.org/x/crypto",
+          "PkgIdentifier": {
+            "PURL": "pkg:golang/golang.org/x/crypto@v0.53.0",
+            "UID": "452941183935d79b"
+          },
+          "InstalledVersion": "v0.53.0",
+          "Status": "affected",
+          "Layer": {
+            "DiffID": "sha256:4bbae6f5c07989887b6de303b556f663ac95d3ec8bc79ef28f7863293e328de6"
+          },
+          "DataSource": {
+            "ID": "govulndb",
+            "Name": "The Go Vulnerability Database",
+            "URL": "https://pkg.go.dev/vuln/"
+          },
+          "Custom": null,
+          "Title": "The golang.org/x/crypto/openpgp package is unmaintained, unsafe by design, and has known security issues",
+          "Description": "The golang.org/x/crypto/openpgp package is unsafe by design, has numerous known security issues, is not maintained, and should not be used.\n\nIf you are required to interoperate with OpenPGP systems and need a maintained package, consider github.com/ProtonMail/go-crypto/openpgp which is a maintained fork that aims to be a drop-in replacement for this package.",
+          "Severity": "UNKNOWN",
+          "References": [
+            "https://go.dev/issue/44226",
+            "https://pkg.go.dev/vuln/GO-2026-5932"
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,246 @@
+# ============================================
+# Homepage services.yaml
+# Local addresses for use when Tailscale is unavailable
+# Place this file in /docker/homepage/services.yaml on amy
+# ============================================
+# amy IP: 10.30.0.11
+# bender IP: 10.30.0.12
+# ============================================
+
+- Infrastructure:
+    - TSDProxy (amy):
+        icon: sh-tailscale
+        href: http://10.30.0.11:8085
+        description: Tailscale Proxy - Amy
+        server: amy
+        container: tsdproxy
+    - TSDProxy (bender):
+        icon: sh-tailscale
+        href: http://10.30.0.12:8085
+        description: Tailscale Proxy - Bender
+        server: bender
+        container: tsdproxy
+    - Pi-hole (amy):
+        icon: sh-pi-hole
+        href: http://10.30.0.11:8053
+        description: Secondary DNS
+        server: amy
+        container: pihole
+    - Pi-hole (bender):
+        icon: sh-pi-hole
+        href: http://10.30.0.12:8053
+        description: Primary DNS
+        server: bender
+        container: pihole
+    - Dockwatch (amy):
+        icon: sh-dockge
+        href: http://10.30.0.11:9999
+        description: Docker Manager - Amy
+        server: amy
+        container: dockwatch
+    - Dockwatch (bender):
+        icon: sh-dockge
+        href: http://10.30.0.12:9999
+        description: Docker Manager - Bender
+        server: bender
+        container: dockwatch
+
+- Media:
+    - Jellyfin:
+        icon: sh-jellyfin
+        href: http://10.30.0.12:8096
+        description: Media Server
+        server: bender
+        container: jellyfin
+    - Immich:
+        icon: sh-immich
+        href: http://10.30.0.12:2283
+        description: Photo Management
+        server: bender
+        container: immich_server
+    - Audiobookshelf:
+        icon: sh-audiobookshelf
+        href: http://10.30.0.12:8081
+        description: Audiobooks & Podcasts
+        server: bender
+        container: audiobookshelf
+
+- Downloads:
+    - Transmission:
+        icon: sh-transmission
+        href: http://10.30.0.12:9091
+        description: Torrent Client
+        server: bender
+        container: transmission
+    - MeTube:
+        icon: sh-metube
+        href: http://10.30.0.12:8383
+        description: YouTube Downloader
+        server: bender
+        container: metube
+    - JDownloader:
+        icon: mdi-download-box
+        href: http://10.30.0.12:5800
+        description: Download Manager
+        server: bender
+        container: jdownloader
+    - SpotDL:
+        icon: sh-spotify
+        href: http://10.30.0.12:8800
+        description: Spotify Downloader
+        server: bender
+        container: spotdl
+    - Syncthing:
+        icon: sh-syncthing
+        href: http://10.30.0.12:8384
+        description: File Sync
+        server: bender
+        container: syncthing
+
+- Arr Stack:
+    - Prowlarr:
+        icon: sh-prowlarr
+        href: http://10.30.0.12:9696
+        description: Indexer Manager
+        server: bender
+        container: prowlarr
+    - Sonarr:
+        icon: sh-sonarr
+        href: http://10.30.0.12:8998
+        description: TV Shows
+        server: bender
+        container: sonarr
+    - Radarr:
+        icon: sh-radarr
+        href: http://10.30.0.12:7878
+        description: Movies
+        server: bender
+        container: radarr
+    - Lidarr:
+        icon: sh-lidarr
+        href: http://10.30.0.12:8686
+        description: Music
+        server: bender
+        container: lidarr
+    - Readarr:
+        icon: sh-readarr
+        href: http://10.30.0.12:8787
+        description: Books
+        server: bender
+        container: readarr
+    - Bazarr:
+        icon: sh-bazarr
+        href: http://10.30.0.12:6767
+        description: Subtitles
+        server: bender
+        container: bazarr
+
+- Notes & Productivity:
+    - HedgeDoc:
+        icon: sh-hedgedoc
+        href: http://10.30.0.12:3000
+        description: Collaborative Notes
+        server: bender
+        container: hedgedoc
+    - Mealie:
+        icon: sh-mealie
+        href: http://10.30.0.11:9000
+        description: Recipe Manager
+        server: amy
+        container: mealie
+    - Stirling PDF:
+        icon: sh-stirling-pdf
+        href: http://10.30.0.11:8080
+        description: PDF Tools
+        server: amy
+        container: stirling
+    - IT-Tools:
+        icon: sh-it-tools
+        href: http://10.30.0.11:8181
+        description: Developer Tools
+        server: amy
+        container: it-tools
+
+- Monitoring:
+    - Beszel:
+        icon: sh-beszel
+        href: http://10.30.0.11:8090
+        description: Server Monitoring
+        server: amy
+        container: beszel
+    - Dozzle:
+        icon: sh-dozzle
+        href: http://10.30.0.11:9001
+        description: Docker Logs
+        server: amy
+        container: dozzle
+    - cAdvisor:
+        icon: sh-cadvisor
+        href: http://10.30.0.11:9099
+        description: Container Metrics
+        server: amy
+        container: cadvisor
+    - NetAlertX:
+        icon: sh-netalertx
+        href: http://10.30.0.11:20211
+        description: Network Scanner
+        server: amy
+        container: netalertx
+    - Argus:
+        icon: sh-argus
+        href: http://10.30.0.11:8282
+        description: Release Monitor
+        server: amy
+        container: argus
+
+- Utilities:
+    - Vaultwarden:
+        icon: sh-vaultwarden
+        href: http://10.30.0.12:8484
+        description: Password Manager
+        server: bender
+        container: vaultwarden
+    - ntfy:
+        icon: sh-ntfy
+        href: http://10.30.0.11:8888
+        description: Push Notifications
+        server: amy
+        container: ntfy
+    - Miniflux:
+        icon: sh-miniflux
+        href: http://10.30.0.11:8385
+        description: RSS Reader
+        server: amy
+        container: miniflux
+    - Atuin:
+        icon: sh-atuin
+        href: http://10.30.0.11:8777
+        description: Shell History
+        server: amy
+        container: atuin
+    - File Browser:
+        icon: sh-file-browser
+        href: http://10.30.0.11:8082
+        description: File Manager
+        server: amy
+        container: filebrowser
+
+- Personal:
+    - LubeLogger:
+        icon: mdi-car-wrench
+        href: http://10.30.0.11:8989
+        description: Vehicle Maintenance
+        server: amy
+        container: lubelogger
+    - Limdius:
+        icon: mdi-car-multiple
+        href: http://10.30.0.11:5050
+        description: Vehicle Tracker
+        server: amy
+        container: limdius
+    - SpendSpentSpent:
+        icon: mdi-cash-multiple
+        href: http://10.30.0.11:5006
+        description: Expense Tracker
+        server: amy
+        container: spendspentspent

@@ -1,0 +1,358 @@
+{
+  "SchemaVersion": 2,
+  "CreatedAt": "2026-02-11T04:39:28.335539076-05:00",
+  "ArtifactName": "filebrowser/filebrowser:latest",
+  "ArtifactType": "container_image",
+  "Metadata": {
+    "Size": 30178304,
+    "ImageID": "sha256:cf1d70b5f1905e5edb9b08af73019d8d6eb6de9d386cc5092014560b6433447a",
+    "DiffIDs": [
+      "sha256:94b7e9998b924f3f19795fc713810546286c307bbee9d56a0ea19a5a1bade234",
+      "sha256:cabf149592bb9fdf0e9338164091afb432b29237e99f35b6a5bf0fa1c84277e4",
+      "sha256:d4529dec4357a9ec1026c06e9fff67be887ef5546f8346348465294154a4d685",
+      "sha256:e6471cae402b53d7a261766f051f8eb972ad5823a12cb64d55227cacdce9e755",
+      "sha256:4cb533f14c36b908d6a2ac282db99297425e15ab12fde3b9910d78efa05862bd",
+      "sha256:2713816c1ca899382fb1e866b567d1e2410a78786dcb0c84057398ced90e3938",
+      "sha256:7079c670ef78d71f9707f286a6eea2982790da876f268627c26503b4d1b7b873",
+      "sha256:efb1f50c42060d9f0ec79bcca3f19fe9f4996ef6b6b12480d7b989f2eee785aa",
+      "sha256:1db5368251f72974acf1f9524152137afba37fa5ce4e2ed886ed3171e700576b",
+      "sha256:bf5a51c5949e8d390fed214c6ea9dcfb0652630101685be81a0f9420b9dded9b",
+      "sha256:dd3cba8cc50f59ae796c6e5387002a7f85f6312623c7740f8fac0a6baef224f9",
+      "sha256:2a52563ee313161f5c096d9e5ad9ff8caa4d881604b39b23946d717e39ec51bf"
+    ],
+    "RepoTags": [
+      "filebrowser/filebrowser:latest"
+    ],
+    "RepoDigests": [
+      "filebrowser/filebrowser@sha256:6ef368f5a0730ee1638886e4b77a94503fcc302569f7d2ae980b23d59072a700"
+    ],
+    "ImageConfig": {
+      "architecture": "amd64",
+      "created": "2026-02-08T07:14:39.131166657Z",
+      "history": [
+        {
+          "created": "2024-09-26T21:31:42Z",
+          "created_by": "BusyBox 1.37.0 (musl), Alpine 3.23.3"
+        },
+        {
+          "created": "2026-02-08T07:14:37Z",
+          "created_by": "ENV UID=1000",
+          "comment": "buildkit.dockerfile.v0",
+          "empty_layer": true
+        },
+        {
+          "created": "2026-02-08T07:14:37Z",
+          "created_by": "ENV GID=1000",
+          "comment": "buildkit.dockerfile.v0",
+          "empty_layer": true
+        },
+        {
+          "created": "2026-02-08T07:14:37Z",
+          "created_by": "RUN /bin/sh -c addgroup -g $GID user \u0026\u0026     adduser -D -u $UID -G user user # buildkit",
+          "comment": "buildkit.dockerfile.v0"
+        },
+        {
+          "created": "2026-02-08T07:14:37Z",
+          "created_by": "COPY --chown=user:user filebrowser /bin/filebrowser # buildkit",
+          "comment": "buildkit.dockerfile.v0"
+        },
+        {
+          "created": "2026-02-08T07:14:37Z",
+          "created_by": "COPY --chown=user:user docker/common/ / # buildkit",
+          "comment": "buildkit.dockerfile.v0"
+        },
+        {
+          "created": "2026-02-08T07:14:37Z",
+          "created_by": "COPY --chown=user:user docker/alpine/ / # buildkit",
+          "comment": "buildkit.dockerfile.v0"
+        },
+        {
+          "created": "2026-02-08T07:14:38Z",
+          "created_by": "COPY --chown=user:user /sbin/tini-static /bin/tini # buildkit",
+          "comment": "buildkit.dockerfile.v0"
+        },
+        {
+          "created": "2026-02-08T07:14:38Z",
+          "created_by": "COPY /JSON.sh /JSON.sh # buildkit",
+          "comment": "buildkit.dockerfile.v0"
+        },
+        {
+          "created": "2026-02-08T07:14:38Z",
+          "created_by": "COPY /etc/ca-certificates.conf /etc/ca-certificates.conf # buildkit",
+          "comment": "buildkit.dockerfile.v0"
+        },
+        {
+          "created": "2026-02-08T07:14:38Z",
+          "created_by": "COPY /etc/ca-certificates /etc/ca-certificates # buildkit",
+          "comment": "buildkit.dockerfile.v0"
+        },
+        {
+          "created": "2026-02-08T07:14:38Z",
+          "created_by": "COPY /etc/mime.types /etc/mime.types # buildkit",
+          "comment": "buildkit.dockerfile.v0"
+        },
+        {
+          "created": "2026-02-08T07:14:39Z",
+          "created_by": "COPY /etc/ssl /etc/ssl # buildkit",
+          "comment": "buildkit.dockerfile.v0"
+        },
+        {
+          "created": "2026-02-08T07:14:39Z",
+          "created_by": "RUN /bin/sh -c mkdir -p /config /database /srv \u0026\u0026     chown -R user:user /config /database /srv     \u0026\u0026 chmod +x /healthcheck.sh # buildkit",
+          "comment": "buildkit.dockerfile.v0"
+        },
+        {
+          "created": "2026-02-08T07:14:39Z",
+          "created_by": "HEALTHCHECK \u0026{[\"CMD-SHELL\" \"/healthcheck.sh\"] \"5s\" \"3s\" \"2s\" \"0s\" '\\x00'}",
+          "comment": "buildkit.dockerfile.v0",
+          "empty_layer": true
+        },
+        {
+          "created": "2026-02-08T07:14:39Z",
+          "created_by": "USER user",
+          "comment": "buildkit.dockerfile.v0",
+          "empty_layer": true
+        },
+        {
+          "created": "2026-02-08T07:14:39Z",
+          "created_by": "VOLUME [/srv /config /database]",
+          "comment": "buildkit.dockerfile.v0",
+          "empty_layer": true
+        },
+        {
+          "created": "2026-02-08T07:14:39Z",
+          "created_by": "EXPOSE [80/tcp]",
+          "comment": "buildkit.dockerfile.v0",
+          "empty_layer": true
+        },
+        {
+          "created": "2026-02-08T07:14:39Z",
+          "created_by": "ENTRYPOINT [\"tini\" \"--\" \"/init.sh\"]",
+          "comment": "buildkit.dockerfile.v0",
+          "empty_layer": true
+        }
+      ],
+      "os": "linux",
+      "rootfs": {
+        "type": "layers",
+        "diff_ids": [
+          "sha256:94b7e9998b924f3f19795fc713810546286c307bbee9d56a0ea19a5a1bade234",
+          "sha256:cabf149592bb9fdf0e9338164091afb432b29237e99f35b6a5bf0fa1c84277e4",
+          "sha256:d4529dec4357a9ec1026c06e9fff67be887ef5546f8346348465294154a4d685",
+          "sha256:e6471cae402b53d7a261766f051f8eb972ad5823a12cb64d55227cacdce9e755",
+          "sha256:4cb533f14c36b908d6a2ac282db99297425e15ab12fde3b9910d78efa05862bd",
+          "sha256:2713816c1ca899382fb1e866b567d1e2410a78786dcb0c84057398ced90e3938",
+          "sha256:7079c670ef78d71f9707f286a6eea2982790da876f268627c26503b4d1b7b873",
+          "sha256:efb1f50c42060d9f0ec79bcca3f19fe9f4996ef6b6b12480d7b989f2eee785aa",
+          "sha256:1db5368251f72974acf1f9524152137afba37fa5ce4e2ed886ed3171e700576b",
+          "sha256:bf5a51c5949e8d390fed214c6ea9dcfb0652630101685be81a0f9420b9dded9b",
+          "sha256:dd3cba8cc50f59ae796c6e5387002a7f85f6312623c7740f8fac0a6baef224f9",
+          "sha256:2a52563ee313161f5c096d9e5ad9ff8caa4d881604b39b23946d717e39ec51bf"
+        ]
+      },
+      "config": {
+        "Healthcheck": {
+          "Test": [
+            "CMD-SHELL",
+            "/healthcheck.sh"
+          ],
+          "Interval": 5000000000,
+          "Timeout": 3000000000,
+          "StartPeriod": 2000000000
+        },
+        "Entrypoint": [
+          "tini",
+          "--",
+          "/init.sh"
+        ],
+        "Env": [
+          "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+          "UID=1000",
+          "GID=1000"
+        ],
+        "Labels": {
+          "org.opencontainers.image.created": "2026-02-08T07:05:28Z",
+          "org.opencontainers.image.name": "filebrowser",
+          "org.opencontainers.image.revision": "e193d43278e79549950d7f0e69af50a38c77f855",
+          "org.opencontainers.image.source": "https://github.com/filebrowser/filebrowser",
+          "org.opencontainers.image.version": "2.57.1"
+        },
+        "User": "user",
+        "Volumes": {
+          "/config": {},
+          "/database": {},
+          "/srv": {}
+        },
+        "ExposedPorts": {
+          "80/tcp": {}
+        }
+      }
+    },
+    "Layers": [
+      {
+        "Size": 1730560,
+        "DiffID": "sha256:94b7e9998b924f3f19795fc713810546286c307bbee9d56a0ea19a5a1bade234"
+      },
+      {
+        "Size": 9728,
+        "DiffID": "sha256:cabf149592bb9fdf0e9338164091afb432b29237e99f35b6a5bf0fa1c84277e4"
+      },
+      {
+        "Size": 27859456,
+        "DiffID": "sha256:d4529dec4357a9ec1026c06e9fff67be887ef5546f8346348465294154a4d685"
+      },
+      {
+        "Size": 3584,
+        "DiffID": "sha256:e6471cae402b53d7a261766f051f8eb972ad5823a12cb64d55227cacdce9e755"
+      },
+      {
+        "Size": 4096,
+        "DiffID": "sha256:4cb533f14c36b908d6a2ac282db99297425e15ab12fde3b9910d78efa05862bd"
+      },
+      {
+        "Size": 62976,
+        "DiffID": "sha256:2713816c1ca899382fb1e866b567d1e2410a78786dcb0c84057398ced90e3938"
+      },
+      {
+        "Size": 6656,
+        "DiffID": "sha256:7079c670ef78d71f9707f286a6eea2982790da876f268627c26503b4d1b7b873"
+      },
+      {
+        "Size": 8192,
+        "DiffID": "sha256:efb1f50c42060d9f0ec79bcca3f19fe9f4996ef6b6b12480d7b989f2eee785aa"
+      },
+      {
+        "Size": 3584,
+        "DiffID": "sha256:1db5368251f72974acf1f9524152137afba37fa5ce4e2ed886ed3171e700576b"
+      },
+      {
+        "Size": 77312,
+        "DiffID": "sha256:bf5a51c5949e8d390fed214c6ea9dcfb0652630101685be81a0f9420b9dded9b"
+      },
+      {
+        "Size": 408576,
+        "DiffID": "sha256:dd3cba8cc50f59ae796c6e5387002a7f85f6312623c7740f8fac0a6baef224f9"
+      },
+      {
+        "Size": 3584,
+        "DiffID": "sha256:2a52563ee313161f5c096d9e5ad9ff8caa4d881604b39b23946d717e39ec51bf"
+      }
+    ]
+  },
+  "Results": [
+    {
+      "Target": "bin/filebrowser",
+      "Class": "lang-pkgs",
+      "Type": "gobinary",
+      "Vulnerabilities": [
+        {
+          "VulnerabilityID": "CVE-2023-36308",
+          "VendorIDs": [
+            "GHSA-q7pp-wcgr-pffx"
+          ],
+          "PkgID": "github.com/disintegration/imaging@v1.6.2",
+          "PkgName": "github.com/disintegration/imaging",
+          "PkgIdentifier": {
+            "PURL": "pkg:golang/github.com/disintegration/imaging@v1.6.2",
+            "UID": "588af84d585323f3"
+          },
+          "InstalledVersion": "v1.6.2",
+          "Status": "affected",
+          "Layer": {
+            "DiffID": "sha256:d4529dec4357a9ec1026c06e9fff67be887ef5546f8346348465294154a4d685"
+          },
+          "SeveritySource": "ghsa",
+          "PrimaryURL": "https://avd.aquasec.com/nvd/cve-2023-36308",
+          "DataSource": {
+            "ID": "ghsa",
+            "Name": "GitHub Security Advisory Go",
+            "URL": "https://github.com/advisories?query=type%3Areviewed+ecosystem%3Ago"
+          },
+          "Custom": null,
+          "Title": "disintegration Imaging 1.6.2 allows attackers to cause a panic (becaus ...",
+          "Description": "disintegration Imaging 1.6.2 allows attackers to cause a panic (because of an integer index out of range during a Grayscale call) via a crafted TIFF file to the scan function of scanner.go. NOTE: it is unclear whether there are common use cases in which this panic could have any security consequence",
+          "Severity": "LOW",
+          "CweIDs": [
+            "CWE-129"
+          ],
+          "VendorSeverity": {
+            "ghsa": 1,
+            "nvd": 2
+          },
+          "CVSS": {
+            "nvd": {
+              "V3Vector": "CVSS:3.1/AV:L/AC:L/PR:N/UI:R/S:U/C:N/I:N/A:H",
+              "V3Score": 5.5
+            }
+          },
+          "References": [
+            "github.com/disintegration/imaging",
+            "https://github.com/disintegration/imaging/issues/165",
+            "https://github.com/disintegration/imaging/releases/tag/v1.6.2",
+            "https://lists.fedoraproject.org/archives/list/package-announce%40lists.fedoraproject.org/message/3GX2SYGRCNFUAGELLDOBIERCSCYSGKFY/",
+            "https://lists.fedoraproject.org/archives/list/package-announce@lists.fedoraproject.org/message/3GX2SYGRCNFUAGELLDOBIERCSCYSGKFY/",
+            "https://nvd.nist.gov/vuln/detail/CVE-2023-36308"
+          ],
+          "PublishedDate": "2023-09-05T04:15:08.703Z",
+          "LastModifiedDate": "2025-11-04T18:15:40.753Z"
+        },
+        {
+          "VulnerabilityID": "CVE-2025-68121",
+          "VendorIDs": [
+            "GO-2026-4337"
+          ],
+          "PkgID": "stdlib@v1.25.6",
+          "PkgName": "stdlib",
+          "PkgIdentifier": {
+            "PURL": "pkg:golang/stdlib@v1.25.6",
+            "UID": "762eae05008e6d28"
+          },
+          "InstalledVersion": "v1.25.6",
+          "FixedVersion": "1.24.13, 1.25.7, 1.26.0-rc.3",
+          "Status": "fixed",
+          "Layer": {
+            "DiffID": "sha256:d4529dec4357a9ec1026c06e9fff67be887ef5546f8346348465294154a4d685"
+          },
+          "SeveritySource": "nvd",
+          "PrimaryURL": "https://avd.aquasec.com/nvd/cve-2025-68121",
+          "DataSource": {
+            "ID": "govulndb",
+            "Name": "The Go Vulnerability Database",
+            "URL": "https://pkg.go.dev/vuln/"
+          },
+          "Custom": null,
+          "Title": "During session resumption in crypto/tls, if the underlying Config has  ...",
+          "Description": "During session resumption in crypto/tls, if the underlying Config has its ClientCAs or RootCAs fields mutated between the initial handshake and the resumed handshake, the resumed handshake may succeed when it should have failed. This may happen when a user calls Config.Clone and mutates the returned Config, or uses Config.GetConfigForClient. This can cause a client to resume a session with a server that it would not have resumed with during the initial handshake, or cause a server to resume a session with a client that it would not have resumed with during the initial handshake.",
+          "Severity": "CRITICAL",
+          "CweIDs": [
+            "CWE-295"
+          ],
+          "VendorSeverity": {
+            "amazon": 3,
+            "bitnami": 2,
+            "nvd": 4
+          },
+          "CVSS": {
+            "bitnami": {
+              "V3Vector": "CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:L/I:L/A:N",
+              "V3Score": 4.8
+            },
+            "nvd": {
+              "V3Vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:C/C:H/I:H/A:H",
+              "V3Score": 10
+            }
+          },
+          "References": [
+            "https://go.dev/cl/737700",
+            "https://go.dev/issue/77217",
+            "https://groups.google.com/g/golang-announce/c/K09ubi9FQFk",
+            "https://nvd.nist.gov/vuln/detail/CVE-2025-68121",
+            "https://pkg.go.dev/vuln/GO-2026-4337"
+          ],
+          "PublishedDate": "2026-02-05T18:16:10.857Z",
+          "LastModifiedDate": "2026-02-10T16:08:03.303Z"
+        }
+      ]
+    }
+  ]
+}

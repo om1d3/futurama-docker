@@ -1,0 +1,14 @@
+{
+  "settings": {
+    "cert": "meshcentral.home.arpa",
+    "LANOnly": true,
+    "port": 443,
+    "redirPort": 80
+  },
+  "domains": {
+    "": {
+      "title": "futurama AMT",
+      "allowedOrigin": true
+    }
+  }
+}

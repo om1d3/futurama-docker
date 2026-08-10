@@ -1,0 +1,117 @@
+{
+  "SchemaVersion": 2,
+  "CreatedAt": "2026-05-27T04:36:22.048496159-04:00",
+  "ArtifactName": "amir20/dozzle:latest",
+  "ArtifactType": "container_image",
+  "Metadata": {
+    "Size": 67978240,
+    "ImageID": "sha256:138e3bc47c38712dd3735d6934ed4c83015cabd900e726357cdd844e63289d6d",
+    "DiffIDs": [
+      "sha256:18339348d2720ebb8f4be4df72d9f2567de823b060bd232b49d1e2ec6ffca49a",
+      "sha256:475eb46200ab9a2c52794033ea59285b0a5f8c6d3248c09795ae9b2dd090a244",
+      "sha256:55ba2b6e224584639f3f06c24915447e3bd01ad53183e0f4a99e72e303ec63f7",
+      "sha256:0b6c5aeda14a744c6b375324c37aebf5c88b72ca9bc625b198cfe2c9d2d0c4f8"
+    ],
+    "RepoTags": [
+      "amir20/dozzle:latest"
+    ],
+    "RepoDigests": [
+      "amir20/dozzle@sha256:dac897ce93cbc0db48d9a6014ba24fb9438edc95c27e283a6fcc9260ea474d6d"
+    ],
+    "ImageConfig": {
+      "architecture": "amd64",
+      "created": "2026-05-26T17:03:09.54810502Z",
+      "history": [
+        {
+          "created": "2025-11-09T15:53:53Z",
+          "created_by": "COPY /data /data # buildkit",
+          "comment": "buildkit.dockerfile.v0"
+        },
+        {
+          "created": "2025-11-09T15:53:53Z",
+          "created_by": "COPY /tmp /tmp # buildkit",
+          "comment": "buildkit.dockerfile.v0"
+        },
+        {
+          "created": "2026-04-16T22:24:20Z",
+          "created_by": "COPY /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt # buildkit",
+          "comment": "buildkit.dockerfile.v0"
+        },
+        {
+          "created": "2026-05-26T17:03:09Z",
+          "created_by": "COPY /dozzle/dozzle /dozzle # buildkit",
+          "comment": "buildkit.dockerfile.v0"
+        },
+        {
+          "created": "2026-05-26T17:03:09Z",
+          "created_by": "EXPOSE [8080/tcp]",
+          "comment": "buildkit.dockerfile.v0",
+          "empty_layer": true
+        },
+        {
+          "created": "2026-05-26T17:03:09Z",
+          "created_by": "ENTRYPOINT [\"/dozzle\"]",
+          "comment": "buildkit.dockerfile.v0",
+          "empty_layer": true
+        }
+      ],
+      "os": "linux",
+      "rootfs": {
+        "type": "layers",
+        "diff_ids": [
+          "sha256:18339348d2720ebb8f4be4df72d9f2567de823b060bd232b49d1e2ec6ffca49a",
+          "sha256:475eb46200ab9a2c52794033ea59285b0a5f8c6d3248c09795ae9b2dd090a244",
+          "sha256:55ba2b6e224584639f3f06c24915447e3bd01ad53183e0f4a99e72e303ec63f7",
+          "sha256:0b6c5aeda14a744c6b375324c37aebf5c88b72ca9bc625b198cfe2c9d2d0c4f8"
+        ]
+      },
+      "config": {
+        "Entrypoint": [
+          "/dozzle"
+        ],
+        "Env": [
+          "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+        ],
+        "Labels": {
+          "org.opencontainers.image.created": "2026-05-26T16:59:06.837Z",
+          "org.opencontainers.image.description": "Realtime log viewer for containers.  Supports Docker, Swarm and K8s.",
+          "org.opencontainers.image.licenses": "MIT",
+          "org.opencontainers.image.revision": "d80128684c2947f91fc384a2f76ff2dd98c3cbd7",
+          "org.opencontainers.image.source": "https://github.com/amir20/dozzle",
+          "org.opencontainers.image.title": "dozzle",
+          "org.opencontainers.image.url": "https://github.com/amir20/dozzle",
+          "org.opencontainers.image.version": "v10.6.2"
+        },
+        "WorkingDir": "/",
+        "ExposedPorts": {
+          "8080/tcp": {}
+        }
+      }
+    },
+    "Layers": [
+      {
+        "Size": 1536,
+        "DiffID": "sha256:18339348d2720ebb8f4be4df72d9f2567de823b060bd232b49d1e2ec6ffca49a"
+      },
+      {
+        "Size": 1536,
+        "DiffID": "sha256:475eb46200ab9a2c52794033ea59285b0a5f8c6d3248c09795ae9b2dd090a244"
+      },
+      {
+        "Size": 221184,
+        "DiffID": "sha256:55ba2b6e224584639f3f06c24915447e3bd01ad53183e0f4a99e72e303ec63f7"
+      },
+      {
+        "Size": 67753984,
+        "DiffID": "sha256:0b6c5aeda14a744c6b375324c37aebf5c88b72ca9bc625b198cfe2c9d2d0c4f8"
+      }
+    ]
+  },
+  "Results": [
+    {
+      "Target": "dozzle",
+      "Class": "lang-pkgs",
+      "Type": "gobinary"
+    }
+  ]
+}

@@ -1,0 +1,19 @@
+title: Homepage
+background:
+  image: ""
+theme: dark
+color: slate
+headerStyle: clean
+layout:
+  - Services
+  - Infrastructure
+  - Monitoring
+providers:
+  openweathermap: openweathermapapikey
+  weatherapi: weatherapiapikey
+
+# Add this to allow your Tailscale domain
+hosts:
+  - home.bunny-enigmatic.ts.net
+  - localhost
+  - 10.30.0.11

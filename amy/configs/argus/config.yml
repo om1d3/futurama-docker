@@ -1,0 +1,884 @@
+service:
+  release-argus/argus:
+    options:
+      interval: 24h
+    latest_version:
+      type: github
+      url: release-argus/argus
+      use_prerelease: false
+    notify:
+      Argus:
+        type: ntfy
+        url_fields:
+          host: ntfy.home.arpa
+          port: "8888"
+          topic: argus
+        params:
+          scheme: http
+    dashboard:
+      icon: https://raw.githubusercontent.com/release-argus/Argus/master/web/ui/react-app/public/favicon.svg
+      web_url: https://github.com/release-argus/Argus/blob/master/CHANGELOG.md
+  WiCAN-fw:
+    options:
+      interval: 24h
+    latest_version:
+      type: github
+      url: meatpiHQ/wican-fw
+      use_prerelease: false
+    notify:
+      WiCAN:
+        type: ntfy
+        url_fields:
+          host: ntfy.home.arpa
+          port: "8888"
+          topic: argus
+        params:
+          disabletlsverification: "true"
+          scheme: http
+    dashboard:
+      icon: https://avatars.githubusercontent.com/u/94690098?s=64&v=4
+  audiobookshelf:
+    options:
+      interval: 24h
+    latest_version:
+      type: github
+      url: advplyr/audiobookshelf
+      use_prerelease: false
+    notify:
+      audiobookshelf:
+        type: ntfy
+        url_fields:
+          host: ntfy.home.arpa
+          port: "8888"
+          topic: argus
+        params:
+          disabletlsverification: "true"
+          scheme: http
+    dashboard:
+      icon: https://www.audiobookshelf.org/Logo.png
+  AutoHeal:
+    latest_version:
+      type: github
+      url: willfarrell/docker-autoheal
+      use_prerelease: false
+    notify:
+      AutoHeal:
+        type: ntfy
+        url_fields:
+          host: ntfy.home.arpa
+          port: "8888"
+          topic: autoheal
+        params:
+          disabletlsverification: "true"
+          scheme: http
+    dashboard:
+      icon: https://cdn.iconscout.com/icon/free/png-512/social-275-116309.png
+  baïkal:
+    options:
+      interval: 24h
+    latest_version:
+      type: github
+      url: ckulka/baikal-docker
+      use_prerelease: false
+    notify:
+      baïkal:
+        type: ntfy
+        url_fields:
+          host: ntfy.home.arpa
+          port: "8888"
+          topic: argus
+        params:
+          disabletlsverification: "true"
+          scheme: http
+    dashboard:
+      icon: https://sabre.io/img/baikal.png
+  Bazarr:
+    options:
+      interval: 24h
+    latest_version:
+      type: github
+      url: morpheus65535/bazarr
+      use_prerelease: false
+    notify:
+      Bazarr:
+        type: ntfy
+        url_fields:
+          host: ntfy.home.arpa
+          port: "8888"
+          topic: argus
+        params:
+          disabletlsverification: "true"
+          scheme: http
+    dashboard:
+      icon: https://user-images.githubusercontent.com/26902309/41456760-be00043e-7081-11e8-9646-1b724037b4ff.png
+  OpenAI-edge-TTS:
+    options:
+      interval: 24h
+    latest_version:
+      type: github
+      url: travisvn/openai-edge-tts
+      use_prerelease: false
+    notify:
+      OpenAI-edge-TTS:
+        type: ntfy
+        url_fields:
+          host: ntfy.home.arpa
+          port: "8888"
+          topic: argus
+        params:
+          disabletlsverification: "true"
+          scheme: http
+    dashboard:
+      icon: https://logodix.com/logo/2218496.png
+  FlareSolverr:
+    options:
+      interval: 24h
+    latest_version:
+      type: github
+      url: FlareSolverr/FlareSolverr
+      use_prerelease: false
+    notify:
+      FlareSolverr:
+        type: ntfy
+        url_fields:
+          host: ntfy.home.arpa
+          port: "8888"
+          topic: argus
+        params:
+          disabletlsverification: "true"
+          scheme: http
+    dashboard:
+      icon: https://a.fsdn.com/allura/mirror/flaresolverr/icon?53719e1543d831656e9abc08c6c9357e274394fdda3e023e0012e574d2b74725?&w=120
+  gluetun/:
+    options:
+      interval: 24h
+    latest_version:
+      type: github
+      url: qdm12/gluetun
+      use_prerelease: false
+    notify:
+      gluetun:
+        type: ntfy
+        url_fields:
+          host: ntfy.home.arpa
+          port: "8888"
+          topic: argus
+        params:
+          disabletlsverification: "true"
+          scheme: http
+    dashboard:
+      icon: https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/png/gluetun.png
+  HedgeDoc:
+    options:
+      interval: 24h
+    latest_version:
+      type: github
+      url: hedgedoc/hedgedoc
+      use_prerelease: false
+    notify:
+      HedgeDoc:
+        type: ntfy
+        url_fields:
+          host: ntfy.home.arpa
+          port: "8888"
+          topic: argus
+        params:
+          disabletlsverification: "true"
+          scheme: http
+    dashboard:
+      icon: https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/webp/hedgedoc.webp
+  Immich:
+    options:
+      interval: 24h
+    latest_version:
+      type: github
+      url: immich-app/immich
+      use_prerelease: false
+    notify:
+      Immich:
+        type: ntfy
+        url_fields:
+          host: ntfy.home.arpa
+          port: "8888"
+          topic: argus
+        params:
+          disabletlsverification: "true"
+          scheme: http
+    dashboard:
+      icon: https://avatars.githubusercontent.com/u/109746326?s=200&v=4
+  JDownloader:
+    options:
+      interval: 24h
+    latest_version:
+      type: github
+      url: jlesage/docker-jdownloader-2
+      use_prerelease: false
+    notify:
+      JDownloader:
+        type: ntfy
+        url_fields:
+          host: ntfy.home.arpa
+          port: "8888"
+          topic: argus
+        params:
+          disabletlsverification: "true"
+          scheme: http
+    dashboard:
+      icon: https://i.pinimg.com/originals/83/a0/21/83a021a8ed0d0e2c37404e56acec11a0.png
+  Jellyfin:
+    options:
+      interval: 24h
+    latest_version:
+      type: github
+      url: jellyfin/jellyfin
+      use_prerelease: false
+    notify:
+      Jellyfin:
+        type: ntfy
+        url_fields:
+          host: ntfy.home.arpa
+          port: "8888"
+          topic: argus
+        params:
+          disabletlsverification: "true"
+          scheme: http
+    dashboard:
+      icon: https://cdn.brandfetch.io/idu_b8goqH/w/400/h/400/theme/dark/icon.jpeg?c=1bxid64Mup7aczewSAYMX&t=1740527783902
+  MeTube:
+    options:
+      interval: 24h
+    latest_version:
+      type: github
+      url: alexta69/metube
+      use_prerelease: true
+    notify:
+      MeTube:
+        type: ntfy
+        url_fields:
+          host: ntfy.home.arpa
+          port: "8888"
+          topic: argus
+        params:
+          disabletlsverification: "true"
+          scheme: http
+    dashboard:
+      icon: https://metube.martinsautosvc.com/assets/icons/android-chrome-192x192.png
+  Spotify-downloader:
+    options:
+      interval: 24h
+    latest_version:
+      type: github
+      url: spotDL/spotify-downloader
+      use_prerelease: false
+    notify:
+      Prowlarr:
+        type: ntfy
+        url_fields:
+          host: ntfy.home.arpa
+          port: "8888"
+          topic: argus
+        params:
+          disabletlsverification: "true"
+          scheme: http
+    dashboard:
+      icon: https://raw.githubusercontent.com/C0ntrolDev/spotify_downloader/main/github_images/app_icon.png
+  SyncThing:
+    options:
+      interval: 24h
+    latest_version:
+      type: github
+      url: syncthing/syncthing
+      use_prerelease: false
+    notify:
+      SyncThing:
+        type: ntfy
+        url_fields:
+          host: ntfy.home.arpa
+          port: "8888"
+          topic: argus
+        params:
+          disabletlsverification: "true"
+          scheme: http
+    dashboard:
+      icon: https://images.icon-icons.com/3053/PNG/512/syncthing_macos_bigsur_icon_189675.png
+  Transmission:
+    options:
+      interval: 24h
+    latest_version:
+      type: github
+      url: transmission/transmission
+      use_prerelease: false
+    notify:
+      Transmission:
+        type: ntfy
+        url_fields:
+          host: ntfy.home.arpa
+          port: "8888"
+          topic: argus
+        params:
+          disabletlsverification: "true"
+          scheme: http
+    dashboard:
+      icon: https://images.seeklogo.com/logo-png/51/2/transmission-logo-png_seeklogo-517782.png
+  Unpackerr:
+    options:
+      interval: 24h
+    latest_version:
+      type: github
+      url: Unpackerr/unpackerr
+    notify:
+      Unpackerr:
+        type: ntfy
+        url_fields:
+          host: ntfy.home.arpa
+          port: "8888"
+          topic: argus
+        params:
+          disabletlsverification: "true"
+          scheme: http
+    dashboard:
+      icon: https://unpackerr.zip/img/logo.png
+  VaultWarden:
+    options:
+      interval: 24h
+    latest_version:
+      type: github
+      url: dani-garcia/vaultwarden
+      use_prerelease: false
+    notify:
+      VaultWarden:
+        type: ntfy
+        url_fields:
+          host: ntfy.home.arpa
+          port: "8888"
+          topic: argus
+        params:
+          disabletlsverification: "true"
+          scheme: http
+    dashboard:
+      icon: https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/webp/vaultwarden-light.webp
+  Vikunja:
+    options:
+      interval: 24h
+    latest_version:
+      type: github
+      url: go-vikunja/vikunja
+      use_prerelease: false
+    notify:
+      Vikunja:
+        type: ntfy
+        url_fields:
+          host: ntfy.home.arpa
+          port: "8888"
+          topic: argus
+        params:
+          disabletlsverification: "true"
+          scheme: http
+    dashboard:
+      icon: https://community.vikunja.io/uploads/default/original/1X/894bd400d7c5bde78a65ba02e326798ccfb82006.png
+  Atuin:
+    options:
+      interval: 24h
+    latest_version:
+      type: github
+      url: atuinsh/atuin
+    notify:
+      Atuin:
+        type: ntfy
+        url_fields:
+          host: ntfy.home.arpa
+          port: "8888"
+          topic: argus
+        params:
+          disabletlsverification: "true"
+          scheme: http
+    dashboard:
+      icon: https://avatars.githubusercontent.com/u/122059230?s=200&v=4
+  browserless:
+    options:
+      interval: 24h
+    latest_version:
+      type: github
+      url: browserless/browserless
+      use_prerelease: false
+    notify:
+      browserless:
+        type: ntfy
+        url_fields:
+          host: ntfy.home.arpa
+          port: "8888"
+          topic: argus
+        params:
+          disabletlsverification: "true"
+          scheme: http
+    dashboard:
+      icon: https://cdn.brandfetch.io/idWmmkyKj1/w/400/h/400/theme/dark/icon.jpeg?c=1bxid64Mup7aczewSAYMX&t=1746167412002
+  Dozzle:
+    options:
+      interval: 24h
+    latest_version:
+      type: github
+      url: amir20/dozzle
+    notify:
+      Dozzle:
+        type: ntfy
+        url_fields:
+          host: ntfy.home.arpa
+          port: "8888"
+          topic: argus
+        params:
+          disabletlsverification: "true"
+          scheme: http
+    dashboard:
+      icon: https://static0.xdaimages.com/wordpress/wp-content/uploads/2025/08/dozzle-logo.png?q=70&fit=contain&w=420&dpr=1
+  FileBrowser:
+    options:
+      interval: 24h
+    latest_version:
+      type: github
+      url: filebrowser/filebrowser
+      use_prerelease: false
+    notify:
+      FileBrowser:
+        type: ntfy
+        url_fields:
+          host: ntfy.home.arpa
+          port: "8888"
+          topic: argus
+        params:
+          disabletlsverification: "true"
+          scheme: http
+    dashboard:
+      icon: https://docs.theme-park.dev/site_assets/filebrowser/logo.png
+  HomePage:
+    options:
+      interval: 24h
+    latest_version:
+      type: github
+      url: gethomepage/homepage
+    notify:
+      HomePage:
+        type: ntfy
+        url_fields:
+          host: ntfy.home.arpa
+          port: "8888"
+          topic: argus
+        params:
+          disabletlsverification: "true"
+          scheme: http
+    dashboard:
+      icon: https://user-images.githubusercontent.com/88257202/194461324-cd562d2d-2a96-4fbc-8e93-80085c514f0d.png
+  IT-tools:
+    options:
+      interval: 24h
+    latest_version:
+      type: github
+      url: CorentinTh/it-tools
+      use_prerelease: false
+    notify:
+      IT-tools:
+        type: ntfy
+        url_fields:
+          host: ntfy.home.arpa
+          port: "8888"
+          topic: argus
+        params:
+          disabletlsverification: "true"
+          scheme: http
+    dashboard:
+      icon: https://perron.de/wp-content/uploads/2025/02/it-tools-light.webp
+  Mealie:
+    options:
+      interval: 24h
+    latest_version:
+      type: github
+      url: mealie-recipes/mealie
+    notify:
+      Mealie:
+        type: ntfy
+        url_fields:
+          host: ntfy.home.arpa
+          port: "8888"
+          topic: argus
+        params:
+          disabletlsverification: "true"
+          scheme: http
+    dashboard:
+      icon: https://brands.home-assistant.io/_/mealie/logo@2x.png
+  MiniFlux:
+    options:
+      interval: 24h
+    latest_version:
+      type: github
+      url: miniflux/v2
+      use_prerelease: false
+    notify:
+      MiniFlux:
+        type: ntfy
+        url_fields:
+          host: ntfy.home.arpa
+          port: "8888"
+          topic: argus
+        params:
+          disabletlsverification: "true"
+          scheme: http
+    dashboard:
+      icon: https://d33wubrfki0l68.cloudfront.net/e7ea48d67fb30fbcbe44f252d86e42df18597291/be184/_images/miniflux.png
+  NetAlertX:
+    options:
+      interval: 24h
+    latest_version:
+      type: github
+      url: jokob-sk/NetAlertX
+      use_prerelease: false
+    notify:
+      NetAlertX:
+        type: ntfy
+        url_fields:
+          host: ntfy.home.arpa
+          port: "8888"
+          topic: argus
+        params:
+          disabletlsverification: "true"
+          scheme: http
+    dashboard:
+      icon: https://netalertx.com/static/media/favicon.f38c23566273e8ad35a4.ico
+  ntfy:
+    options:
+      interval: 24h
+    latest_version:
+      type: github
+      url: binwiederhier/ntfy
+      use_prerelease: false
+    notify:
+      ntfy:
+        url_fields:
+          host: ntfy.home.arpa
+          port: "8888"
+          topic: argus
+        params:
+          disabletlsverification: "true"
+          scheme: http
+    dashboard:
+      icon: https://play-lh.googleusercontent.com/O9uRWkaFLCzl7wkpeUWFuJfllrvykC6wOCR3sy8sZkrCyIMs-DPv7j7D710QY8VSc7KN
+  SpendSpentSpent:
+    options:
+      interval: 24h
+    latest_version:
+      type: github
+      url: lamarios/SpendSpentSpent
+      use_prerelease: false
+    notify:
+      SpendSpentSpent:
+        type: ntfy
+        url_fields:
+          host: ntfy.home.arpa
+          port: "8888"
+          topic: argus
+        params:
+          disabletlsverification: "true"
+          scheme: http
+    dashboard:
+      icon: https://play-lh.googleusercontent.com/0-8lfR1RLqE9HxP-c4Fm6t_G0D0eyw4cTxmjTi17rtwHtnyFelexJOLFbenO8NAvLs8
+  Stirling-PDF:
+    options:
+      interval: 24h
+    latest_version:
+      type: github
+      url: Stirling-Tools/Stirling-PDF
+      use_prerelease: false
+    notify:
+      Stirling-PDF:
+        type: ntfy
+        url_fields:
+          host: ntfy.home.arpa
+          port: "8888"
+          topic: argus
+        params:
+          disabletlsverification: "true"
+          scheme: http
+    dashboard:
+      icon: https://octabyte.io/images/development/dev-tools/stirling-pdf/logo.png
+  telegraf:
+    options:
+      interval: 24h
+    latest_version:
+      type: github
+      url: influxdata/telegraf
+      use_prerelease: false
+    notify:
+      telegraf:
+        type: ntfy
+        url_fields:
+          host: ntfy.home.arpa
+          port: "8888"
+          topic: argus
+        params:
+          disabletlsverification: "true"
+          scheme: http
+    dashboard:
+      icon: https://www.influxdata.com/images/legacy-uploads/TelegrafTiger.png
+  valkey:
+    options:
+      interval: 24h
+    latest_version:
+      type: github
+      url: valkey-io/valkey
+    notify:
+      valkey:
+        type: ntfy
+        url_fields:
+          host: ntfy.home.arpa
+          port: "8888"
+          topic: argus
+        params:
+          disabletlsverification: "true"
+          scheme: http
+    dashboard:
+      icon: https://avatars.githubusercontent.com/u/164458127?s=200&v=4
+  Wallos:
+    options:
+      interval: 24h
+    latest_version:
+      type: github
+      url: ellite/Wallos
+      use_prerelease: false
+    notify:
+      Wallos:
+        type: ntfy
+        url_fields:
+          host: ntfy.home.arpa
+          port: "8888"
+          topic: argus
+        params:
+          disabletlsverification: "true"
+          scheme: http
+    dashboard:
+      icon: https://wallosapp.com/images/logo/wallos.png
+  LubeLogger:
+    options:
+      interval: 24h
+    latest_version:
+      type: github
+      url: hargata/lubelog
+    notify:
+      LubeLogger:
+        type: ntfy
+        url_fields:
+          host: ntfy.home.arpa
+          port: "8888"
+          topic: argus
+        params:
+          disabletlsverification: "true"
+          scheme: http
+    dashboard:
+      icon: https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/webp/lubelogger.webp
+  Beszel:
+    options:
+      interval: 24h
+    latest_version:
+      type: github
+      url: henrygd/beszel
+      use_prerelease: false
+    notify:
+      Beszel:
+        type: ntfy
+        url_fields:
+          host: ntfy.home.arpa
+          port: "8888"
+          topic: argus
+        params:
+          disabletlsverification: "true"
+          scheme: http
+    dashboard:
+      icon: https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/webp/beszel-light.webp
+  cAdvisor:
+    options:
+      interval: 24h
+    latest_version:
+      type: github
+      url: google/cadvisor
+      use_prerelease: false
+    notify:
+      cAdvisor:
+        type: ntfy
+        url_fields:
+          host: ntfy.home.arpa
+          port: "8888"
+          topic: argus
+        params:
+          disabletlsverification: "true"
+          scheme: http
+    dashboard:
+      icon: https://www.netdata.cloud/img/cadvisor.png
+  Diun:
+    options:
+      interval: 24h
+    latest_version:
+      type: github
+      url: crazy-max/diun
+      use_prerelease: false
+    notify:
+      Diun:
+        type: ntfy
+        url_fields:
+          host: ntfy.home.arpa
+          port: "8888"
+          topic: argus
+        params:
+          disabletlsverification: "true"
+          scheme: http
+    dashboard:
+      icon: https://crazymax.dev/diun/assets/logo.png
+  docker-socket-proxy:
+    options:
+      interval: 24h
+    latest_version:
+      type: github
+      url: Tecnativa/docker-socket-proxy
+      use_prerelease: false
+    notify:
+      docker-socket-proxy:
+        type: ntfy
+        url_fields:
+          host: ntfy.home.arpa
+          port: "8888"
+          topic: argus
+        params:
+          disabletlsverification: "true"
+          scheme: http
+    dashboard:
+      icon: https://www.metalnikovg.ru/static/images/blog/banners/dsp_banner.png
+  DockWatch:
+    options:
+      interval: 24h
+    latest_version:
+      type: github
+      url: notifiarr/dockwatch
+      use_prerelease: false
+    notify:
+      DockWatch:
+        type: ntfy
+        url_fields:
+          host: ntfy.home.arpa
+          port: "8888"
+          topic: argus
+        params:
+          disabletlsverification: "true"
+          scheme: http
+    dashboard:
+      icon: https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/webp/dockwatch.webp
+  docker-keepalived:
+    options:
+      interval: 24h
+    latest_version:
+      type: github
+      url: osixia/docker-keepalived
+      use_prerelease: false
+    notify:
+      docker-keepalived:
+        type: ntfy
+        url_fields:
+          host: ntfy.home.arpa
+          port: "8888"
+          topic: argus
+        params:
+          disabletlsverification: "true"
+          scheme: http
+    dashboard:
+      icon: https://img.stackshare.io/service/3577/bq-C0K5C_400x400.png
+  nebula-sync:
+    options:
+      interval: 24h
+    latest_version:
+      type: github
+      url: lovelaze/nebula-sync
+      use_prerelease: false
+    notify:
+      nebula-sync:
+        type: ntfy
+        url_fields:
+          host: ntfy.home.arpa
+          port: "8888"
+          topic: argus
+        params:
+          disabletlsverification: "true"
+          scheme: http
+    dashboard:
+      icon: https://avatars.githubusercontent.com/u/3408386?s=64&v=4
+  pi-hole:
+    options:
+      interval: 24h
+    latest_version:
+      type: github
+      url: pi-hole/docker-pi-hole
+      use_prerelease: false
+    notify:
+      pi-hole:
+        type: ntfy
+        url_fields:
+          host: ntfy.home.arpa
+          port: "8888"
+          topic: argus
+        params:
+          disabletlsverification: "true"
+          scheme: http
+    dashboard:
+      icon: https://agirlhasnona.me/content/images/2017/03/pi-hole_github_logo.png
+  Trivy:
+    options:
+      interval: 24h
+    latest_version:
+      type: github
+      url: aquasecurity/trivy
+      use_prerelease: false
+    notify:
+      Trivy:
+        type: ntfy
+        url_fields:
+          host: ntfy.home.arpa
+          port: "8888"
+          topic: argus
+        params:
+          disabletlsverification: "true"
+          scheme: http
+    dashboard:
+      icon: https://www.itopstimes.com/wp-content/uploads/2021/11/logo.png
+  TSDproxy:
+    options:
+      interval: 24h
+    latest_version:
+      type: github
+      url: almeidapaulopt/tsdproxy
+      use_prerelease: false
+    notify:
+      TSDproxy:
+        type: ntfy
+        url_fields:
+          host: ntfy.home.arpa
+          port: "8888"
+          topic: argus
+        params:
+          disabletlsverification: "true"
+          scheme: http
+    dashboard:
+      icon: https://asset.brandfetch.io/id7QyaLp8E/idYJnR6YE1.jpeg
+  Flood for transmission:
+    options:
+      interval: 24h
+    latest_version:
+      type: github
+      url: johman10/flood-for-transmission
+      use_prerelease: false
+    notify:
+      Flood for transmission:
+        type: ntfy
+        url_fields:
+          host: ntfy.home.arpa
+          port: "8888"
+          topic: argus
+        params:
+          disabletlsverification: "true"
+          scheme: http
+    dashboard:
+      icon: https://flood.js.org/assets/img/logo.png

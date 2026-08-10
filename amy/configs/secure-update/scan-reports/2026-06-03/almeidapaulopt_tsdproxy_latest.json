@@ -1,0 +1,353 @@
+{
+  "SchemaVersion": 2,
+  "CreatedAt": "2026-06-03T04:59:55.76350039-04:00",
+  "ArtifactName": "almeidapaulopt/tsdproxy:latest",
+  "ArtifactType": "container_image",
+  "Metadata": {
+    "Size": 70991872,
+    "ImageID": "sha256:fe4de052e9234d84baa3e17221fa9a4c0ceadf3dd1ea632a4776500bf138d334",
+    "DiffIDs": [
+      "sha256:c8e3124af87b2416f16f60e47297553a234bfffcd16c158cc9807cd3a4c3edd3",
+      "sha256:da4f130ffc95496e96144a6c340b0c8c877b874788c85f48d96f6e375f8369bb",
+      "sha256:cd83de291c570979f9958e3ff309ef41cdae34b3d72f0051e52e1b84ea06b1ba"
+    ],
+    "RepoTags": [
+      "almeidapaulopt/tsdproxy:latest"
+    ],
+    "RepoDigests": [
+      "almeidapaulopt/tsdproxy@sha256:043cd282bfbf846d5d7d31b7def4e86bd17e58ec0c4b7bbc1f8a8d7b2628cd21"
+    ],
+    "ImageConfig": {
+      "architecture": "amd64",
+      "created": "2026-06-02T22:38:07.914078802Z",
+      "history": [
+        {
+          "created": "2026-06-02T22:38:07Z",
+          "created_by": "ARG TARGETPLATFORM=linux/amd64",
+          "comment": "buildkit.dockerfile.v0",
+          "empty_layer": true
+        },
+        {
+          "created": "2026-06-02T22:38:07Z",
+          "created_by": "COPY /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ # buildkit",
+          "comment": "buildkit.dockerfile.v0"
+        },
+        {
+          "created": "2026-06-02T22:38:07Z",
+          "created_by": "COPY linux/amd64/tsdproxyd / # buildkit",
+          "comment": "buildkit.dockerfile.v0"
+        },
+        {
+          "created": "2026-06-02T22:38:07Z",
+          "created_by": "COPY linux/amd64/healthcheck / # buildkit",
+          "comment": "buildkit.dockerfile.v0"
+        },
+        {
+          "created": "2026-06-02T22:38:07Z",
+          "created_by": "ENTRYPOINT [\"/tsdproxyd\"]",
+          "comment": "buildkit.dockerfile.v0",
+          "empty_layer": true
+        },
+        {
+          "created": "2026-06-02T22:38:07Z",
+          "created_by": "EXPOSE [8080/tcp]",
+          "comment": "buildkit.dockerfile.v0",
+          "empty_layer": true
+        },
+        {
+          "created": "2026-06-02T22:38:07Z",
+          "created_by": "HEALTHCHECK {Test:[CMD /healthcheck] Interval:1m0s Timeout:2s StartPeriod:0s StartInterval:0s Retries:0}",
+          "comment": "buildkit.dockerfile.v0",
+          "empty_layer": true
+        }
+      ],
+      "os": "linux",
+      "rootfs": {
+        "type": "layers",
+        "diff_ids": [
+          "sha256:c8e3124af87b2416f16f60e47297553a234bfffcd16c158cc9807cd3a4c3edd3",
+          "sha256:da4f130ffc95496e96144a6c340b0c8c877b874788c85f48d96f6e375f8369bb",
+          "sha256:cd83de291c570979f9958e3ff309ef41cdae34b3d72f0051e52e1b84ea06b1ba"
+        ]
+      },
+      "config": {
+        "Healthcheck": {
+          "Test": [
+            "CMD",
+            "/healthcheck"
+          ],
+          "Interval": 60000000000,
+          "Timeout": 2000000000
+        },
+        "Entrypoint": [
+          "/tsdproxyd"
+        ],
+        "Env": [
+          "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+        ],
+        "Labels": {
+          "io.artifacthub.package.license": "MIT",
+          "io.artifacthub.package.maintainers": "{\"name\":\"Paulo Almeida\",\"email\":\"almeidapaulopt@gmail.com\"}",
+          "org.opencontainers.image.created": "2026-06-02T22:36:27Z",
+          "org.opencontainers.image.description": "tsdproxy",
+          "org.opencontainers.image.name": "tsdproxy",
+          "org.opencontainers.image.revision": "dd3ed06f977cfc8ad563ab20e84f15b5db21c5b8",
+          "org.opencontainers.image.source": "https://github.com/almeidapaulopt/tsdproxy",
+          "org.opencontainers.image.title": "tsdproxy",
+          "org.opencontainers.image.url": "https://github.com/almeidapaulopt/tsdproxy",
+          "org.opencontainers.image.version": "3.0.0-alpha.2"
+        },
+        "WorkingDir": "/",
+        "ExposedPorts": {
+          "8080/tcp": {}
+        }
+      }
+    },
+    "Layers": [
+      {
+        "Size": 221184,
+        "DiffID": "sha256:c8e3124af87b2416f16f60e47297553a234bfffcd16c158cc9807cd3a4c3edd3"
+      },
+      {
+        "Size": 64899072,
+        "DiffID": "sha256:da4f130ffc95496e96144a6c340b0c8c877b874788c85f48d96f6e375f8369bb"
+      },
+      {
+        "Size": 5871616,
+        "DiffID": "sha256:cd83de291c570979f9958e3ff309ef41cdae34b3d72f0051e52e1b84ea06b1ba"
+      }
+    ]
+  },
+  "Results": [
+    {
+      "Target": "healthcheck",
+      "Class": "lang-pkgs",
+      "Type": "gobinary",
+      "Vulnerabilities": [
+        {
+          "VulnerabilityID": "CVE-2026-27145",
+          "VendorIDs": [
+            "GO-2026-5037"
+          ],
+          "PkgID": "stdlib@v1.26.3",
+          "PkgName": "stdlib",
+          "PkgIdentifier": {
+            "PURL": "pkg:golang/stdlib@v1.26.3",
+            "UID": "15ff670cb1bb5e14"
+          },
+          "InstalledVersion": "v1.26.3",
+          "FixedVersion": "1.25.11, 1.26.4",
+          "Status": "fixed",
+          "Layer": {
+            "DiffID": "sha256:cd83de291c570979f9958e3ff309ef41cdae34b3d72f0051e52e1b84ea06b1ba"
+          },
+          "PrimaryURL": "https://avd.aquasec.com/nvd/cve-2026-27145",
+          "DataSource": {
+            "ID": "govulndb",
+            "Name": "The Go Vulnerability Database",
+            "URL": "https://pkg.go.dev/vuln/"
+          },
+          "Custom": null,
+          "Title": "Inefficient candidate hostname parsing in crypto/x509",
+          "Description": "(*x509.Certificate).VerifyHostname previously called matchHostnames in a loop over all DNS Subject Alternative Name (SAN) entries. This caused strings.Split(host, \".\") to execute repeatedly on the same input hostname. With a large DNS SAN list, verification costs scaled quadratically based on the number of SAN entries multiplied by the hostname's label count. Because x509.Verify validates hostnames before building the certificate chain, this overhead occurred even for untrusted certificates.",
+          "Severity": "UNKNOWN",
+          "References": [
+            "https://go.dev/cl/783621",
+            "https://go.dev/issue/79694",
+            "https://groups.google.com/g/golang-announce/c/tKs3rmcBcKw",
+            "https://pkg.go.dev/vuln/GO-2026-5037"
+          ],
+          "PublishedDate": "2026-06-02T23:16:35.57Z",
+          "LastModifiedDate": "2026-06-02T23:16:35.57Z"
+        },
+        {
+          "VulnerabilityID": "CVE-2026-42504",
+          "VendorIDs": [
+            "GO-2026-5038"
+          ],
+          "PkgID": "stdlib@v1.26.3",
+          "PkgName": "stdlib",
+          "PkgIdentifier": {
+            "PURL": "pkg:golang/stdlib@v1.26.3",
+            "UID": "15ff670cb1bb5e14"
+          },
+          "InstalledVersion": "v1.26.3",
+          "FixedVersion": "1.25.11, 1.26.4",
+          "Status": "fixed",
+          "Layer": {
+            "DiffID": "sha256:cd83de291c570979f9958e3ff309ef41cdae34b3d72f0051e52e1b84ea06b1ba"
+          },
+          "PrimaryURL": "https://avd.aquasec.com/nvd/cve-2026-42504",
+          "DataSource": {
+            "ID": "govulndb",
+            "Name": "The Go Vulnerability Database",
+            "URL": "https://pkg.go.dev/vuln/"
+          },
+          "Custom": null,
+          "Title": "Quadratic complexity in WordDecoder.DecodeHeader in mime",
+          "Description": "Decoding a maliciously-crafted MIME header containing many invalid encoded-words can consume excessive CPU.",
+          "Severity": "UNKNOWN",
+          "References": [
+            "https://go.dev/cl/774481",
+            "https://go.dev/issue/79217",
+            "https://groups.google.com/g/golang-announce/c/tKs3rmcBcKw",
+            "https://pkg.go.dev/vuln/GO-2026-5038"
+          ],
+          "PublishedDate": "2026-06-02T23:16:37.927Z",
+          "LastModifiedDate": "2026-06-02T23:16:37.927Z"
+        },
+        {
+          "VulnerabilityID": "CVE-2026-42507",
+          "VendorIDs": [
+            "GO-2026-5039"
+          ],
+          "PkgID": "stdlib@v1.26.3",
+          "PkgName": "stdlib",
+          "PkgIdentifier": {
+            "PURL": "pkg:golang/stdlib@v1.26.3",
+            "UID": "15ff670cb1bb5e14"
+          },
+          "InstalledVersion": "v1.26.3",
+          "FixedVersion": "1.25.11, 1.26.4",
+          "Status": "fixed",
+          "Layer": {
+            "DiffID": "sha256:cd83de291c570979f9958e3ff309ef41cdae34b3d72f0051e52e1b84ea06b1ba"
+          },
+          "PrimaryURL": "https://avd.aquasec.com/nvd/cve-2026-42507",
+          "DataSource": {
+            "ID": "govulndb",
+            "Name": "The Go Vulnerability Database",
+            "URL": "https://pkg.go.dev/vuln/"
+          },
+          "Custom": null,
+          "Title": "Arbitrary inputs are included in errors without any escaping in net/textproto",
+          "Description": "When returning errors, functions in the net/textproto package would include its input as part of the error. This might allow an attacker to inject misleading content to errors that are printed or logged.",
+          "Severity": "UNKNOWN",
+          "References": [
+            "https://go.dev/cl/777060",
+            "https://go.dev/issue/79346",
+            "https://groups.google.com/g/golang-announce/c/tKs3rmcBcKw",
+            "https://pkg.go.dev/vuln/GO-2026-5039"
+          ],
+          "PublishedDate": "2026-06-02T23:16:38.027Z",
+          "LastModifiedDate": "2026-06-02T23:16:38.027Z"
+        }
+      ]
+    },
+    {
+      "Target": "tsdproxyd",
+      "Class": "lang-pkgs",
+      "Type": "gobinary",
+      "Vulnerabilities": [
+        {
+          "VulnerabilityID": "CVE-2026-27145",
+          "VendorIDs": [
+            "GO-2026-5037"
+          ],
+          "PkgID": "stdlib@v1.26.3",
+          "PkgName": "stdlib",
+          "PkgIdentifier": {
+            "PURL": "pkg:golang/stdlib@v1.26.3",
+            "UID": "337744fcdc0d47f"
+          },
+          "InstalledVersion": "v1.26.3",
+          "FixedVersion": "1.25.11, 1.26.4",
+          "Status": "fixed",
+          "Layer": {
+            "DiffID": "sha256:da4f130ffc95496e96144a6c340b0c8c877b874788c85f48d96f6e375f8369bb"
+          },
+          "PrimaryURL": "https://avd.aquasec.com/nvd/cve-2026-27145",
+          "DataSource": {
+            "ID": "govulndb",
+            "Name": "The Go Vulnerability Database",
+            "URL": "https://pkg.go.dev/vuln/"
+          },
+          "Custom": null,
+          "Title": "Inefficient candidate hostname parsing in crypto/x509",
+          "Description": "(*x509.Certificate).VerifyHostname previously called matchHostnames in a loop over all DNS Subject Alternative Name (SAN) entries. This caused strings.Split(host, \".\") to execute repeatedly on the same input hostname. With a large DNS SAN list, verification costs scaled quadratically based on the number of SAN entries multiplied by the hostname's label count. Because x509.Verify validates hostnames before building the certificate chain, this overhead occurred even for untrusted certificates.",
+          "Severity": "UNKNOWN",
+          "References": [
+            "https://go.dev/cl/783621",
+            "https://go.dev/issue/79694",
+            "https://groups.google.com/g/golang-announce/c/tKs3rmcBcKw",
+            "https://pkg.go.dev/vuln/GO-2026-5037"
+          ],
+          "PublishedDate": "2026-06-02T23:16:35.57Z",
+          "LastModifiedDate": "2026-06-02T23:16:35.57Z"
+        },
+        {
+          "VulnerabilityID": "CVE-2026-42504",
+          "VendorIDs": [
+            "GO-2026-5038"
+          ],
+          "PkgID": "stdlib@v1.26.3",
+          "PkgName": "stdlib",
+          "PkgIdentifier": {
+            "PURL": "pkg:golang/stdlib@v1.26.3",
+            "UID": "337744fcdc0d47f"
+          },
+          "InstalledVersion": "v1.26.3",
+          "FixedVersion": "1.25.11, 1.26.4",
+          "Status": "fixed",
+          "Layer": {
+            "DiffID": "sha256:da4f130ffc95496e96144a6c340b0c8c877b874788c85f48d96f6e375f8369bb"
+          },
+          "PrimaryURL": "https://avd.aquasec.com/nvd/cve-2026-42504",
+          "DataSource": {
+            "ID": "govulndb",
+            "Name": "The Go Vulnerability Database",
+            "URL": "https://pkg.go.dev/vuln/"
+          },
+          "Custom": null,
+          "Title": "Quadratic complexity in WordDecoder.DecodeHeader in mime",
+          "Description": "Decoding a maliciously-crafted MIME header containing many invalid encoded-words can consume excessive CPU.",
+          "Severity": "UNKNOWN",
+          "References": [
+            "https://go.dev/cl/774481",
+            "https://go.dev/issue/79217",
+            "https://groups.google.com/g/golang-announce/c/tKs3rmcBcKw",
+            "https://pkg.go.dev/vuln/GO-2026-5038"
+          ],
+          "PublishedDate": "2026-06-02T23:16:37.927Z",
+          "LastModifiedDate": "2026-06-02T23:16:37.927Z"
+        },
+        {
+          "VulnerabilityID": "CVE-2026-42507",
+          "VendorIDs": [
+            "GO-2026-5039"
+          ],
+          "PkgID": "stdlib@v1.26.3",
+          "PkgName": "stdlib",
+          "PkgIdentifier": {
+            "PURL": "pkg:golang/stdlib@v1.26.3",
+            "UID": "337744fcdc0d47f"
+          },
+          "InstalledVersion": "v1.26.3",
+          "FixedVersion": "1.25.11, 1.26.4",
+          "Status": "fixed",
+          "Layer": {
+            "DiffID": "sha256:da4f130ffc95496e96144a6c340b0c8c877b874788c85f48d96f6e375f8369bb"
+          },
+          "PrimaryURL": "https://avd.aquasec.com/nvd/cve-2026-42507",
+          "DataSource": {
+            "ID": "govulndb",
+            "Name": "The Go Vulnerability Database",
+            "URL": "https://pkg.go.dev/vuln/"
+          },
+          "Custom": null,
+          "Title": "Arbitrary inputs are included in errors without any escaping in net/textproto",
+          "Description": "When returning errors, functions in the net/textproto package would include its input as part of the error. This might allow an attacker to inject misleading content to errors that are printed or logged.",
+          "Severity": "UNKNOWN",
+          "References": [
+            "https://go.dev/cl/777060",
+            "https://go.dev/issue/79346",
+            "https://groups.google.com/g/golang-announce/c/tKs3rmcBcKw",
+            "https://pkg.go.dev/vuln/GO-2026-5039"
+          ],
+          "PublishedDate": "2026-06-02T23:16:38.027Z",
+          "LastModifiedDate": "2026-06-02T23:16:38.027Z"
+        }
+      ]
+    }
+  ]
+}

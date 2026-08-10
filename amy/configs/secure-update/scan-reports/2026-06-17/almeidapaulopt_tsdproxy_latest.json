@@ -1,0 +1,133 @@
+{
+  "SchemaVersion": 2,
+  "CreatedAt": "2026-06-17T04:58:47.776972235-04:00",
+  "ArtifactName": "almeidapaulopt/tsdproxy:latest",
+  "ArtifactType": "container_image",
+  "Metadata": {
+    "Size": 72288768,
+    "ImageID": "sha256:3b696fda6b4b3f8e092230f6cc9fa6358dff1b4dfa28867a9c0abe2d892cde55",
+    "DiffIDs": [
+      "sha256:a3fed4699f5d3c6b96ec25062e19927d263d284208ee2a966b390e133c073ab8",
+      "sha256:8a586a58f88f6479266b03bd81225a4f36ff43c589192ca9e3d48258094d919c",
+      "sha256:1b63c0438caa39a9e297b0f204ea484fdaa0f904235fc0265b42b1fee290cd92"
+    ],
+    "RepoTags": [
+      "almeidapaulopt/tsdproxy:latest"
+    ],
+    "RepoDigests": [
+      "almeidapaulopt/tsdproxy@sha256:e75357d559066a6d0a8242b6d64f8e295adfa6024d3cf1c9a3e3f1ecb00c0bb1"
+    ],
+    "ImageConfig": {
+      "architecture": "amd64",
+      "created": "2026-06-16T13:39:27.417305595Z",
+      "history": [
+        {
+          "created": "2026-06-16T13:39:27Z",
+          "created_by": "ARG TARGETPLATFORM=linux/amd64",
+          "comment": "buildkit.dockerfile.v0",
+          "empty_layer": true
+        },
+        {
+          "created": "2026-06-16T13:39:27Z",
+          "created_by": "COPY /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ # buildkit",
+          "comment": "buildkit.dockerfile.v0"
+        },
+        {
+          "created": "2026-06-16T13:39:27Z",
+          "created_by": "COPY linux/amd64/tsdproxyd / # buildkit",
+          "comment": "buildkit.dockerfile.v0"
+        },
+        {
+          "created": "2026-06-16T13:39:27Z",
+          "created_by": "COPY linux/amd64/healthcheck / # buildkit",
+          "comment": "buildkit.dockerfile.v0"
+        },
+        {
+          "created": "2026-06-16T13:39:27Z",
+          "created_by": "ENTRYPOINT [\"/tsdproxyd\"]",
+          "comment": "buildkit.dockerfile.v0",
+          "empty_layer": true
+        },
+        {
+          "created": "2026-06-16T13:39:27Z",
+          "created_by": "EXPOSE [8080/tcp]",
+          "comment": "buildkit.dockerfile.v0",
+          "empty_layer": true
+        },
+        {
+          "created": "2026-06-16T13:39:27Z",
+          "created_by": "HEALTHCHECK {Test:[CMD /healthcheck] Interval:1m0s Timeout:2s StartPeriod:0s StartInterval:0s Retries:0}",
+          "comment": "buildkit.dockerfile.v0",
+          "empty_layer": true
+        }
+      ],
+      "os": "linux",
+      "rootfs": {
+        "type": "layers",
+        "diff_ids": [
+          "sha256:a3fed4699f5d3c6b96ec25062e19927d263d284208ee2a966b390e133c073ab8",
+          "sha256:8a586a58f88f6479266b03bd81225a4f36ff43c589192ca9e3d48258094d919c",
+          "sha256:1b63c0438caa39a9e297b0f204ea484fdaa0f904235fc0265b42b1fee290cd92"
+        ]
+      },
+      "config": {
+        "Healthcheck": {
+          "Test": [
+            "CMD",
+            "/healthcheck"
+          ],
+          "Interval": 60000000000,
+          "Timeout": 2000000000
+        },
+        "Entrypoint": [
+          "/tsdproxyd"
+        ],
+        "Env": [
+          "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+        ],
+        "Labels": {
+          "io.artifacthub.package.license": "MIT",
+          "io.artifacthub.package.maintainers": "{\"name\":\"Paulo Almeida\",\"email\":\"almeidapaulopt@gmail.com\"}",
+          "org.opencontainers.image.created": "2026-06-16T13:29:30Z",
+          "org.opencontainers.image.description": "tsdproxy",
+          "org.opencontainers.image.name": "tsdproxy",
+          "org.opencontainers.image.revision": "1bad3d38de6efb9fa99fe970ab466c6db1b61fbb",
+          "org.opencontainers.image.source": "https://github.com/almeidapaulopt/tsdproxy",
+          "org.opencontainers.image.title": "tsdproxy",
+          "org.opencontainers.image.url": "https://github.com/almeidapaulopt/tsdproxy",
+          "org.opencontainers.image.version": "3.0.0-beta.1"
+        },
+        "WorkingDir": "/",
+        "ExposedPorts": {
+          "8080/tcp": {}
+        }
+      }
+    },
+    "Layers": [
+      {
+        "Size": 182784,
+        "DiffID": "sha256:a3fed4699f5d3c6b96ec25062e19927d263d284208ee2a966b390e133c073ab8"
+      },
+      {
+        "Size": 66234368,
+        "DiffID": "sha256:8a586a58f88f6479266b03bd81225a4f36ff43c589192ca9e3d48258094d919c"
+      },
+      {
+        "Size": 5871616,
+        "DiffID": "sha256:1b63c0438caa39a9e297b0f204ea484fdaa0f904235fc0265b42b1fee290cd92"
+      }
+    ]
+  },
+  "Results": [
+    {
+      "Target": "healthcheck",
+      "Class": "lang-pkgs",
+      "Type": "gobinary"
+    },
+    {
+      "Target": "tsdproxyd",
+      "Class": "lang-pkgs",
+      "Type": "gobinary"
+    }
+  ]
+}

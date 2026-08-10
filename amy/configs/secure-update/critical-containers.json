@@ -1,0 +1,43 @@
+{
+  "critical": [
+    {
+      "name": "postgres",
+      "pre_upgrade": ["backup_postgres"],
+      "health_checks": ["pg_isready", "pg_connect", "pg_databases"],
+      "functional_tests": ["atuin_db_access", "miniflux_db_access", "sss_db_access"],
+      "integration_tests": ["ntfy_http", "miniflux_http"],
+      "dependent_services": ["atuin", "miniflux", "spendspentspent", "postgres-backup"]
+    },
+    {
+      "name": "ntfy",
+      "pre_upgrade": [],
+      "health_checks": ["container_running"],
+      "functional_tests": ["ntfy_http"],
+      "integration_tests": [],
+      "dependent_services": []
+    },
+    {
+      "name": "beszel",
+      "pre_upgrade": [],
+      "health_checks": ["container_running"],
+      "functional_tests": ["beszel_http"],
+      "integration_tests": [],
+      "dependent_services": []
+    },
+    {
+      "name": "spendspentspent",
+      "pre_upgrade": [],
+      "health_checks": ["container_running"],
+      "functional_tests": ["spendspentspent_http"],
+      "integration_tests": [],
+      "dependent_services": []
+    }
+  ],
+  "non_critical": [
+    "pihole",
+    "keepalived",
+    "tsdproxy",
+    "vaultwarden",
+    "beszel-agent"
+  ]
+}

@@ -2,9 +2,9 @@
 
 ## security-first container lifecycle management
 
-**document version:** 3.0
-**infrastructure version:** 99
-**last updated:** february 2026
+**document version:** 5.0
+**infrastructure version:** 20260810.2
+**last updated:** august 2026
 
 ---
 
@@ -20,15 +20,16 @@
 8. [notification flow](#notification-flow)
 9. [cron schedule](#cron-schedule)
 10. [configuration files](#configuration-files)
-11. [differences from bender](#differences-from-bender)
+11. [known audit items](#known-audit-items)
+12. [differences from bender](#differences-from-bender)
 
 ---
 
 ## overview
 
-amy uses the same secure container update system as bender. the system pulls new images, scans them with trivy, deploys only if clean, runs health checks, and automatically rolls back on failure.
+amy uses the same secure container update system as bender: pull → trivy scan (block on CRITICAL/HIGH) → deploy → health check → rollback on failure, with a daily retry queue for blocked containers. amy runs script **v1.2**; bender has since moved to v1.3 (five-tenant tests, gluetun-critical) – amy has no gluetun and fewer tenants, so v1.2 remains adequate, but the version skew is a tracked item.
 
-unlike bender (which requires copying scripts to `/tmp/` due to TrueNAS restrictions), amy can execute scripts directly from `/docker-compose/scripts/`.
+execution is refreshingly plain compared to bender: scripts run directly, schedules live in root's crontab, and Debian does not destroy crontabs on upgrade.
 
 ---
 
@@ -39,237 +40,133 @@ unlike bender (which requires copying scripts to `/tmp/` due to TrueNAS restrict
 | secure-container-update.sh | v1.2 | main update orchestration script |
 | health-checks.sh | v1.0 | standalone health check suite |
 | rollback.sh | v1.0 | manual rollback helper |
-| diun | latest | monitors Docker Hub for new image tags |
-| trivy | latest | scans images for CVEs (server mode on port 8083:4954) |
-| critical-containers.json | — | defines critical services and their test suites |
-| retry-queue.json | — | tracks containers blocked by vulnerabilities |
+| diun | latest | new-tag notifications (wednesday 04:00, via local ntfy) |
+| trivy | latest | CVE scanning server (`--listen 4954`, host port 8083) |
+| critical-containers.json | – | defines the four critical services |
+| retry-queue.json | – | containers blocked by vulnerabilities |
 
 ---
 
 ## update workflow
 
+identical shape to bender's v1.2 pipeline:
+
 ```
-1. check system health (load average < 4.0, iowait < 50%)
-   |
-   v
-2. for each running container:
-   |
-   +-- pull new image
-   |   |
-   |   v
-   +-- scan with trivy (server mode, port 8083)
-   |   |
-   |   +-- CRITICAL or HIGH found → add to retry queue → skip
-   |   |
-   |   v
-   +-- pre-upgrade actions (backup for critical containers)
-   |   |
-   |   v
-   +-- stop container
-   |   |
-   |   v
-   +-- backup current image (rotate backup-1/2/3 tags)
-   |   |
-   |   v
-   +-- start with new image (docker compose up -d --force-recreate)
-   |   |
-   |   v
-   +-- wait 30 seconds
-   |   |
-   |   v
-   +-- run health checks
-   |   |
-   |   +-- FAIL → rollback to backup-1 → notify
-   |   |
-   |   v
-   +-- restart dependent services (critical containers only)
-   |   |
-   |   v
-   +-- re-run integration tests
-   |   |
-   |   +-- FAIL → rollback → notify
-   |   |
-   |   v
-   +-- SUCCESS → remove from retry queue
-   |
-   v
-3. wait THROTTLE_DELAY (60s) between containers
-   |
-   v
-4. check system health again before next container
-   |
-   +-- overloaded → wait up to 5 × 120s for recovery
-   +-- still overloaded → skip remaining containers
-   |
-   v
-5. generate report + send ntfy notification
+health gate (load/iowait) → per container: pull → trivy scan
+  → blocked ⇒ retry queue
+  → critical pre-upgrade actions
+  → stop → rotate backup-1/2/3 tags → force-recreate → wait 30s
+  → health + functional + integration checks → fail ⇒ rollback to backup-1
+  → critical: restart dependents → re-run integration tests
+  → 60s throttle between containers → report + ntfy
 ```
 
-### containers skipped by the update system
+### containers skipped
 
 | container | reason |
 |-----------|--------|
-| diun | infrastructure — updates itself |
-| trivy | infrastructure — scanner should not scan itself |
+| diun | infrastructure – updates itself |
+| trivy | infrastructure – scanner should not scan itself |
+
+amy has no build-based containers – everything else is eligible.
 
 ---
 
 ## critical services
 
-amy has 4 critical services (compared to bender's 1):
+four services are classified as critical on amy:
 
 ### postgres
 
 | aspect | detail |
 |--------|--------|
-| pre-upgrade | full `pg_dumpall` backup to `/docker/backups/postgres/pre-upgrade/` |
-| health checks | pg_isready, pg_connect (SELECT 1), pg_databases (check atuin exists) |
-| functional tests | atuin_db_access, miniflux_db_access, sss_db_access |
-| integration tests | ntfy_http (HTTP 200/301/302 on :8888), miniflux_http (HTTP 200/301/302 on :8385) |
-| dependent services | atuin, miniflux, spendspentspent, postgres-backup |
-| rollback | restore backup-1 image tag → restart postgres → restart all dependents |
+| pre-upgrade | full `pg_dumpall` to the backup path |
+| health checks | pg_isready, connect, database presence (atuin, miniflux, sss, mealie, stirling) |
+| dependent services | postgres-backup, atuin, miniflux, mealie, spendspentspent (a `stirling` DB also exists – app linkage unverified, see 02) |
+| rollback | backup-1 image → restart postgres → restart dependents |
 
 ### ntfy
 
 | aspect | detail |
 |--------|--------|
-| health checks | container_running |
-| functional tests | ntfy_http (HTTP 200/301/302 on :8888) |
-| reason critical | bender depends on ntfy for update notifications — if ntfy breaks, bender loses alerting |
+| why critical | it is the notification hub for BOTH hosts – a broken ntfy means silent infrastructure |
+| checks | container running/healthy, HTTP reachability on :8888 |
+| note | ntfy's update is the one update you double-check by hand: send a test message after |
 
 ### beszel
 
 | aspect | detail |
 |--------|--------|
-| health checks | container_running |
-| functional tests | beszel_http (HTTP 200/301/302/401 on :8090) |
-| reason critical | monitoring hub for both hosts — losing it means no system metrics |
+| why critical | monitoring hub – both hosts' agents report here |
+| checks | container running, HTTP :8090 |
 
 ### spendspentspent
 
 | aspect | detail |
 |--------|--------|
-| health checks | container_running |
-| functional tests | spendspentspent_http (HTTP 200/301/302 on :9021) |
-| reason critical | financial data — must not lose access after an update |
+| why critical | finance data; depends on postgres (sss) + playwright-chrome |
+| checks | container running, HTTP :9021, database access |
 
-### non-critical but monitored
-
-| container | monitoring |
-|-----------|-----------|
-| pihole | DNS resolution |
-| keepalived | VIP presence |
-| tsdproxy | tailscale connectivity |
-| beszel-agent | agent registration |
+<!-- VERIFY: the per-service test lists above reflect the documented v1.2 critical set; diff against amy's live critical-containers.json at next touch -->
 
 ---
 
 ## health checks
 
-### health-checks.sh capabilities
-
 ```bash
-# full postgresql suite
-bash /docker-compose/scripts/health-checks.sh postgres
-
-# individual service checks
-bash /docker-compose/scripts/health-checks.sh ntfy
-bash /docker-compose/scripts/health-checks.sh pihole
-bash /docker-compose/scripts/health-checks.sh trivy
-bash /docker-compose/scripts/health-checks.sh diun
-bash /docker-compose/scripts/health-checks.sh vaultwarden
-
-# all checks
-bash /docker-compose/scripts/health-checks.sh all
+# from /docker-compose/scripts – direct execution, no bash prefix needed
+./health-checks.sh postgres
+./health-checks.sh container ntfy
+./health-checks.sh all
 ```
 
-note: amy's health-checks.sh includes a vaultwarden check for legacy reasons (vaultwarden was on amy until v92 when it moved to bender). the check will simply report the container as not running, which is correct.
-
-### postgresql health check suite
-
-| check | command | pass criteria |
-|-------|---------|---------------|
-| container running | docker ps filter | container exists and running |
-| health status | docker inspect | healthy |
-| pg_isready | pg_isready -U postgres | exit code 0 |
-| database exists (atuin) | psql -lqt | atuin found |
-| database exists (miniflux) | psql -lqt | miniflux found |
-| database exists (sss) | psql -lqt | sss found |
-| SELECT 1 | psql SELECT 1 | query succeeds |
-| connect to atuin | psql -d atuin | succeeds |
-| connect to miniflux | psql -d miniflux | succeeds |
-| connect to sss | psql -d sss | succeeds |
+amy's health-checks.sh is v1.0 – it predates bender's v1.2 refinements. the postgres suite covers readiness/connect/database-presence; the per-tenant depth bender gained (quoted-"user" immich probe etc.) has no amy equivalent yet beyond database presence.
 
 ---
 
 ## rollback system
 
-### automatic rollback (during updates)
+same 3-tag rotation as bender:
 
-same as bender — triggered when health checks fail after deploying a new image.
-
-### manual rollback
-
-```bash
-# list available backups for a container
-bash /docker-compose/scripts/rollback.sh list-containers ntfy
-
-# rollback container to most recent backup
-bash /docker-compose/scripts/rollback.sh container ntfy
-
-# rollback to second-most-recent backup
-bash /docker-compose/scripts/rollback.sh container ntfy 2
-
-# list postgresql backups
-bash /docker-compose/scripts/rollback.sh list-postgres
-
-# restore full postgresql backup
-bash /docker-compose/scripts/rollback.sh postgres /docker/backups/postgres/last/atuin-latest.sql.gz
-
-# restore single database
-bash /docker-compose/scripts/rollback.sh database atuin /docker/backups/postgres/daily/atuin-20260210.sql.gz
+```
+image:latest / image:backup-1 / image:backup-2 / image:backup-3
 ```
 
-### image backup retention
-
-same as bender — 3 backup tags per container (backup-1, backup-2, backup-3).
+```bash
+./rollback.sh list ntfy
+./rollback.sh rollback ntfy
+./rollback.sh rollback ntfy 2
+./rollback.sh postgres      # dependent-aware postgres rollback
+```
 
 ---
 
 ## throttling system
 
-identical to bender's v1.2 throttling:
+same constants as bender's v1.2 (the script is shared lineage):
 
-| setting | value | purpose |
-|---------|-------|---------|
-| THROTTLE_DELAY | 60s | wait between container updates |
-| MAX_LOAD | 4.0 | skip if 1-min load average exceeds |
-| MAX_IOWAIT | 50% | skip if I/O wait percentage exceeds |
-| RECOVERY_WAIT | 120s | wait time for system recovery |
-| MAX_RECOVERY_ATTEMPTS | 5 | max recovery wait cycles (10 min total) |
+| setting | value |
+|---------|-------|
+| THROTTLE_DELAY | 60s |
+| MAX_LOAD | 4.0 |
+| MAX_IOWAIT | 50% |
+| RECOVERY_WAIT | 120s |
+| MAX_RECOVERY_ATTEMPTS | 5 |
 
-```bash
-# check system health manually
-bash /docker-compose/scripts/secure-container-update.sh health
-```
+the i3-2310M hits the load gate more easily than bender's Xeon – a scan skipping containers on amy usually means playwright-chrome or stirling was busy, not that anything is wrong.
 
 ---
 
 ## notification flow
 
-amy's ntfy is local, so notifications use `http://localhost:8888`:
+notifications go to the **local** ntfy – no cross-host dependency for amy's own updates:
 
-| event | priority | tags |
-|-------|----------|------|
-| weekly scan starting | low | hourglass |
-| weekly scan complete | default | white_check_mark |
-| daily retry starting | low | arrows_counterclockwise |
-| daily retry complete | default | arrows_counterclockwise |
-| container rolled back | high | warning, rotating_light |
-| rollback FAILED | urgent | rotating_light, skull |
-| scan aborted (overloaded) | high | warning |
+| producer | endpoint |
+|----------|----------|
+| secure-container-update.sh | local ntfy (localhost:8888) |
+| diun | `http://ntfy:80` (container network) |
 
-note: the notification URL comes from the `WATCHTOWER_NOTIFICATION_URL` variable in .env (legacy name). on amy this variable is currently commented out, so notifications from secure-container-update.sh are silently skipped. diun uses its own `DIUN_NOTIF_NTFY_ENDPOINT=http://ntfy:80` which works independently.
+event/priority table matches bender's (scan start/complete low/default; rollback high; rollback-failed urgent).
 
 ---
 
@@ -277,47 +174,37 @@ note: the notification URL comes from the `WATCHTOWER_NOTIFICATION_URL` variable
 
 | schedule | command | purpose |
 |----------|---------|---------|
-| wednesday 04:30 | `secure-container-update.sh weekly` | full scan of all containers |
-| all days except wednesday 04:30 | `secure-container-update.sh retry` | retry previously blocked containers |
+| wednesday 04:30 | `secure-container-update.sh weekly` | full scan (offset from bender's saturday) |
+| all other days 04:30 | `secure-container-update.sh retry` | retry blocked containers |
 
 ```bash
-# verify cron
 crontab -l | grep secure-container
 ```
+
+<!-- VERIFY: paste the literal crontab -l output here at next revision – schedule shape is documented, exact lines unconfirmed -->
+
+the wednesday/saturday split means the two hosts never scan simultaneously, and one host is always fully stable while the other updates. amy also hosts bender's 03:30 replication window – amy's own 04:30 wednesday scan follows it by an hour, same discipline as bender's.
 
 ---
 
 ## configuration files
 
-### critical-containers.json
+| file | purpose |
+|------|---------|
+| critical-containers.json | the four critical definitions |
+| retry-queue.json | blocked-container queue |
+| logs/ | per-day logs, 180-day retention |
+| scan-reports/ | trivy JSON by date, 180-day retention |
 
-location: `/docker-compose/configs/secure-update/critical-containers.json`
+<!-- VERIFY: exact state-directory path on amy -->
 
-auto-created on first run. defines postgres, ntfy, beszel, and spendspentspent as critical.
+---
 
-### retry-queue.json
+## known audit items
 
-location: `/docker-compose/configs/secure-update/retry-queue.json`
-
-tracks containers blocked by vulnerability scans.
-
-### logs
-
-location: `/docker-compose/configs/secure-update/logs/`
-
-one log file per day. retention: 180 days.
-
-### scan reports
-
-location: `/docker-compose/configs/secure-update/scan-reports/`
-
-trivy JSON reports organized by date. retention: 180 days.
-
-### weekly reports
-
-location: `/docker-compose/reports/weekly-reports/`
-
-markdown summary reports. retention: 180 days.
+- **script version skew:** amy v1.2 / bender v1.3. nothing in v1.3 is amy-critical (gluetun, five-tenant probes), but the shared lineage should reconverge – port the versioned-backup convention and per-tenant probes when next touching amy's script.
+- **health-checks.sh v1.0:** two versions behind bender's v1.2; upgrade opportunistically.
+- **postgres-backup image tag:** amy pins `:17` (major-matched) – this is *better* practice than bender's `:latest`; propagate amy's convention to bender rather than the reverse. **(done: bender 20260721 pins `:14`.)**
 
 ---
 
@@ -326,19 +213,84 @@ markdown summary reports. retention: 180 days.
 | aspect | amy | bender |
 |--------|-----|--------|
 | update day | wednesday | saturday |
-| trivy host port | 8083 | 8083 |
-| trivy internal port | 4954 | 8080 |
-| trivy server URL | http://localhost:8083 | http://localhost:8082 |
+| script version | v1.2 | v1.3 (postgres + gluetun critical) |
+| trivy port mapping | 8083:4954 (listen 4954) | 8083:8080 (listen 8080) |
+| trivy script URL | http://localhost:8083 (consistent) | historic 8082 constant (audit item) |
 | diun schedule | wednesday 04:00 | daily 06:00 |
-| critical services | 4 (postgres, ntfy, beszel, spendspentspent) | 1 (postgres) |
-| script execution | direct | requires `/tmp` copy (TrueNAS) |
-| ntfy endpoint | local (`http://localhost:8888`) | remote (`http://${NTFY_ADDRESS}`) |
-| postgres image | postgres:17-alpine | immich-app/postgres (vectorchord) |
-| postgres databases | atuin, miniflux, sss, mealie, stirling | immich, hedgedoc |
+| critical services | 4 (postgres, ntfy, beszel, spendspentspent) | 2 (postgres, gluetun) |
+| script execution | direct | `bash <path>` (noexec pool) |
+| cron mechanism | root crontab (survives Debian upgrades) | TrueNAS UI jobs (7) |
+| ntfy endpoint | local | remote (amy) |
+| postgres image | postgres:17-alpine | immich-app/postgres:14 (vectorchord) |
+| postgres databases | atuin, miniflux, sss, mealie, stirling | immich, hedgedoc, baikal, vikunja, forgejo |
 | base path | `/docker-compose` | `/mnt/BIG/filme/docker-compose` |
-| backup path | `/docker/backups/postgres` | `/mnt/BIG/filme/backups/postgres` |
-| additional cron | none | pihole-dns-update.sh (every 5 min) |
-| build-based containers | 0 | 3 (transmission, tts-pipeline, epub2tts-edge) |
+| backup path | `/docker/postgres-backup` | `/mnt/BIG/filme/backups/postgres` |
+| build-based containers | 0 | 3 |
+| extra duties | hosts bender's replica; runs oxidized | replicates to amy; SMART self-testing |
+
+
+---
+
+## image pinning policy (20260810)
+
+three services are pinned. each pin exists because an unpinned `:latest`
+broke production, and each break was silent for weeks.
+
+| service | pin | reason |
+|---------|-----|--------|
+| tsdproxy | digest `sha256:e75357d5...` | `:latest` resolves to 3.0.0-beta.1 |
+| oxidized | tag `0.36.0` | 0.37.0 passes `max_window_size`; net-ssh 7.3.0 rejects it |
+| keepalived | digest `sha256:19026918...` | pins the running 2.3.4; the 2.0.20 tag reads a different config path |
+
+**prefer a digest over a tag.** a digest names the exact image. a tag can
+move, and both the tsdproxy and oxidized faults were caused by a tag
+moving underneath a working deployment.
+
+**pin what runs, not what you assume runs.** the 20260810 keepalived
+failure came from pinning to a version that was believed to be identical
+to `:latest` and was not. get the digest from the running container:
+
+```bash
+docker inspect <image>:latest --format '{{index .RepoDigests 0}}'
+```
+
+### diun blind spot
+
+diun watches tags. a digest-pinned service produces no update
+notifications at all. so a pinned image will not be reported when a new
+version appears, and the version must be reviewed deliberately.
+
+---
+
+## the prune incident (2026-08-08)
+
+`docker image prune -a` recovered 16.94 GB from 108 images and took the
+root filesystem from 97% to 60%. it also deleted every `:backup-N` tag.
+
+those tags are the update system's rollback stock. so image-level rollback
+was unavailable until the next update cycle re-tagged them. a specific
+image can still be re-pulled from its registry by digest.
+
+**any scheduled prune must exclude the `backup-N` pattern**, or it will
+delete its own safety net on a timer. `docker image prune -f` without `-a`
+is safe, because it removes only untagged layers.
+
+---
+
+## log rotation is not configured
+
+a tsdproxy error loop produced a 211 MB json log on 2026-08-08. docker
+applies no size limit by default.
+
+the fix is host-wide rather than per service:
+
+```json
+{ "log-driver": "json-file", "log-opts": { "max-size": "10m", "max-file": "3" } }
+```
+
+placed in `/etc/docker/daemon.json`. it needs a docker restart, which
+bounces every container on amy including pihole. so do it in a planned
+window. existing containers adopt the limit at their next recreate.
 
 ---
 
