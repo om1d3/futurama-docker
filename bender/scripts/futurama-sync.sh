@@ -72,7 +72,7 @@ LOCK="/tmp/futurama-sync.lock"
 
 # Abort if staging would delete more than this many files. Guards against a
 # half-failed copy wiping a host's tree out of the repository.
-MAX_DELETIONS=250
+MAX_DELETIONS=10
 
 # ---------- manifests ----------
 # Format: "source|destination-relative-to-repo"

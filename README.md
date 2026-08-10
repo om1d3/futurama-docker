@@ -1,477 +1,222 @@
-# futurama docker infrastructure
+# futurama-docker
 
-## home lab container infrastructure
+Configuration for a two-host home lab, plus the documentation needed to
+rebuild it.
 
-two-host docker infrastructure for media services, utilities, and home automation.
+**documentation version:** 5.0
+**bender infrastructure version:** 20260809
+**amy infrastructure version:** 20260810.2
+**last updated:** august 2026
 
-**infrastructure versions:** bender v109 / amy v99
-**last updated:** february 2026
+Version numbers are date-based, `YYYYMMDD`, with `.2` appended for a second
+edit on the same day. The older sequential history, up to v115 on bender and
+v104 on amy, remains valid and is preserved in each compose file's changelog.
 
 ---
 
-## network architecture
+## what is here
+
+| path | contents |
+|------|----------|
+| `bender/` | compose file, scripts, service configs, documentation |
+| `amy/` | the same, for the second host |
+| `docs/` | topics that span both hosts |
+| `.gitignore` | a safety net; the manifest decides what is committed |
+
+Each host directory holds:
 
 ```
-                                             LAN network
-                                           192.168.21.0/24
-                                                  |
-                         +------------------------+------------------------+
-                         |                        |                        |
-                         v                        v                        v
-                +------------------+    +------------------+    +------------------+
-                |     bender       |    |   pihole VIP     |    |       amy        |
-                |  192.168.21.121  |    |  192.168.21.100  |    |  192.168.21.130  |
-                |  TrueNAS Scale   |    |   (keepalived)   |    |  Intel i3-2310M  |
-                +--------+---------+    +--------+---------+    +--------+---------+
-                         |                       |                       |
-                         |          +------------+------------+          |
-                         |          |                         |          |
-                         |          v                         v          |
-                         |   +------------+           +------------+     |
-                         |   |   pihole   |<---VRRP-->|   pihole   |     |
-                         |   |  (master)  |  failover |  (backup)  |     |
-                         |   | priority200|           | priority100|     |
-                         |   |  port 8053 |           |  port 8053 |     |
-                         |   +------------+           +------------+     |
-                         |          |                         |          |
-                         +----------+-------------------------+----------+
-```
-
-### keepalived DNS failover
-
-```
-                +-----------------------------------------------------------------------+
-                |                         keepalived VRRP                               |
-                +-----------------------------------------------------------------------+
-                |                                                                       |
-                |  normal operation:                                                    |
-                |  +----------+       +------------+       +------------------+         |
-                |  |  client  |------>|  VIP .100  |------>| bender pihole    |         |
-                |  | DNS query|       |  (master)  |       | (serves request) |         |
-                |  +----------+       +------------+       +------------------+         |
-                |                                                                       |
-                |  failover (bender pihole down):                                       |
-                |  +----------+       +------------+       +------------------+         |
-                |  |  client  |------>|  VIP .100  |------>| amy pihole       |         |
-                |  | DNS query|       |  (backup)  |       | (serves request) |         |
-                |  +----------+       +------------+       +------------------+         |
-                |                                                                       |
-                |  health check: wget to pihole admin (port 8053)                       |
-                |  failover time: ~5 seconds                                            |
-                |                                                                       |
-                +-----------------------------------------------------------------------+
+<host>/
+├── docker-compose.yaml     the running configuration
+├── .env.gpg                every secret, encrypted
+├── docs/                   eight documents plus a README index
+├── scripts/                automation
+└── configs/                per-service configuration
 ```
 
 ---
 
-## services architecture
+## network
 
 ```
-                +-----------------------------------------------------------------------+
-                |                    bender (TrueNAS Scale) 192.168.21.121              |
-                +-----------------------------------------------------------------------+
-                |                                                                       |
-                |  +-----------------------------+  +-----------------------------+     |
-                |  | media services              |  | download services (via VPN) |     |
-                |  | +---------+ +---------+     |  | +-------------+ +---------+ |     |
-                |  | | immich  | |jellyfin |     |  | |transmission | | sonarr  | |     |
-                |  | | :2283   | | :8096   |     |  | |    :9091    | | :8989   | |     |
-                |  | +---------+ +---------+     |  | |  (gluetun)  | +---------+ |     |
-                |  | +---------+ +---------+     |  | +-------------+ +---------+ |     |
-                |  | |audio    | | metube  |     |  | | prowlarr    | | radarr  | |     |
-                |  | |bookshelf| | :8383   |     |  | |    :9696    | | :7878   | |     |
-                |  | | :8081   | +---------+     |  | +-------------+ +---------+ |     |
-                |  | +---------+ +---------+     |  | +---------+ +-------------+ |     |
-                |  | | spotdl  | |jdownldr |     |  | | lidarr  | |   readarr  | |     |
-                |  | | :8800   | | :5800   |     |  | | :8686   | |    :8787   | |     |
-                |  | +---------+ +---------+     |  | +---------+ +-------------+ |     |
-                |  +-----------------------------+  | +---------+ +-------------+ |     |
-                |                                   | | bazarr  | |  unpackerr  | |     |
-                |  +-----------------------------+  | | :6767   | | (no port)   | |     |
-                |  | collaboration               |  | +---------+ +-------------+ |     |
-                |  | +---------+ +-----------+   |  +-----------------------------+     |
-                |  | |hedgedoc | |vaultwarden|   |                                      |
-                |  | | :3000   | |   :8484   |   |  +-----------------------------+     |
-                |  | +---------+ +-----------+   |  | text-to-speech              |     |
-                |  +-----------------------------+  | +---------+ +-------------+ |     |
-                |                                   | |edge-tts | |tts-pipeline | |     |
-                |  +---------------------------+    | | :5050   | |    :5051    | |     |
-                |  | postgresql (vectorchord)  |    | +---------+ +-------------+ |     |
-                |  | :5432 [immich, hedgedoc]  |    +-----------------------------+     |
-                |  +---------------------------+                                        |
-                |                                                                       |
-                |  +---------------------------------------------------------------+    |
-                |  | infrastructure                                                |    |
-                |  | +---------+ +---------+ +-----------+ +------+ +------------+ |    |
-                |  | |tsdproxy | | pihole  | |keepalived | | diun | |   trivy    | |    |
-                |  | | :8085   | | :8053   | | (master)  | |daily | |   :8083    | |    |
-                |  | +---------+ +---------+ +-----------+ +------+ +------------+ |    |
-                |  | +---------+ +-----------+ +-----------+ +------------------+  |    |
-                |  | |cadvisor | |nebula-sync| |flaresolvrr| |  beszel-agent    |  |    |
-                |  | | :9099   | | (hourly)  | |   :8191   | |  (host network)  |  |    |
-                |  | +---------+ +-----------+ +-----------+ +------------------+  |    |
-                |  | +----------+ +------------------+                             |    |
-                |  | | autoheal | | dockerproxy      |                             |    |
-                |  | | (gluetun)| |     :2375        |                             |    |
-                |  | +----------+ +------------------+                             |    |
-                |  +---------------------------------------------------------------+    |
-                |                                                                       |
-                +-----------------------------------------------------------------------+
-                                                   |
-                                                   | nfs + tailscale
-                                                   v
-                +-----------------------------------------------------------------------+
-                |                      amy (Debian) 192.168.21.130                      |
-                +-----------------------------------------------------------------------+
-                |                                                                       |
-                |  +-------------------------------+  +-----------------------------+   |
-                |  | monitoring & notifications    |  | productivity                |   |
-                |  | +---------+ +---------+       |  | +-----------+ +-----------+ |   |
-                |  | |  ntfy   | | beszel  |       |  | |  stirling | | miniflux  | |   |
-                |  | | :8888   | | :8090   |       |  | |   :8080   | |   :8385   | |   |
-                |  | +---------+ +---------+       |  | +-----------+ +-----------+ |   |
-                |  | +---------+ +-----------+     |  | +-----------+ +-----------+ |   |
-                |  | |cadvisor | | netalertx |     |  | |  mealie   | | homepage  | |   |
-                |  | | :9099   | |  :20211   |     |  | |   :8456   | |   :3003   | |   |
-                |  | +---------+ +-----------+     |  | +-----------+ +-----------+ |   |
-                |  | +---------+ +-----------+     |  | +-----------+ +-----------+ |   |
-                |  | |telegraf | |  dozzle   |     |  | |  it-tools | |   atuin   | |   |
-                |  | | (host)  | |  :8182    |     |  | |   :8181   | |   :8777   | |   |
-                |  | +---------+ +-----------+     |  | +-----------+ +-----------+ |   |
-                |  +-------------------------------+  | +-----------+ +-----------+ |   |
-                |                                     | |filebrowser| |   wallos  | |   |
-                |  +-------------------------------+  | |   :8082   | |   :8283   | |   |
-                |  | finance & automation          |  | +-----------+ +-----------+ |   |
-                |  | +----------+ +-----------+    |  | +-----------+ +-----------+ |   |
-                |  | |  money   | |  limdius  |    |  | |   argus   | | lubelogger| |   |
-                |  | |  :9021   | |  :5050    |    |  | |   :8282   | |   :8989   | |   |
-                |  | +----------+ +-----------+    |  | +-----------+ +-----------+ |   |
-                |  +-------------------------------+  +-----------------------------+   |
-                |                                                                       |
-                |  +-------------------------------+  +---------------------------+     |
-                |  | postgres-backup               |  | postgresql                |     |
-                |  | [atuin,miniflux,sss,          |<-| :5432 [atuin,miniflux,sss,|     |
-                |  |   mealie,stirling]            |  |      mealie,stirling]     |     |
-                |  +-------------------------------+  +---------------------------+     |
-                |                                                                       |
-                |  +---------------------------------------------------------------+    |
-                |  | infrastructure                                                |    |
-                |  | +---------+ +---------+ +-----------+ +------+ +------------+ |    |
-                |  | |tsdproxy | | pihole  | |keepalived | | diun | |   trivy    | |    |
-                |  | | :8085   | | :8053   | | (backup)  | |weekly| |   :8083    | |    |
-                |  | +---------+ +---------+ +-----------+ +------+ +------------+ |    |
-                |  +---------------------------------------------------------------+    |
-                |                                                                       |
-                +-----------------------------------------------------------------------+
+                    internet
+                        │
+                        ▼
+              ┌───────────────────┐
+              │        fry        │   OPNsense router and firewall
+              │    10.30.0.1      │   DNS NAT forces clients to the pihole VIP
+              └─────────┬─────────┘
+                        │
+              ┌─────────┴─────────┐
+              │        nod        │   Cisco Catalyst 3750X
+              └─────────┬─────────┘   config backed up hourly by oxidized
+                        │
+   ───────────┬─────────┴──────────┬──────────────┬────────────────
+              │                    │              │
+              ▼                    ▼              ▼
+      ┌───────────────┐    ┌──────────────┐  ┌──────────────┐
+      │    bender     │    │     amy      │  │  farnsworth  │
+      │  10.30.0.12   │    │  10.30.0.11  │  │  10.30.0.21  │
+      │  TrueNAS      │    │  Debian      │  │  Proxmox     │
+      │  MicroServer  │    │  i3-2310M    │  │              │
+      │  Gen8         │    │  16 GB       │  │  Home Asst.  │
+      │               │    │              │  │  10.30.0.41  │
+      └───────────────┘    └──────────────┘  └──────────────┘
+              │                    │
+              └────── keepalived ──┘
+                  VIP 10.30.0.2
+            bender MASTER, amy BACKUP
+              two Pi-hole instances
 ```
 
----
+Segments are one VLAN per third octet:
 
-## quick links
-
-| host | documentation | docker compose | scripts |
-|------|---------------|----------------|---------|
-| **bender** | [docs](bender/docs/) | [docker-compose.yaml](bender/docker-compose.yaml) | [scripts](bender/scripts/) |
-| **amy** | [docs](amy/docs/) | [docker-compose.yaml](amy/docker-compose.yaml) | [scripts](amy/scripts/) |
-
----
-
-## infrastructure overview
-
-### host roles
-
-| host | hardware | ip address | role |
-|------|----------|------------|------|
-| **bender** | TrueNAS Scale (HP MicroServer Gen8, Xeon E3-1265L V2) | 192.168.21.121 | media services, downloads, TTS, primary storage |
-| **amy** | Intel i3-2310M, 16GB | 192.168.21.130 | utilities, monitoring, notifications |
-
-### shared services
-
-| service | vip | primary | backup |
-|---------|-----|---------|--------|
-| **pihole DNS** | 192.168.21.100 | bender (priority 200) | amy (priority 100) |
+| VLAN | network | purpose |
+|------|---------|---------|
+| 10 | 10.10.0.0/23 | HOUSE |
+| 20 | 10.20.0.0/28 | SMART_TV |
+| 30 | 10.30.0.0/24 | INFRASTRUCTURE |
+| 40 | 10.40.0.0/24 | IOT |
+| 50 | 10.50.0.0/16 | KUBERNETES |
+| 60 | 10.60.0.0/24 | PXE |
+| 70 | 10.70.0.0/24 | VOIP |
+| 80 | 10.80.0.0/24 | GUEST_UNTRUSTED |
+| 90 | 10.90.0.0/24 | GUEST_TRUSTED |
+| 100 | 10.100.0.0/24 | VPN (WireGuard) |
 
 ---
 
-## repository structure
+## the two hosts
 
-```
-                .
-                ├── README.md
-                ├── docs/
-                │   ├── PIHOLE-DNS-AUTO-POPULATION.md
-                │   └── TTS-PIPELINE.md
-                ├── bender/
-                │   ├── .env.example
-                │   ├── .env.gpg
-                │   ├── docker-compose.yaml
-                │   ├── configs/
-                │   │   ├── keepalived/keepalived.conf
-                │   │   ├── tts-pipeline/
-                │   │   │   ├── Dockerfile
-                │   │   │   ├── pipeline.sh
-                │   │   │   ├── webapp.py
-                │   │   │   ├── start.sh
-                │   │   │   ├── preprocess.py
-                │   │   │   └── patch_epub2tts.py
-                │   │   ├── epub2tts-edge/
-                │   │   │   ├── Dockerfile
-                │   │   │   └── patch_epub2tts.py
-                │   │   └── transmission/
-                │   │       └── Dockerfile
-                │   ├── docs/
-                │   └── scripts/
-                │       └── pihole-dns-update.sh
-                └── amy/
-                    ├── .env.example
-                    ├── .env.gpg
-                    ├── docker-compose.yaml
-                    ├── configs/
-                    │   ├── keepalived/keepalived.conf
-                    │   └── telegraf/telegraf.conf
-                    ├── docs/
-                    └── scripts/
-```
+### bender, 10.30.0.12
+
+TrueNAS Scale on an HP MicroServer Gen8, Xeon E3-1265L V2. Data lives on a
+ZFS pool at `/mnt/BIG/filme`.
+
+42 services defined, 41 running. Media serving, downloads behind a VPN
+namespace, photo management, a git forge, calendar and tasks, audiobook
+generation, time-series storage, and AMT management.
+
+It is also the write path for this repository. See below.
+
+### amy, 10.30.0.11
+
+Debian on an Intel i3-2310M with 16 GB. Data lives at `/docker`.
+
+31 services defined, 25 running. Six are parked with
+`profiles: ["parked"]` and start on demand only. Utilities, notifications,
+network config backup, monitoring, and the second Pi-hole.
+
+Amy is also bender's replica target. A nightly rsync places bender's
+configs and database dumps at `/docker/backups/bender-replica`, with seven
+days of hardlink rotation.
 
 ---
 
-## services summary
+## how configuration reaches this repository
 
-### bender services (36 containers)
+**forgejo is the only write target.** It runs on bender and mirrors to
+GitHub on every push. Nothing pushes to GitHub directly.
 
-| category | services |
-|----------|----------|
-| **media** | immich_server, immich_machine_learning, immich_redis, jellyfin, audiobookshelf, metube, spotdl |
-| **downloads** | gluetun (VPN), transmission, sonarr, radarr, prowlarr, bazarr, lidarr, readarr, unpackerr, jdownloader, flaresolverr |
-| **collaboration** | hedgedoc, vaultwarden, syncthing |
-| **text-to-speech** | edge-tts, tts-pipeline |
-| **databases** | postgresql, postgres-backup |
-| **dns & ha** | pihole, keepalived, nebula-sync |
-| **infrastructure** | tsdproxy, dockwatch, dockerproxy, autoheal |
-| **monitoring** | beszel-agent, cadvisor |
-| **updates** | diun, trivy |
+**bender is the only committer.** It collects amy's files over SSH, so the
+repository is complete regardless of which host changed. That removes git
+divergence, two clones to keep in step, and any need for amy to reach
+bender.
 
-### amy services (29 containers)
+**the working clone is neutral.** It lives at
+`/mnt/BIG/filme/git/futurama-docker`, outside both hosts' live directories.
+Those directories hold dozens of dated backups, a venv, scan reports and
+update state. A git working tree rooted there means fighting `.gitignore`
+forever, and it is why an earlier clone drifted for six months.
 
-| category | services |
-|----------|----------|
-| **monitoring** | ntfy, beszel, beszel-agent, cadvisor, netalertx, telegraf, dozzle |
-| **productivity** | stirling-pdf, miniflux, mealie, homepage, it-tools, atuin, filebrowser, wallos, argus |
-| **finance & automation** | spendspentspent, lubelogger, limdius, playwright-chrome |
-| **databases** | postgresql, postgres-backup, valkey |
-| **dns & ha** | pihole, keepalived |
-| **infrastructure** | tsdproxy, dockwatch |
-| **updates** | diun, trivy |
-
----
-
-## quick start
+One command performs a sync:
 
 ```bash
-# clone
-git clone git@github.com:om1d3/futurama-docker.git
-cd futurama-docker
-
-# decrypt secrets
-cd bender && gpg --decrypt --output .env .env.gpg && cd ..
-cd amy && gpg --decrypt --output .env .env.gpg && cd ..
-
-# deploy to bender
-scp bender/docker-compose.yaml bender/.env root@192.168.21.121:/mnt/BIG/filme/docker-compose/
-
-# deploy to amy
-scp amy/docker-compose.yaml amy/.env root@192.168.21.130:/docker-compose/
-
-# start services
-ssh root@192.168.21.121 'cd /mnt/BIG/filme/docker-compose && docker compose up -d'
-ssh root@192.168.21.130 'cd /docker-compose && docker compose up -d'
+/root/futurama-sync.sh "bender: what changed"
 ```
 
----
+It pulls, encrypts each host's secrets locally, copies an explicit manifest
+of files into the clone, then commits and pushes. Two gates run before the
+commit: it aborts if more than ten deletions are staged, and it aborts if
+any plaintext secret reaches the index.
 
-## documentation
-
-### shared documentation
-
-| document | description |
-|----------|-------------|
-| [PIHOLE-DNS-AUTO-POPULATION.md](docs/PIHOLE-DNS-AUTO-POPULATION.md) | automatic DNS record population for docker services |
-| [TTS-PIPELINE.md](docs/TTS-PIPELINE.md) | automated PDF/EPUB to audiobook conversion pipeline |
-
-### host-specific documentation
-
-| bender | amy |
-|--------|-----|
-| [01-ARCHITECTURE.md](bender/docs/01-ARCHITECTURE.md) | [01-ARCHITECTURE.md](amy/docs/01-ARCHITECTURE.md) |
-| [02-SERVICES-CATALOG.md](bender/docs/02-SERVICES-CATALOG.md) | [02-SERVICES-CATALOG.md](amy/docs/02-SERVICES-CATALOG.md) |
-| [03-DIRECTORY-STRUCTURE.md](bender/docs/03-DIRECTORY-STRUCTURE.md) | [03-DIRECTORY-STRUCTURE.md](amy/docs/03-DIRECTORY-STRUCTURE.md) |
-| [04-SECURE-UPDATES.md](bender/docs/04-SECURE-UPDATES.md) | [04-SECURE-UPDATES.md](amy/docs/04-SECURE-UPDATES.md) |
-| [05-ENV-REFERENCE.md](bender/docs/05-ENV-REFERENCE.md) | [05-ENV-REFERENCE.md](amy/docs/05-ENV-REFERENCE.md) |
-| [06-BENEFITS-TRADEOFFS.md](bender/docs/06-BENEFITS-TRADEOFFS.md) | [06-BENEFITS-TRADEOFFS.md](amy/docs/06-BENEFITS-TRADEOFFS.md) |
-| [07-MAINTENANCE.md](bender/docs/07-MAINTENANCE.md) | [07-MAINTENANCE.md](amy/docs/07-MAINTENANCE.md) |
-| [08-TROUBLESHOOTING.md](bender/docs/08-TROUBLESHOOTING.md) | [08-TROUBLESHOOTING.md](amy/docs/08-TROUBLESHOOTING.md) |
+Run it with `--dry-run` first to see the staged list without committing.
 
 ---
 
-## automatic DNS resolution
+## secrets
 
-all services with `tsdproxy.enable: "true"` labels automatically get DNS entries in pi-hole. a cron job on bender scans running containers every 5 minutes and updates pi-hole's configuration.
+**Plaintext never leaves the host that owns it.** Each host encrypts its own
+secrets with `encrypt-secrets.sh`, and only the `.gpg` files are copied.
 
-| feature | value |
-|---------|-------|
-| **domain suffix** | `home.arpa` |
-| **scan interval** | every 5 minutes |
-| **replication** | nebula-sync to amy (hourly) |
-| **script location** | `/root/pihole-dns-update.sh` on bender |
+Encryption is symmetric GPG with AES256. That choice is deliberate. This
+repository exists to survive the loss of the whole infrastructure, and a key
+pair stored on that infrastructure would die with it. A passphrase kept
+outside the house survives.
 
-### example DNS names
+| encrypted | host |
+|-----------|------|
+| `.env.gpg` | both |
+| `configs/keepalived/keepalived.conf.gpg` | both |
+| `configs/tsdproxy/tsdproxy.yaml.gpg` | both |
+| `configs/oxidized/config.gpg` | amy |
+| `configs/oxidized/router.db.gpg` | amy |
 
-| bender services | amy services |
-|-----------------|--------------|
-| photo.home.arpa | ntfy.home.arpa |
-| media.home.arpa | beszel.home.arpa |
-| books.home.arpa | home.home.arpa |
-| pad.home.arpa | mealie.home.arpa |
-| sync.home.arpa | rss.home.arpa |
-| transmission.home.arpa | money.home.arpa |
-| tts.home.arpa | logs.home.arpa |
+To read one:
 
-see [PIHOLE-DNS-AUTO-POPULATION.md](docs/PIHOLE-DNS-AUTO-POPULATION.md) for implementation details.
-
----
-
-## key design decisions
-
-| decision | rationale |
-|----------|-----------|
-| **two-host split** | failure isolation, TrueNAS upgrade immunity |
-| **pihole HA** | zero-downtime DNS with keepalived VRRP |
-| **automatic DNS** | containers get `*.home.arpa` entries automatically |
-| **local ntfy** | notifications work without internet |
-| **security-first updates** | trivy scanning before deployment |
-| **shared postgresql per host** | ram efficiency, centralized backup |
-| **centralized VPN** | gluetun provides single OpenVPN tunnel for all download/ARR services |
-| **cadvisor resource limits** | 97% CPU reduction with `--docker_only` and disabled unused metrics |
-| **autoheal for VPN** | auto-restarts gluetun on stale VPN sessions, prevents silent download failures |
-| **cloud TTS** | edge-tts uses free Microsoft neural voices — no GPU needed, better quality than local Piper |
-| **pre-baked Flood UI** | custom Transmission build eliminates linuxserver mod download on every restart |
-
----
-
-## monitoring pipeline
-
-```
-bender cadvisor ──┐
-  :9099           │     prometheus        grafana
-                  ├──►  :9090       ──►  (HA add-on)
-amy cadvisor ─────┘     (HA VM)          2 dashboards
-  :9099                 192.168.21.220
+```bash
+gpg --decrypt bender/.env.gpg
 ```
 
-each host has a dedicated grafana dashboard with the `instance` variable set to Constant type:
-
-| dashboard | instance value |
-|-----------|---------------|
-| amy docker | `192.168.21.130:9099` |
-| bender docker | `192.168.21.121:9099` |
-
-amy's telegraf also monitors the cisco 3750x switch and brother printer via SNMP → influxdb → grafana on the same HA VM.
+**The passphrase is not stored here, and must exist outside the house.** In
+a password manager you do not self-host, or on paper. Without it, every
+`.gpg` file in this repository is unreadable, and the disaster-recovery
+purpose is lost.
 
 ---
 
-## update schedule
+## where to start reading
 
-| host | weekly scan | daily retry |
-|------|-------------|-------------|
-| **bender** | saturday 04:30 | sunday–friday 04:30 |
-| **amy** | wednesday 04:30 | all days except wednesday 04:30 |
+**Something is broken.** Go to `<host>/docs/08-TROUBLESHOOTING.md`. It is
+organised by symptom and ends with a historical fixes table.
 
----
+**Rebuilding a host.** Read `03-DIRECTORY-STRUCTURE.md`, then
+`05-ENV-REFERENCE.md`, then `02-SERVICES-CATALOG.md`.
 
-## backup strategy
+**Adding a service.** `02-SERVICES-CATALOG.md` for the conventions, then
+`07-MAINTENANCE.md` for the version bump ritual.
 
-| data | location | method | retention |
-|------|----------|--------|-----------|
-| **bender postgresql** | `/mnt/BIG/filme/backups/postgres` | postgres-backup (daily) | 7d / 4w / 6m |
-| **amy postgresql** | `/docker/postgres-backup` | postgres-backup (daily) | 7d / 4w / 6m |
-| **configuration** | this repository | git | unlimited |
-| **secrets** | `*.env.gpg` files | GPG encrypted in repo | with git history |
-| **media libraries** | `/mnt/BIG/filme/` | ZFS snapshots | as needed |
+**Wondering why something is the way it is.** `06-BENEFITS-TRADEOFFS.md`
+records decisions and their known costs.
+
+Each host's `docs/README.md` is a full index.
 
 ---
 
-## service urls
+## conventions
 
-### bender services (192.168.21.121)
+**Every change to a compose file gets a version and a changelog entry**,
+however small. The entry records what changed, why, and any REQUIRED steps.
+Two pins were once applied by hand without an entry, and the resulting gap
+is the reason the rule exists.
 
-| service | tsdproxy name | LAN url | tailscale url |
-|---------|---------------|---------|---------------|
-| immich | photo | http://photo.home.arpa:2283 | https://photo.bunny-enigmatic.ts.net |
-| jellyfin | media | http://media.home.arpa:8096 | https://media.bunny-enigmatic.ts.net |
-| audiobookshelf | books | http://books.home.arpa:8081 | https://books.bunny-enigmatic.ts.net |
-| transmission | transmission | http://transmission.home.arpa:9091 | https://transmission.bunny-enigmatic.ts.net |
-| hedgedoc | pad | http://pad.home.arpa:3000 | https://pad.bunny-enigmatic.ts.net |
-| vaultwarden | vault | http://vault.home.arpa:8484 | https://vault.bunny-enigmatic.ts.net |
-| syncthing | sync | http://sync.home.arpa:8384 | https://sync.bunny-enigmatic.ts.net |
-| metube | metube | http://metube.home.arpa:8383 | https://metube.bunny-enigmatic.ts.net |
-| jdownloader | jdown | http://jdown.home.arpa:5800 | https://jdown.bunny-enigmatic.ts.net |
-| spotdl | spotdl | http://spotdl.home.arpa:8800 | https://spotdl.bunny-enigmatic.ts.net |
-| tts-pipeline | tts | http://tts.home.arpa:5051 | https://tts.bunny-enigmatic.ts.net |
-| prowlarr | prowlarr | http://prowlarr.home.arpa:9696 | https://prowlarr.bunny-enigmatic.ts.net |
-| sonarr | sonarr | http://sonarr.home.arpa:8989 | https://sonarr.bunny-enigmatic.ts.net |
-| radarr | radarr | http://radarr.home.arpa:7878 | https://radarr.bunny-enigmatic.ts.net |
-| lidarr | lidarr | http://lidarr.home.arpa:8686 | https://lidarr.bunny-enigmatic.ts.net |
-| readarr | readarr | http://readarr.home.arpa:8787 | https://readarr.bunny-enigmatic.ts.net |
-| bazarr | bazarr | http://bazarr.home.arpa:6767 | https://bazarr.bunny-enigmatic.ts.net |
-| pihole | pihole-bender | http://pihole-bender.home.arpa:8053 | https://pihole-bender.bunny-enigmatic.ts.net |
-| cadvisor | bender-cadvisor | http://bender-cadvisor.home.arpa:9099 | https://bender-cadvisor.bunny-enigmatic.ts.net |
-| dockwatch | bender-dockwatch | http://bender-dockwatch.home.arpa:9999 | https://bender-dockwatch.bunny-enigmatic.ts.net |
+**Ports and tsdproxy names marked LOCKED do not change.** Other things
+depend on them: DNS records generated from the labels, and clients
+configured against the resulting names.
 
-### amy services (192.168.21.130)
+**Images are pinned when an unpinned tag has caused an outage.** Prefer a
+digest over a tag. See each host's `04-SECURE-UPDATES.md` for the current
+list and the reason behind each pin.
 
-| service | tsdproxy name | LAN url | tailscale url |
-|---------|---------------|---------|---------------|
-| ntfy | ntfy | http://ntfy.home.arpa:8888 | https://ntfy.bunny-enigmatic.ts.net |
-| beszel | beszel | http://beszel.home.arpa:8090 | https://beszel.bunny-enigmatic.ts.net |
-| stirling-pdf | pdf | http://pdf.home.arpa:8080 | https://pdf.bunny-enigmatic.ts.net |
-| homepage | home | http://home.home.arpa:3003 | https://home.bunny-enigmatic.ts.net |
-| miniflux | rss | http://rss.home.arpa:8385 | https://rss.bunny-enigmatic.ts.net |
-| mealie | mealie | http://mealie.home.arpa:8456 | https://mealie.bunny-enigmatic.ts.net |
-| atuin | atuin | http://atuin.home.arpa:8777 | https://atuin.bunny-enigmatic.ts.net |
-| it-tools | it-tools | http://it-tools.home.arpa:8181 | https://it-tools.bunny-enigmatic.ts.net |
-| filebrowser | files | http://files.home.arpa:8082 | https://files.bunny-enigmatic.ts.net |
-| wallos | wallos | http://wallos.home.arpa:8283 | https://wallos.bunny-enigmatic.ts.net |
-| argus | argus | http://argus.home.arpa:8282 | https://argus.bunny-enigmatic.ts.net |
-| lubelogger | lube | http://lube.home.arpa:8989 | https://lube.bunny-enigmatic.ts.net |
-| spendspentspent | money | http://money.home.arpa:9021 | https://money.bunny-enigmatic.ts.net |
-| limdius | limdius | http://limdius.home.arpa:5050 | https://limdius.bunny-enigmatic.ts.net |
-| cadvisor | cadvisor | http://cadvisor.home.arpa:9099 | https://cadvisor.bunny-enigmatic.ts.net |
-| netalertx | netalertx | http://netalertx.home.arpa:20211 | https://netalertx.bunny-enigmatic.ts.net |
-| dozzle | logs | http://logs.home.arpa:8182 | https://logs.bunny-enigmatic.ts.net |
-| pihole | pihole-amy | http://pihole-amy.home.arpa:8053 | https://pihole-amy.bunny-enigmatic.ts.net |
-| dockwatch | amy-dockwatch | http://amy-dockwatch.home.arpa:9999 | https://amy-dockwatch.bunny-enigmatic.ts.net |
+**Verify configuration from the process that consumes it**, not from the
+file you edited. Four separate faults in this infrastructure came from a
+plausible configuration file that nothing read.
 
 ---
 
-## version history
+## topic documents
 
-| date | bender | amy | changes |
-|------|--------|-----|---------|
-| 2026-02-20 | v109 | v99 | TTS multi-voice web UI, atuin command fix |
-| 2026-02-18 | v108 | v99 | edge-tts + tts-pipeline, custom Transmission build with pre-baked Flood UI |
-| 2026-02-12 | v107 | v99 | Transmission queue/cache/peer limits, intel_iommu fix |
-| 2026-02-12 | v106 | v99 | autoheal for gluetun, IP-based VPN healthcheck |
-| 2026-02-11 | v105 | v99 | atuin command fix (upstream binary change) |
-| 2026-02-07 | v105 | v98 | cadvisor on both hosts, telegraf consolidated, jellyfin tvshows fix |
-| 2026-02-06 | v104 | v97 | gluetun OpenVPN, stirling DPI fix |
-| 2026-01-25 | v103 | v96 | transmission 4.0.5 pinned, qBittorrent reverted |
-| 2026-01-22 | v97 | v96 | gluetun VPN for ARR stack, jellyfin image fix |
-| 2026-01-20 | v96 | v96 | verification comments, service fixes synced |
-| 2026-01-19 | v93 | v93 | DNS anchors, vaultwarden migrated to bender |
-| 2026-01-10 | v86 | v85 | secure update system, full documentation |
-
----
-
-## license
-
-private infrastructure documentation.
+| document | covers |
+|----------|--------|
+| [PIHOLE-DNS-AUTO-POPULATION](./docs/PIHOLE-DNS-AUTO-POPULATION.md) | how `*.home.arpa` names are generated from container labels |
+| [AUDIOBOOK-FOUNDRY](./docs/AUDIOBOOK-FOUNDRY.md) | the ebook to audiobook subsystem |

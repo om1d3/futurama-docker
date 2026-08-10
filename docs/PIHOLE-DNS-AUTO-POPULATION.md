@@ -1,448 +1,196 @@
-# pihole DNS auto-population
+# Pi-hole DNS auto-population
 
-## automatic DNS record population for docker services
+**document version:** 5.0
+**script version:** pihole-dns-update.sh 3.2
+**last updated:** august 2026
 
-**document version:** 3.0
-**infrastructure version:** bender v109 / amy v99
-**last updated:** february 2026
-
----
-
-## table of contents
-
-1. [overview](#overview)
-2. [infrastructure](#infrastructure)
-3. [problem statement](#problem-statement)
-4. [solution architecture](#solution-architecture)
-5. [how it works](#how-it-works)
-6. [DNS entries generated](#dns-entries-generated)
-7. [the script](#the-script)
-8. [installation](#installation)
-9. [testing](#testing)
-10. [troubleshooting](#troubleshooting)
-11. [thought process and failed approaches](#thought-process-and-failed-approaches)
-12. [TrueNAS limitations](#truenas-limitations)
-13. [security considerations](#security-considerations)
-14. [limitations and future improvements](#limitations-and-future-improvements)
+Every service reachable through tsdproxy also gets a `*.home.arpa` name on
+the LAN, generated automatically from container labels. This document
+explains how, and what breaks it.
 
 ---
 
-## overview
+## the problem it solves
 
-the pihole-dns-update.sh script automatically creates local DNS records for all docker containers that have tsdproxy labels enabled. it scans running containers on both bender and amy, extracts their `tsdproxy.name` labels, and updates pihole's configuration so that each service is accessible via `<name>.home.arpa` on the local network.
+tsdproxy gives each labelled container a tailnet name, such as
+`media.bunny-enigmatic.ts.net`. That works from anywhere on the tailnet, but
+it routes through Tailscale even when the client and the server sit on the
+same LAN.
 
-the script runs every 5 minutes via cron on bender. changes are replicated to amy's pihole automatically via nebula-sync (hourly).
+Maintaining a parallel set of LAN names by hand would mean editing DNS every
+time a service is added, renamed, or moved between hosts. That drifts.
 
----
-
-## infrastructure
-
-| component | details |
-|-----------|---------|
-| **bender** | 192.168.21.121 — TrueNAS Scale, 36 containers (v109) |
-| **amy** | 192.168.21.130 — Debian 13, 29 containers (v99) |
-| **pihole VIP** | 192.168.21.100 — keepalived VRRP failover |
-| **domain suffix** | `home.arpa` |
-| **script location** | `/root/pihole-dns-update.sh` on bender (executable) |
-| **reference copy** | `/mnt/BIG/filme/docker-compose/scripts/pihole-dns-update.sh` |
-| **cron schedule** | `*/5 * * * *` |
-| **pihole version** | v6 (TOML-based configuration) |
-
----
-
-## problem statement
-
-with 65 containers across two hosts, many exposing web interfaces via tsdproxy, manually maintaining DNS records is error-prone and tedious. every time a container is added, removed, or renamed, the DNS configuration needs updating.
-
-the goal: automatically generate `*.home.arpa` DNS entries for every container that has `tsdproxy.enable: "true"`, so services are immediately accessible by name on the local network.
-
----
-
-## solution architecture
-
-```
-bender cron (every 5 min)
-   |
-   v
-pihole-dns-update.sh
-   |
-   +-- scan bender containers (local docker API)
-   |   extract tsdproxy.name labels
-   |
-   +-- scan amy containers (SSH → docker API)
-   |   extract tsdproxy.name labels
-   |
-   +-- build hosts array
-   |   add static entries (homeassistant)
-   |   add bender entries (192.168.21.121)
-   |   add amy entries (192.168.21.130)
-   |
-   +-- compare md5 hash with previous state
-   |
-   +-- if changed:
-       +-- backup pihole.toml
-       +-- replace hosts array in pihole.toml via awk
-       +-- chown to pihole user (UID 1000)
-       +-- restart pihole container
-       +-- save new hash to state file
-   |
-   v
-nebula-sync (hourly)
-   |
-   +-- replicates pihole.toml from bender to amy
-   +-- runs gravity update on amy
-```
+So the labels become the single source of truth. A service is labelled once,
+in the compose file, and its LAN name follows.
 
 ---
 
 ## how it works
 
-### step 1: scan containers
+`pihole-dns-update.sh` runs on bender. It:
 
-the script queries Docker on both hosts to find containers with `tsdproxy.enable: "true"`:
+1. Inspects every running container on bender for two labels,
+   `tsdproxy.enable` and `tsdproxy.name`
+2. Does the same on amy over SSH, as `kube@10.30.0.11`
+3. Keeps only containers where `tsdproxy.enable` is `true`
+4. Writes each `tsdproxy.name` as an A record for `<name>.home.arpa`, pointing
+   at the host that runs it
+5. Writes those records into Pi-hole's configuration
 
-- **bender (local):** `docker ps -q | xargs docker inspect` — extracts `tsdproxy.enable` and `tsdproxy.name` labels
-- **amy (remote):** same command executed via `ssh kube@192.168.21.130` — uses an ed25519 key without passphrase for automated access
+Bender's containers resolve to `10.30.0.12`. Amy's resolve to `10.30.0.11`.
 
-### step 2: build DNS entries
+So a service labelled `tsdproxy.name: "media"` on bender becomes
+`media.home.arpa` at `10.30.0.12`.
 
-for each container with tsdproxy enabled, a DNS entry is created:
+### paths
 
-- bender containers → `192.168.21.121 <name>.home.arpa`
-- amy containers → `192.168.21.130 <name>.home.arpa`
+| item | path |
+|------|------|
+| script | `/mnt/BIG/filme/docker-compose/scripts/pihole-dns-update.sh` |
+| target | `/mnt/BIG/filme/configs/pihole/etc-pihole/pihole.toml` |
+| state | `/mnt/BIG/filme/configs/pihole/etc-pihole/.dns-state` |
 
-static entries (like Home Assistant) are added manually at the top of the hosts list.
+The state file lets the script detect whether anything changed, so it does
+not rewrite `pihole.toml` on every run.
 
-### step 3: change detection
+### schedule
 
-the script calculates an md5 hash of the generated hosts content and compares it to the previous hash stored in a state file. if unchanged, the script exits without modifying anything — no unnecessary pihole restarts.
+Hourly, as a TrueNAS UI cron job.
 
-### step 4: update pihole.toml
+**It must be a UI job, not a crontab entry.** TrueNAS updates preserve
+UI-defined cron jobs. Entries added with `crontab -e` do not survive.
 
-pihole v6 uses a TOML configuration file instead of the traditional `custom.list`. the script uses `awk` to replace the `hosts = [...]` array in pihole.toml, preserving all other configuration.
-
-### step 5: replication
-
-nebula-sync on bender replicates the entire pihole configuration to amy hourly with `FULL_SYNC=true`. amy's pihole picks up the DNS entries automatically.
-
----
-
-## DNS entries generated
-
-### bender entries (192.168.21.121)
-
-| DNS name | tsdproxy.name | service |
-|----------|---------------|---------|
-| bender-proxy.home.arpa | bender-proxy | tsdproxy |
-| bender-dockwatch.home.arpa | bender-dockwatch | dockwatch |
-| pihole-bender.home.arpa | pihole-bender | pihole |
-| photo.home.arpa | photo | immich |
-| media.home.arpa | media | jellyfin |
-| books.home.arpa | books | audiobookshelf |
-| transmission.home.arpa | transmission | transmission |
-| metube.home.arpa | metube | metube |
-| jdown.home.arpa | jdown | jdownloader |
-| spotdl.home.arpa | spotdl | spotdl |
-| pad.home.arpa | pad | hedgedoc |
-| vault.home.arpa | vault | vaultwarden |
-| sync.home.arpa | sync | syncthing |
-| prowlarr.home.arpa | prowlarr | prowlarr |
-| sonarr.home.arpa | sonarr | sonarr |
-| radarr.home.arpa | radarr | radarr |
-| lidarr.home.arpa | lidarr | lidarr |
-| readarr.home.arpa | readarr | readarr |
-| bazarr.home.arpa | bazarr | bazarr |
-| tts.home.arpa | tts | tts-pipeline |
-| bender-cadvisor.home.arpa | bender-cadvisor | cadvisor |
-
-### amy entries (192.168.21.130)
-
-| DNS name | tsdproxy.name | service |
-|----------|---------------|---------|
-| amy-proxy.home.arpa | amy-proxy | tsdproxy |
-| amy-dockwatch.home.arpa | amy-dockwatch | dockwatch |
-| logs.home.arpa | logs | dozzle |
-| pihole-amy.home.arpa | pihole-amy | pihole |
-| ntfy.home.arpa | ntfy | ntfy |
-| pdf.home.arpa | pdf | stirling |
-| home.home.arpa | home | homepage |
-| atuin.home.arpa | atuin | atuin |
-| rss.home.arpa | rss | miniflux |
-| it-tools.home.arpa | it-tools | it-tools |
-| files.home.arpa | files | filebrowser |
-| wallos.home.arpa | wallos | wallos |
-| mealie.home.arpa | mealie | mealie |
-| argus.home.arpa | argus | argus |
-| lube.home.arpa | lube | lubelogger |
-| money.home.arpa | money | spendspentspent |
-| limdius.home.arpa | limdius | limdius |
-| beszel.home.arpa | beszel | beszel |
-| cadvisor.home.arpa | cadvisor | cadvisor |
-| netalertx.home.arpa | netalertx | netalertx |
-
-### static entries
-
-| DNS name | IP | service |
-|----------|-----|---------|
-| homeassistant.horia.wtf | 192.168.21.220 | Home Assistant VM |
+The cadence was every five minutes originally. Hourly is sufficient,
+because a new name is only needed after a deliberate compose change, and
+that change is followed by a manual run anyway.
 
 ---
 
-## the script
+## the manual step after a compose change
 
-the script lives at `/root/pihole-dns-update.sh` on bender (executable) with a reference copy at `/mnt/BIG/filme/docker-compose/scripts/pihole-dns-update.sh`.
+Adding or renaming a tsdproxy label does not create the DNS record
+immediately. Either wait for the next hourly run, or run the script:
 
-see [bender/scripts/pihole-dns-update.sh](../bender/scripts/pihole-dns-update.sh) for the complete source.
+```bash
+bash /mnt/BIG/filme/docker-compose/scripts/pihole-dns-update.sh
+```
 
-### key configuration
+Then confirm:
 
-| variable | value | purpose |
-|----------|-------|---------|
-| `LOCAL_IP` | 192.168.21.121 | bender's IP for DNS entries |
-| `REMOTE_IP` | 192.168.21.130 | amy's IP for DNS entries |
-| `SUFFIX` | home.arpa | domain suffix for all entries |
-| `TOML_FILE` | /mnt/BIG/filme/configs/pihole/etc-pihole/pihole.toml | pihole config file |
-| `STATE_FILE` | /mnt/BIG/filme/configs/pihole/etc-pihole/.dns-state | change detection hash |
+```bash
+dig <newname>.home.arpa @10.30.0.2 +short
+```
+
+This is why `tsdproxy.name` values are marked LOCKED in both compose files.
+Changing one silently invalidates a DNS record that clients may be using.
 
 ---
 
-## installation
+## two settings that make it work
 
-### on bender
+### etc_dnsmasq_d must be enabled
 
-```bash
-# copy script to /root (executable location)
-cp /mnt/BIG/filme/docker-compose/scripts/pihole-dns-update.sh /root/
-chmod +x /root/pihole-dns-update.sh
+Pi-hole reads extra dnsmasq configuration from `/etc/dnsmasq.d` only when
+`pihole.toml` says so. The default is off.
 
-# add cron job (TrueNAS UI: System → Advanced → Cron Jobs)
-# or manually:
-# */5 * * * * /root/pihole-dns-update.sh >> /var/log/pihole-dns-export.log 2>&1
+```
+# in pihole.toml, around line 1501
+etc_dnsmasq_d = true
 ```
 
-### SSH setup for amy access
+This was set by hand. `pihole.toml` is a generated file and is not committed,
+so the setting is recorded here rather than in version control. If Pi-hole
+is ever rebuilt from scratch, set it again.
 
-the script connects to amy as user `kube` (docker group member) via SSH with an ed25519 key:
+### ts-net.conf forwards the tailnet zone
 
-```bash
-# on bender, generate key if not already done
-ssh-keygen -t ed25519 -f /root/.ssh/id_ed25519 -N ""
-
-# copy key to amy
-ssh-copy-id -i /root/.ssh/id_ed25519.pub kube@192.168.21.130
-
-# test (should return a number without prompting for password)
-ssh -o ConnectTimeout=5 -o BatchMode=yes kube@192.168.21.130 "docker ps -q | wc -l"
+```
+# configs/pihole/etc-dnsmasq.d/ts-net.conf
+server=/ts.net/100.100.100.100#53
 ```
 
-### pihole.toml preparation
+One line. It forwards every `*.ts.net` query to Tailscale's MagicDNS
+resolver. Without it, no tailnet name resolves through Pi-hole, so
+`media.bunny-enigmatic.ts.net` fails on the LAN while `media.home.arpa`
+works.
 
-the script expects a `### CHANGED` marker in pihole.toml. on first run, manually add an empty hosts array:
-
-```toml
-  hosts = [
-  ] ### CHANGED, default = []
-```
+This file **is** committed, at
+`bender/configs/pihole/etc-dnsmasq.d/ts-net.conf`.
 
 ---
 
-## testing
+## high availability
 
-### verify script runs correctly
+Two Pi-hole instances run, one per host. keepalived presents a single VIP at
+`10.30.0.2`, with bender as MASTER and amy as BACKUP. fry's DNS NAT rules
+force every client to that VIP regardless of what DNS server the client
+thinks it is using.
 
-```bash
-# run manually and check output
-/root/pihole-dns-update.sh
+`nebula-sync` copies bender's Pi-hole settings to amy hourly, so blocklists
+and settings stay aligned.
 
-# check log
-tail -5 /var/log/pihole-dns-export.log
-
-# verify pihole.toml hosts array
-grep -A 50 "hosts = \[" /mnt/BIG/filme/configs/pihole/etc-pihole/pihole.toml | head -60
-```
-
-### verify DNS resolution
-
-```bash
-# test a bender service
-dig @192.168.21.100 photo.home.arpa +short
-# should return: 192.168.21.121
-
-# test an amy service
-dig @192.168.21.100 ntfy.home.arpa +short
-# should return: 192.168.21.130
-
-# test a new service (tts-pipeline, added in v109)
-dig @192.168.21.100 tts.home.arpa +short
-# should return: 192.168.21.121
-
-# test static entry
-dig @192.168.21.100 homeassistant.horia.wtf +short
-# should return: 192.168.21.220
-```
-
-### verify state file
-
-```bash
-cat /mnt/BIG/filme/configs/pihole/etc-pihole/.dns-state
-# should show an md5 hash
-```
-
-### verify replication to amy
-
-```bash
-# check amy's pihole has the same hosts
-ssh kube@192.168.21.130 "docker exec pihole grep -c 'home.arpa' /etc/pihole/pihole.toml"
-```
+Note the asymmetry. The DNS records are generated on bender and written to
+bender's `pihole.toml`. nebula-sync then propagates them. So amy is a
+replica of bender's configuration, not an independent generator.
 
 ---
 
 ## troubleshooting
 
-### DNS entries not appearing
+### a name does not resolve
 
 ```bash
-# check if script ran recently
-tail -10 /var/log/pihole-dns-export.log
-
-# run manually to see errors
-/root/pihole-dns-update.sh
-
-# check if SSH to amy works
-ssh -o ConnectTimeout=5 -o BatchMode=yes kube@192.168.21.130 "echo OK"
-
-# check pihole.toml is writable
-ls -la /mnt/BIG/filme/configs/pihole/etc-pihole/pihole.toml
+dig <name>.home.arpa @10.30.0.2 +short
+dig <name>.home.arpa @10.30.0.12 +short   # bender directly
+dig <name>.home.arpa @10.30.0.11 +short   # amy directly
 ```
 
-### entries for amy containers missing
+If bender answers and amy does not, nebula-sync has not run yet. If neither
+answers, the record was never generated. Run the script by hand and read its
+output.
+
+### the label is present but no record appears
+
+Check that the container is actually running. The script inspects running
+containers only, so a stopped or parked service produces no record.
 
 ```bash
-# test SSH access from bender
-ssh -o ConnectTimeout=5 -o BatchMode=yes kube@192.168.21.130 "docker ps -q | wc -l"
-
-# if SSH fails:
-# 1. check kube user exists on amy: ssh root@192.168.21.130 'id kube'
-# 2. check kube is in docker group: ssh root@192.168.21.130 'groups kube'
-# 3. check authorized_keys: ssh root@192.168.21.130 'cat /home/kube/.ssh/authorized_keys'
+docker inspect <container> --format '{{index .Config.Labels "tsdproxy.enable"}} {{index .Config.Labels "tsdproxy.name"}}'
 ```
 
-### pihole not restarting after update
+Both values must be present, and the first must be exactly `true`.
+
+### the script cannot reach amy
+
+It authenticates as `kube@10.30.0.11`, which is a different credential from
+the `root@10.30.0.11` used by `futurama-sync.sh` and `bender-replicate.sh`.
 
 ```bash
-# check if pihole container is running
-docker ps | grep pihole
-
-# manual restart
-docker restart pihole
-
-# check pihole.toml is valid
-docker logs pihole --tail 10
+ssh -o BatchMode=yes kube@10.30.0.11 true && echo OK
 ```
 
-### state file stale (script runs but doesn't update)
+If that fails, bender still generates its own records. Amy's simply go
+missing, which looks like a partial outage.
 
-```bash
-# delete state file to force an update
-rm /mnt/BIG/filme/configs/pihole/etc-pihole/.dns-state
+### a tailnet name fails while the LAN name works
 
-# run script
-/root/pihole-dns-update.sh
-
-# verify
-tail -3 /var/log/pihole-dns-export.log
-```
+That is the `ts-net.conf` forwarder, not this script. Confirm the file exists
+and that `etc_dnsmasq_d = true` in `pihole.toml`.
 
 ---
 
-## thought process and failed approaches
+## known gaps
 
-### approach 1: custom.list (failed)
+**Parked services keep no record.** The six services parked on amy have no
+containers, so no records are generated. Their `home.arpa` names disappear
+until they are started. That is correct behaviour, but it can look like a
+fault.
 
-pihole traditionally used `/etc/pihole/custom.list` for local DNS. this was the first approach tried:
+**pihole.toml is not version controlled.** It is a large generated file
+containing state. So the two manual settings documented above exist only
+here. That is a deliberate trade, and it is the reason this document names
+them explicitly.
 
-```
-192.168.21.121  photo.home.arpa
-192.168.21.121  media.home.arpa
-```
-
-**why it failed:** pihole v6 ignores the custom.list file entirely. all configuration moved to pihole.toml.
-
-### approach 2: pihole API (failed)
-
-pihole v6 has an API, so the next attempt was to use `curl` to add DNS records via the API:
-
-```bash
-curl -X POST http://localhost:8053/api/dns/local \
-  -H "Authorization: ..." \
-  -d '{"domain":"photo.home.arpa","ip":"192.168.21.121"}'
-```
-
-**why it failed:** at the time of implementation, pihole v6's local DNS API endpoints were not yet available or documented. the API returned 404 for DNS-related endpoints.
-
-### approach 3: pihole.toml hosts array (success)
-
-the working approach directly modifies the `[dns]` section's `hosts` array in pihole.toml using `awk`. this is the file pihole v6 actually reads for local DNS configuration.
-
-the key insight was discovering that pihole.toml uses a TOML array format:
-
-```toml
-[dns]
-  hosts = [
-    "192.168.21.121 photo.home.arpa",
-    "192.168.21.130 ntfy.home.arpa"
-  ] ### CHANGED, default = []
-```
-
-the `### CHANGED` marker is used by the awk script to identify the end of the hosts array for replacement.
-
----
-
-## TrueNAS limitations
-
-### script execution
-
-TrueNAS cannot execute scripts from `/mnt/` paths. the pihole-dns-update.sh script must live at `/root/pihole-dns-update.sh` (which is on the boot drive, not the ZFS pool).
-
-a reference copy is kept at `/mnt/BIG/filme/docker-compose/scripts/pihole-dns-update.sh` for version control (pushed to the git repo), but this copy is not directly executable.
-
-### file ownership
-
-pihole.toml must be owned by UID 1000 (the pihole container user). the script runs `chown 1000:1000` after updating the file. if the ownership is wrong, pihole may fail to read its configuration.
-
----
-
-## security considerations
-
-- **SSH key authentication**: uses ed25519 key without passphrase for automated access from bender to amy
-- **non-root SSH**: connects to amy as `kube` user (docker group member) instead of root
-- **file permissions**: pihole.toml owned by UID 1000 (pihole container user)
-- **backup before changes**: script creates `.bak` file before modifying pihole.toml
-- **change detection**: md5 hash prevents unnecessary modifications and pihole restarts
-
----
-
-## limitations and future improvements
-
-### current limitations
-
-1. **5-minute delay**: new containers won't have DNS entries for up to 5 minutes
-2. **requires container restart**: pihole must restart to load new entries (~2 seconds)
-3. **SSH dependency**: amy must be reachable via SSH for its entries to be included
-4. **manual entries require script edit**: static DNS entries (like Home Assistant) must be added to the script's `hosts_lines` variable
-5. **hourly replication**: amy's pihole can be up to 1 hour behind bender's after a DNS change (nebula-sync is hourly)
-
-### future improvements
-
-- add ntfy notification when DNS entries change
-- implement retry logic if amy is temporarily unreachable
-- add validation of generated TOML before applying
-- consider using pihole v6 API when local DNS endpoints become fully available
-- reduce nebula-sync interval for faster replication of DNS changes
-
----
-
-*related documentation:*
-- *[bender/docs/01-ARCHITECTURE.md](../bender/docs/01-ARCHITECTURE.md) — network and DNS configuration*
-- *[bender/scripts/pihole-dns-update.sh](../bender/scripts/pihole-dns-update.sh) — the script source*
-- *[amy/docs/01-ARCHITECTURE.md](../amy/docs/01-ARCHITECTURE.md) — amy's pihole and keepalived setup*
+**A rename leaves no forwarding.** Changing a `tsdproxy.name` creates the
+new record and removes the old one. Any client or bookmark using the old
+name simply breaks. Hence the LOCKED convention.
