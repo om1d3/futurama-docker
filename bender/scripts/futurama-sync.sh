@@ -72,7 +72,7 @@ LOCK="/tmp/futurama-sync.lock"
 
 # Abort if staging would delete more than this many files. Guards against a
 # half-failed copy wiping a host's tree out of the repository.
-MAX_DELETIONS=10
+MAX_DELETIONS=250
 
 # ---------- manifests ----------
 # Format: "source|destination-relative-to-repo"
@@ -143,6 +143,8 @@ AMY_GPG=(
 # Patterns never copied, even from inside a mirrored directory.
 RSYNC_EXCLUDES=(
   --exclude='.env'
+  --exclude='secure-update/'
+  --exclude='homepage/config/'
   --exclude='keepalived.conf'
   --exclude='router.db'
   --exclude='*.backup'
