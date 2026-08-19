@@ -1,6 +1,6 @@
 # ============================================
 # bender (TrueNAS Scale) - Media & Downloads
-# Version: 20260809 - influxdb TSI index; deployment corrections from the migration
+# Version: 20260818 - unifi network application, on demand behind a profile
 # ============================================
 # Host: TrueNAS Scale (HP MicroServer Gen8)
 # CPU: Intel Xeon E3-1265L V2 (iGPU disabled by HP BIOS)
@@ -331,6 +331,92 @@
 #     from the file you edited. This is the third instance of this fault
 #     class in this infrastructure, after the /portainer tsdproxy decoy on
 #     amy and the InfluxDB add-on data path.
+# 20260818 CHANGES:
+#   - ADDED: unifi-db (MongoDB 7.0) and unifi (UniFi Network Application) -
+#     the controller for the U7 Pro access point. The access point runs at
+#     2.5 Gbps on mom te1/0/20, through a 10Gtek SFP+ RJ45 copper
+#     transceiver. Confirmed from the access point itself:
+#     "ethtool eth0" reports Speed: 2500Mb/s.
+#   - ON DEMAND: both services carry profiles: ["unifi"], therefore a plain
+#     "docker compose up -d" leaves them DOWN. Owner decision: the
+#     controller runs only while Wi-Fi settings are being changed. An
+#     adopted access point keeps serving every SSID while the controller is
+#     off; statistics and the client list are lost, the network is not.
+#     Same mechanism as amy's six parked services (amy 20260810).
+#   - ADDED: scripts/unifi-ctl.sh v1.0 - start, stop, status, and a backup
+#     reminder. It checks available memory, refuses to start if
+#     init-mongo.sh is missing, waits for the web UI, and prints the
+#     inform-host reminder on first start.
+#   - IMAGE: linuxserver/unifi-controller is DEPRECATED and gone. The
+#     maintained image is unifi-network-application, which REQUIRES an
+#     external MongoDB. That is why this is two services and not one.
+#   - PINNED: mongo:7.0. It MUST stay pinned - MongoDB does not support
+#     automatic upgrades between major versions, and an unpinned tag will
+#     refuse to open the data directory after a major bump. Unifi 8.1+
+#     supports mongo 3.6 to 7.0; Unifi 9.0+ also supports 8.0.
+#   - PINNED: unifi-network-application:9.0.114 rather than :latest, per the
+#     policy earned by tsdproxy and oxidized.
+#   - AVX: MongoDB above 4.4 needs AVX on x86_64. bender's E3-1265L V2 is
+#     Ivy Bridge and HAS avx (verified in /proc/cpuinfo, 2026-08-18). It has
+#     no avx2, which mongo does not need. A host without avx is capped at
+#     mongo 4.4. Same class of gate as the G-T48E and SSE4.2.
+#   - WIREDTIGER CACHE CAPPED: command mongod --wiredTigerCacheSizeGB 0.25.
+#     MongoDB otherwise claims half of host RAM minus 1 GB, about 7 GB here.
+#     That is precisely the v112 immich OOM failure mode.
+#   - RESOURCE LIMITS: unifi mem_limit 1G cpus 1.0; unifi-db mem_limit 768M
+#     cpus 0.5. MEM_LIMIT=768 also caps the java heap below its 1024
+#     default, because this host runs close to its memory ceiling.
+#   - PORT 27017 NOT PUBLISHED, deliberately. LinuxServer's advisory of
+#     2024-08-11 notes that without RBAC the official mongo container allows
+#     unauthenticated remote access to the database over that port. Only
+#     media-network reaches it.
+#   - DATA PATH: /mnt/BIG/filme/unifi-db, deliberately OUTSIDE configs/.
+#     configs/ is a source in bender-replicate.sh, and rsyncing live
+#     WiredTiger files gives an inconsistent copy. Same reasoning as
+#     influxdb (20260807) and immich. Protection is ZFS snapshots plus
+#     UniFi's own auto-backup, which lands inside configs/unifi.
+#   - TSDPROXY: DISABLED deliberately (owner decision). The service is off
+#     most of the time, so a tailnet name that is usually dead has no value.
+#     LAN access is https://10.30.0.12:8443.
+#   - LOCKED PORTS: 8443 (web UI), 8080 (device inform), 3478/udp (STUN),
+#     10001/udp (discovery). All four verified free against every other
+#     published port in this file. 8080 is the inform port - adoption fails
+#     without it. Four optional ports are present but commented: 1900/udp,
+#     8843, 8880, 6789.
+#   - REQUIRED, in this order:
+#       1. mkdir -p /mnt/BIG/filme/unifi-db
+#          mkdir -p /mnt/BIG/filme/configs/unifi
+#          mkdir -p /mnt/BIG/filme/configs/unifi-db
+#       2. place init-mongo.sh in configs/unifi-db/ and chmod 755
+#       3. chown -R 1000:1000 /mnt/BIG/filme/configs/unifi
+#          chown -R 999:999   /mnt/BIG/filme/unifi-db
+#          The mongo image runs as uid 999. The linuxserver image runs as
+#          PUID/PGID. Getting this wrong reproduces the 20260809 influxdb
+#          "permission denied" failure. Verify: docker run --rm mongo:7.0 id mongodb
+#       4. add UNIFI_DB_ROOT_PASSWORD and UNIFI_DB_PASSWORD to .env.
+#          Use "openssl rand -hex 24" - the value is injected into a
+#          mongodb:// URI, so it must not contain @ : / or $.
+#       5. place scripts/unifi-ctl.sh and chmod 755
+#       6. scripts/unifi-ctl.sh start
+#   - CRITICAL, first start only: the init script runs ONCE, against an EMPTY
+#     /data/db. If mongo starts without it, mongo generates test data and the
+#     script never runs again. Recovery: stop both, wipe
+#     /mnt/BIG/filme/unifi-db/*, put the script in place, start again.
+#   - CRITICAL, after first start: set Settings -> System -> Advanced ->
+#     Inform Host to 10.30.0.12. The container otherwise advertises its
+#     internal docker address, which the access point cannot reach, and
+#     adoption fails with no useful error.
+#   - NOTE: the access point at 10.30.0.50 needs a DHCP reservation on fry,
+#     MAC 8c:ed:e1:84:24:28. Do NOT set a static address on the access point
+#     itself; the controller overwrites device network settings on adoption.
+#   - NOTE: mom te1/0/20 flapped fifteen times over four minutes while the
+#     access point negotiated, then held with zero errors on both sides and
+#     no packet loss over 100 pings. Transceiver diagnostics read 3.36 V and
+#     36 C, which is nominal, so the earlier power theory was wrong. Watch
+#     the flap count after any change to that port.
+#   - NOTE: the scheduled auto-backup never runs while the controller is
+#     off. Take a manual backup after each change:
+#     Settings -> System -> Backup -> Download Backup.
 # ============================================
 # ✅ VERIFIED WORKING SERVICES - DO NOT MODIFY WITHOUT APPROVAL:
 #   - immich_redis (v94: upgraded to redis:7-alpine)
@@ -516,6 +602,145 @@ services:
     networks:
       - media-network
 
+  # ============================================
+  # NETWORK MANAGEMENT - UNIFI
+  # ============================================
+  # 20260818: UniFi Network Application - controller for the U7 Pro access
+  # point on mom te1/0/20 (2.5G through a 10Gtek SFP+ copper transceiver).
+  #
+  # ON DEMAND BY DESIGN. Both services carry profiles: ["unifi"], therefore
+  # a plain "docker compose up -d" leaves them DOWN. Start them only to
+  # change Wi-Fi settings, then stop them again:
+  #     scripts/unifi-ctl.sh start
+  #     scripts/unifi-ctl.sh stop
+  # An adopted UniFi access point keeps serving every SSID while the
+  # controller is off. You lose statistics and the client list, not the
+  # network. The controller IS required for adoption and for any change.
+  #
+  # THE OLD IMAGE IS DEAD: linuxserver/unifi-controller is deprecated. The
+  # maintained image is unifi-network-application, and it REQUIRES an
+  # external MongoDB. That is why there are two services here.
+  #
+  # MONGODB IS PINNED to 7.0 and MUST STAY PINNED. MongoDB does not support
+  # automatic upgrades between major versions; an unpinned tag will refuse
+  # to open the data directory after a major bump. Unifi 8.1+ supports
+  # mongo 3.6 through 7.0. Unifi 9.0+ also supports 8.0.
+  #
+  # AVX IS REQUIRED for MongoDB above 4.4 on x86_64. bender's E3-1265L V2 is
+  # Ivy Bridge, which HAS avx (verified in /proc/cpuinfo, 2026-08-18). It
+  # does NOT have avx2, which mongo does not need. If this ever moves to a
+  # host without avx, mongo is capped at 4.4.
+  #
+  # THE INIT SCRIPT RUNS ONCE, ON FIRST START ONLY, against an EMPTY
+  # /data/db. It creates the unifi user with dbOwner on four databases plus
+  # clusterMonitor. If mongo starts without it, mongo generates test data
+  # and you must wipe /mnt/BIG/filme/unifi-db and start again.
+  #
+  # PORT 27017 IS DELIBERATELY NOT PUBLISHED. LinuxServer's own advisory
+  # (2024-08-11) notes that without RBAC the official mongo container allows
+  # unauthenticated remote access to the database over that port. Only the
+  # media-network reaches it.
+  #
+  # DATA PATH: /mnt/BIG/filme/unifi-db, deliberately OUTSIDE configs/, for
+  # the same reason as influxdb and immich. configs/ is a source in
+  # bender-replicate.sh, and rsyncing live WiredTiger files produces an
+  # inconsistent copy. Protection is ZFS snapshots, plus UniFi's own
+  # auto-backup which lands inside configs/unifi.
+  #
+  # WIREDTIGER CACHE IS CAPPED EXPLICITLY. MongoDB defaults to half of host
+  # RAM minus 1 GB, which on this 16 GB host is about 7 GB. That is exactly
+  # the v112 immich failure mode. 0.25 GB is ample for a one-access-point
+  # site.
+  #
+  # OWNERSHIP DIFFERS BETWEEN THE TWO. The linuxserver image runs as
+  # PUID/PGID. The official mongo image runs as uid 999. Getting this wrong
+  # reproduces the 20260809 influxdb "permission denied" failure.
+  #   chown -R 1000:1000 /mnt/BIG/filme/configs/unifi
+  #   chown -R 999:999   /mnt/BIG/filme/unifi-db
+  #   Verify with: docker run --rm mongo:7.0 id mongodb
+  #
+  # TSDPROXY: DISABLED deliberately (owner decision). The service is off
+  # most of the time, so a tailnet name that is usually dead has no value.
+  # Reach it at https://10.30.0.12:8443 when it is running.
+  #
+  # AFTER FIRST START you MUST set the inform host, or adoption fails:
+  #   Settings -> System -> Advanced -> Inform Host = 10.30.0.12
+  # The container otherwise advertises its internal docker address, which
+  # the access point cannot reach.
+  #
+  # LOCKED PORTS: 8443, 8080, 3478/udp, 10001/udp - DO NOT CHANGE
+  # 8080 is the device inform port. Adoption fails without it.
+  unifi-db:
+    image: mongo:7.0
+    container_name: unifi-db
+    restart: unless-stopped
+    <<: *default-dns
+    labels:
+      tsdproxy.enable: "false"
+    environment:
+      - TZ=${TIMEZONE}
+      - MONGO_INITDB_ROOT_USERNAME=root
+      - MONGO_INITDB_ROOT_PASSWORD=${UNIFI_DB_ROOT_PASSWORD}
+      # read by init-mongo.sh on first start only
+      - MONGO_USER=unifi
+      - MONGO_PASS=${UNIFI_DB_PASSWORD}
+      - MONGO_DBNAME=unifi
+      - MONGO_AUTHSOURCE=admin
+    volumes:
+      - /mnt/BIG/filme/unifi-db:/data/db
+      - /mnt/BIG/filme/configs/unifi-db/init-mongo.sh:/docker-entrypoint-initdb.d/init-mongo.sh:ro
+    networks:
+      - media-network
+    # cap the WiredTiger cache: the default would claim ~7 GB on this host
+    command: ["mongod", "--wiredTigerCacheSizeGB", "0.25"]
+    mem_limit: 768M
+    cpus: 0.5
+    profiles:
+      - unifi
+  unifi:
+    image: lscr.io/linuxserver/unifi-network-application:9.0.114
+    container_name: unifi
+    restart: unless-stopped
+    <<: *default-dns
+    labels:
+      tsdproxy.enable: "false"
+    environment:
+      - PUID=${PUID}
+      - PGID=${PGID}
+      - TZ=${TIMEZONE}
+      - MONGO_HOST=unifi-db
+      - MONGO_PORT=27017
+      - MONGO_USER=unifi
+      - MONGO_PASS=${UNIFI_DB_PASSWORD}
+      - MONGO_DBNAME=unifi
+      - MONGO_AUTHSOURCE=admin
+      # java heap, in MB. Lower than the 1024 default: this host is tight.
+      - MEM_LIMIT=768
+      - MEM_STARTUP=256
+    volumes:
+      - /mnt/BIG/filme/configs/unifi:/config
+    ports:
+      # web UI, HTTPS with a self-signed certificate
+      - "8443:8443"
+      # device inform - REQUIRED for adoption
+      - "8080:8080"
+      # STUN, keeps devices reachable
+      - "3478:3478/udp"
+      # access point discovery
+      - "10001:10001/udp"
+      # optional, enable only if needed:
+      #   - "1900:1900/udp"   L2 discovery from the UniFi mobile app
+      #   - "8843:8843"       guest portal HTTPS
+      #   - "8880:8880"       guest portal HTTP
+      #   - "6789:6789"       mobile speed test
+    networks:
+      - media-network
+    depends_on:
+      - unifi-db
+    mem_limit: 1G
+    cpus: 1.0
+    profiles:
+      - unifi
   # ============================================
   # VPN - GLUETUN (Surfshark OpenVPN)
   # ============================================

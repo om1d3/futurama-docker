@@ -11,7 +11,7 @@ service:
         type: ntfy
         url_fields:
           host: ntfy.home.arpa
-          port: "8888"
+          port: '8888'
           topic: argus
         params:
           scheme: http
@@ -30,10 +30,10 @@ service:
         type: ntfy
         url_fields:
           host: ntfy.home.arpa
-          port: "8888"
+          port: '8888'
           topic: argus
         params:
-          disabletlsverification: "true"
+          disabletlsverification: 'true'
           scheme: http
     dashboard:
       icon: https://avatars.githubusercontent.com/u/94690098?s=64&v=4
@@ -49,13 +49,13 @@ service:
         type: ntfy
         url_fields:
           host: ntfy.home.arpa
-          port: "8888"
+          port: '8888'
           topic: argus
         params:
-          disabletlsverification: "true"
+          disabletlsverification: 'true'
           scheme: http
     dashboard:
-      icon: https://www.audiobookshelf.org/Logo.png
+      icon: https://audiobookshelf.org/img/Logo.png
   AutoHeal:
     latest_version:
       type: github
@@ -66,10 +66,10 @@ service:
         type: ntfy
         url_fields:
           host: ntfy.home.arpa
-          port: "8888"
+          port: '8888'
           topic: autoheal
         params:
-          disabletlsverification: "true"
+          disabletlsverification: 'true'
           scheme: http
     dashboard:
       icon: https://cdn.iconscout.com/icon/free/png-512/social-275-116309.png
@@ -85,10 +85,10 @@ service:
         type: ntfy
         url_fields:
           host: ntfy.home.arpa
-          port: "8888"
+          port: '8888'
           topic: argus
         params:
-          disabletlsverification: "true"
+          disabletlsverification: 'true'
           scheme: http
     dashboard:
       icon: https://sabre.io/img/baikal.png
@@ -104,10 +104,10 @@ service:
         type: ntfy
         url_fields:
           host: ntfy.home.arpa
-          port: "8888"
+          port: '8888'
           topic: argus
         params:
-          disabletlsverification: "true"
+          disabletlsverification: 'true'
           scheme: http
     dashboard:
       icon: https://user-images.githubusercontent.com/26902309/41456760-be00043e-7081-11e8-9646-1b724037b4ff.png
@@ -123,10 +123,10 @@ service:
         type: ntfy
         url_fields:
           host: ntfy.home.arpa
-          port: "8888"
+          port: '8888'
           topic: argus
         params:
-          disabletlsverification: "true"
+          disabletlsverification: 'true'
           scheme: http
     dashboard:
       icon: https://logodix.com/logo/2218496.png
@@ -142,10 +142,10 @@ service:
         type: ntfy
         url_fields:
           host: ntfy.home.arpa
-          port: "8888"
+          port: '8888'
           topic: argus
         params:
-          disabletlsverification: "true"
+          disabletlsverification: 'true'
           scheme: http
     dashboard:
       icon: https://a.fsdn.com/allura/mirror/flaresolverr/icon?53719e1543d831656e9abc08c6c9357e274394fdda3e023e0012e574d2b74725?&w=120
@@ -161,10 +161,10 @@ service:
         type: ntfy
         url_fields:
           host: ntfy.home.arpa
-          port: "8888"
+          port: '8888'
           topic: argus
         params:
-          disabletlsverification: "true"
+          disabletlsverification: 'true'
           scheme: http
     dashboard:
       icon: https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/png/gluetun.png
@@ -180,10 +180,10 @@ service:
         type: ntfy
         url_fields:
           host: ntfy.home.arpa
-          port: "8888"
+          port: '8888'
           topic: argus
         params:
-          disabletlsverification: "true"
+          disabletlsverification: 'true'
           scheme: http
     dashboard:
       icon: https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/webp/hedgedoc.webp
@@ -199,10 +199,10 @@ service:
         type: ntfy
         url_fields:
           host: ntfy.home.arpa
-          port: "8888"
+          port: '8888'
           topic: argus
         params:
-          disabletlsverification: "true"
+          disabletlsverification: 'true'
           scheme: http
     dashboard:
       icon: https://avatars.githubusercontent.com/u/109746326?s=200&v=4
@@ -218,10 +218,10 @@ service:
         type: ntfy
         url_fields:
           host: ntfy.home.arpa
-          port: "8888"
+          port: '8888'
           topic: argus
         params:
-          disabletlsverification: "true"
+          disabletlsverification: 'true'
           scheme: http
     dashboard:
       icon: https://i.pinimg.com/originals/83/a0/21/83a021a8ed0d0e2c37404e56acec11a0.png
@@ -237,10 +237,10 @@ service:
         type: ntfy
         url_fields:
           host: ntfy.home.arpa
-          port: "8888"
+          port: '8888'
           topic: argus
         params:
-          disabletlsverification: "true"
+          disabletlsverification: 'true'
           scheme: http
     dashboard:
       icon: https://cdn.brandfetch.io/idu_b8goqH/w/400/h/400/theme/dark/icon.jpeg?c=1bxid64Mup7aczewSAYMX&t=1740527783902
@@ -256,10 +256,10 @@ service:
         type: ntfy
         url_fields:
           host: ntfy.home.arpa
-          port: "8888"
+          port: '8888'
           topic: argus
         params:
-          disabletlsverification: "true"
+          disabletlsverification: 'true'
           scheme: http
     dashboard:
       icon: https://metube.martinsautosvc.com/assets/icons/android-chrome-192x192.png
@@ -275,10 +275,10 @@ service:
         type: ntfy
         url_fields:
           host: ntfy.home.arpa
-          port: "8888"
+          port: '8888'
           topic: argus
         params:
-          disabletlsverification: "true"
+          disabletlsverification: 'true'
           scheme: http
     dashboard:
       icon: https://raw.githubusercontent.com/C0ntrolDev/spotify_downloader/main/github_images/app_icon.png
@@ -294,10 +294,10 @@ service:
         type: ntfy
         url_fields:
           host: ntfy.home.arpa
-          port: "8888"
+          port: '8888'
           topic: argus
         params:
-          disabletlsverification: "true"
+          disabletlsverification: 'true'
           scheme: http
     dashboard:
       icon: https://images.icon-icons.com/3053/PNG/512/syncthing_macos_bigsur_icon_189675.png
@@ -313,10 +313,10 @@ service:
         type: ntfy
         url_fields:
           host: ntfy.home.arpa
-          port: "8888"
+          port: '8888'
           topic: argus
         params:
-          disabletlsverification: "true"
+          disabletlsverification: 'true'
           scheme: http
     dashboard:
       icon: https://images.seeklogo.com/logo-png/51/2/transmission-logo-png_seeklogo-517782.png
@@ -331,10 +331,10 @@ service:
         type: ntfy
         url_fields:
           host: ntfy.home.arpa
-          port: "8888"
+          port: '8888'
           topic: argus
         params:
-          disabletlsverification: "true"
+          disabletlsverification: 'true'
           scheme: http
     dashboard:
       icon: https://unpackerr.zip/img/logo.png
@@ -350,10 +350,10 @@ service:
         type: ntfy
         url_fields:
           host: ntfy.home.arpa
-          port: "8888"
+          port: '8888'
           topic: argus
         params:
-          disabletlsverification: "true"
+          disabletlsverification: 'true'
           scheme: http
     dashboard:
       icon: https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/webp/vaultwarden-light.webp
@@ -369,10 +369,10 @@ service:
         type: ntfy
         url_fields:
           host: ntfy.home.arpa
-          port: "8888"
+          port: '8888'
           topic: argus
         params:
-          disabletlsverification: "true"
+          disabletlsverification: 'true'
           scheme: http
     dashboard:
       icon: https://community.vikunja.io/uploads/default/original/1X/894bd400d7c5bde78a65ba02e326798ccfb82006.png
@@ -387,10 +387,10 @@ service:
         type: ntfy
         url_fields:
           host: ntfy.home.arpa
-          port: "8888"
+          port: '8888'
           topic: argus
         params:
-          disabletlsverification: "true"
+          disabletlsverification: 'true'
           scheme: http
     dashboard:
       icon: https://avatars.githubusercontent.com/u/122059230?s=200&v=4
@@ -406,10 +406,10 @@ service:
         type: ntfy
         url_fields:
           host: ntfy.home.arpa
-          port: "8888"
+          port: '8888'
           topic: argus
         params:
-          disabletlsverification: "true"
+          disabletlsverification: 'true'
           scheme: http
     dashboard:
       icon: https://cdn.brandfetch.io/idWmmkyKj1/w/400/h/400/theme/dark/icon.jpeg?c=1bxid64Mup7aczewSAYMX&t=1746167412002
@@ -424,10 +424,10 @@ service:
         type: ntfy
         url_fields:
           host: ntfy.home.arpa
-          port: "8888"
+          port: '8888'
           topic: argus
         params:
-          disabletlsverification: "true"
+          disabletlsverification: 'true'
           scheme: http
     dashboard:
       icon: https://static0.xdaimages.com/wordpress/wp-content/uploads/2025/08/dozzle-logo.png?q=70&fit=contain&w=420&dpr=1
@@ -443,10 +443,10 @@ service:
         type: ntfy
         url_fields:
           host: ntfy.home.arpa
-          port: "8888"
+          port: '8888'
           topic: argus
         params:
-          disabletlsverification: "true"
+          disabletlsverification: 'true'
           scheme: http
     dashboard:
       icon: https://docs.theme-park.dev/site_assets/filebrowser/logo.png
@@ -461,10 +461,10 @@ service:
         type: ntfy
         url_fields:
           host: ntfy.home.arpa
-          port: "8888"
+          port: '8888'
           topic: argus
         params:
-          disabletlsverification: "true"
+          disabletlsverification: 'true'
           scheme: http
     dashboard:
       icon: https://user-images.githubusercontent.com/88257202/194461324-cd562d2d-2a96-4fbc-8e93-80085c514f0d.png
@@ -480,10 +480,10 @@ service:
         type: ntfy
         url_fields:
           host: ntfy.home.arpa
-          port: "8888"
+          port: '8888'
           topic: argus
         params:
-          disabletlsverification: "true"
+          disabletlsverification: 'true'
           scheme: http
     dashboard:
       icon: https://perron.de/wp-content/uploads/2025/02/it-tools-light.webp
@@ -498,10 +498,10 @@ service:
         type: ntfy
         url_fields:
           host: ntfy.home.arpa
-          port: "8888"
+          port: '8888'
           topic: argus
         params:
-          disabletlsverification: "true"
+          disabletlsverification: 'true'
           scheme: http
     dashboard:
       icon: https://brands.home-assistant.io/_/mealie/logo@2x.png
@@ -517,10 +517,10 @@ service:
         type: ntfy
         url_fields:
           host: ntfy.home.arpa
-          port: "8888"
+          port: '8888'
           topic: argus
         params:
-          disabletlsverification: "true"
+          disabletlsverification: 'true'
           scheme: http
     dashboard:
       icon: https://d33wubrfki0l68.cloudfront.net/e7ea48d67fb30fbcbe44f252d86e42df18597291/be184/_images/miniflux.png
@@ -536,10 +536,10 @@ service:
         type: ntfy
         url_fields:
           host: ntfy.home.arpa
-          port: "8888"
+          port: '8888'
           topic: argus
         params:
-          disabletlsverification: "true"
+          disabletlsverification: 'true'
           scheme: http
     dashboard:
       icon: https://netalertx.com/static/media/favicon.f38c23566273e8ad35a4.ico
@@ -554,10 +554,10 @@ service:
       ntfy:
         url_fields:
           host: ntfy.home.arpa
-          port: "8888"
+          port: '8888'
           topic: argus
         params:
-          disabletlsverification: "true"
+          disabletlsverification: 'true'
           scheme: http
     dashboard:
       icon: https://play-lh.googleusercontent.com/O9uRWkaFLCzl7wkpeUWFuJfllrvykC6wOCR3sy8sZkrCyIMs-DPv7j7D710QY8VSc7KN
@@ -573,10 +573,10 @@ service:
         type: ntfy
         url_fields:
           host: ntfy.home.arpa
-          port: "8888"
+          port: '8888'
           topic: argus
         params:
-          disabletlsverification: "true"
+          disabletlsverification: 'true'
           scheme: http
     dashboard:
       icon: https://play-lh.googleusercontent.com/0-8lfR1RLqE9HxP-c4Fm6t_G0D0eyw4cTxmjTi17rtwHtnyFelexJOLFbenO8NAvLs8
@@ -592,10 +592,10 @@ service:
         type: ntfy
         url_fields:
           host: ntfy.home.arpa
-          port: "8888"
+          port: '8888'
           topic: argus
         params:
-          disabletlsverification: "true"
+          disabletlsverification: 'true'
           scheme: http
     dashboard:
       icon: https://octabyte.io/images/development/dev-tools/stirling-pdf/logo.png
@@ -611,10 +611,10 @@ service:
         type: ntfy
         url_fields:
           host: ntfy.home.arpa
-          port: "8888"
+          port: '8888'
           topic: argus
         params:
-          disabletlsverification: "true"
+          disabletlsverification: 'true'
           scheme: http
     dashboard:
       icon: https://www.influxdata.com/images/legacy-uploads/TelegrafTiger.png
@@ -629,10 +629,10 @@ service:
         type: ntfy
         url_fields:
           host: ntfy.home.arpa
-          port: "8888"
+          port: '8888'
           topic: argus
         params:
-          disabletlsverification: "true"
+          disabletlsverification: 'true'
           scheme: http
     dashboard:
       icon: https://avatars.githubusercontent.com/u/164458127?s=200&v=4
@@ -648,10 +648,10 @@ service:
         type: ntfy
         url_fields:
           host: ntfy.home.arpa
-          port: "8888"
+          port: '8888'
           topic: argus
         params:
-          disabletlsverification: "true"
+          disabletlsverification: 'true'
           scheme: http
     dashboard:
       icon: https://wallosapp.com/images/logo/wallos.png
@@ -666,10 +666,10 @@ service:
         type: ntfy
         url_fields:
           host: ntfy.home.arpa
-          port: "8888"
+          port: '8888'
           topic: argus
         params:
-          disabletlsverification: "true"
+          disabletlsverification: 'true'
           scheme: http
     dashboard:
       icon: https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/webp/lubelogger.webp
@@ -685,10 +685,10 @@ service:
         type: ntfy
         url_fields:
           host: ntfy.home.arpa
-          port: "8888"
+          port: '8888'
           topic: argus
         params:
-          disabletlsverification: "true"
+          disabletlsverification: 'true'
           scheme: http
     dashboard:
       icon: https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/webp/beszel-light.webp
@@ -704,10 +704,10 @@ service:
         type: ntfy
         url_fields:
           host: ntfy.home.arpa
-          port: "8888"
+          port: '8888'
           topic: argus
         params:
-          disabletlsverification: "true"
+          disabletlsverification: 'true'
           scheme: http
     dashboard:
       icon: https://www.netdata.cloud/img/cadvisor.png
@@ -723,10 +723,10 @@ service:
         type: ntfy
         url_fields:
           host: ntfy.home.arpa
-          port: "8888"
+          port: '8888'
           topic: argus
         params:
-          disabletlsverification: "true"
+          disabletlsverification: 'true'
           scheme: http
     dashboard:
       icon: https://crazymax.dev/diun/assets/logo.png
@@ -742,10 +742,10 @@ service:
         type: ntfy
         url_fields:
           host: ntfy.home.arpa
-          port: "8888"
+          port: '8888'
           topic: argus
         params:
-          disabletlsverification: "true"
+          disabletlsverification: 'true'
           scheme: http
     dashboard:
       icon: https://www.metalnikovg.ru/static/images/blog/banners/dsp_banner.png
@@ -761,10 +761,10 @@ service:
         type: ntfy
         url_fields:
           host: ntfy.home.arpa
-          port: "8888"
+          port: '8888'
           topic: argus
         params:
-          disabletlsverification: "true"
+          disabletlsverification: 'true'
           scheme: http
     dashboard:
       icon: https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/webp/dockwatch.webp
@@ -780,10 +780,10 @@ service:
         type: ntfy
         url_fields:
           host: ntfy.home.arpa
-          port: "8888"
+          port: '8888'
           topic: argus
         params:
-          disabletlsverification: "true"
+          disabletlsverification: 'true'
           scheme: http
     dashboard:
       icon: https://img.stackshare.io/service/3577/bq-C0K5C_400x400.png
@@ -799,10 +799,10 @@ service:
         type: ntfy
         url_fields:
           host: ntfy.home.arpa
-          port: "8888"
+          port: '8888'
           topic: argus
         params:
-          disabletlsverification: "true"
+          disabletlsverification: 'true'
           scheme: http
     dashboard:
       icon: https://avatars.githubusercontent.com/u/3408386?s=64&v=4
@@ -818,13 +818,13 @@ service:
         type: ntfy
         url_fields:
           host: ntfy.home.arpa
-          port: "8888"
+          port: '8888'
           topic: argus
         params:
-          disabletlsverification: "true"
+          disabletlsverification: 'true'
           scheme: http
     dashboard:
-      icon: https://agirlhasnona.me/content/images/2017/03/pi-hole_github_logo.png
+      icon: https://wp-cdn.pi-hole.net/wp-content/uploads/2016/07/Pi-hole-vortex2.jpg
   Trivy:
     options:
       interval: 24h
@@ -837,10 +837,10 @@ service:
         type: ntfy
         url_fields:
           host: ntfy.home.arpa
-          port: "8888"
+          port: '8888'
           topic: argus
         params:
-          disabletlsverification: "true"
+          disabletlsverification: 'true'
           scheme: http
     dashboard:
       icon: https://www.itopstimes.com/wp-content/uploads/2021/11/logo.png
@@ -856,10 +856,10 @@ service:
         type: ntfy
         url_fields:
           host: ntfy.home.arpa
-          port: "8888"
+          port: '8888'
           topic: argus
         params:
-          disabletlsverification: "true"
+          disabletlsverification: 'true'
           scheme: http
     dashboard:
       icon: https://asset.brandfetch.io/id7QyaLp8E/idYJnR6YE1.jpeg
@@ -875,10 +875,10 @@ service:
         type: ntfy
         url_fields:
           host: ntfy.home.arpa
-          port: "8888"
+          port: '8888'
           topic: argus
         params:
-          disabletlsverification: "true"
+          disabletlsverification: 'true'
           scheme: http
     dashboard:
       icon: https://flood.js.org/assets/img/logo.png
