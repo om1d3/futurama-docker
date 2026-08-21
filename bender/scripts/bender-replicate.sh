@@ -1,7 +1,7 @@
 #!/bin/bash
 # ============================================
 # bender-replicate.sh
-# Version: 1.1
+# Version: 1.2
 # Host: bender (TrueNAS Scale) → amy (10.30.0.11)
 # ============================================
 # Backlog item 01-A (partial): off-machine, on-site copy of bender's
@@ -65,13 +65,23 @@ SOURCES=(
 
 # Regenerable bulk excluded — keeps the copy small and meaningful.
 EXCLUDES=(
-  "--exclude=configs/trivy/"                 # vuln DB cache, re-downloads
-  "--exclude=configs/jellyfin/cache/"        # image/chapter cache
-  "--exclude=configs/jellyfin/data/transcodes/"
-  "--exclude=configs/jellyfin/data/data/backups/"  # v1.1: Jellyfin's own archives
-  "--exclude=configs/jellyfin/data/trickplay/"     # v1.1: scrub-preview cache
-  "--exclude=configs/tsdproxy/data/"         # tailscale state, re-auths
-  "--exclude=docker-compose/reports/"        # scan reports live in configs too
+  # v1.2 FIX: each pattern is relative to its SOURCE, not to /mnt/BIG/filme.
+  # The loop passes "${src}/" with a trailing slash, so rsync's transfer root
+  # is the source directory itself and it tests paths like "trivy/". The
+  # earlier "configs/trivy/" form matched nothing, and every directory listed
+  # here was copied in full. Measured on 2026-08-21: trivy 3.0 GB and
+  # jellyfin/cache 674 MB were present in the replica despite being listed.
+  "--exclude=trivy/"                       # vuln DB cache, re-downloads
+  "--exclude=jellyfin/cache/"              # image/chapter cache
+  "--exclude=jellyfin/data/transcodes/"
+  "--exclude=jellyfin/data/data/backups/"  # v1.1: Jellyfin's own archives
+  "--exclude=jellyfin/data/trickplay/"     # v1.1: scrub-preview cache
+  # v1.2: 7.9 GB of downloaded artwork. Rebuilds from the media library.
+  # jellyfin/data/data/ is NOT excluded: it holds library.db, users and
+  # watch state, and it is not regenerable.
+  "--exclude=jellyfin/data/metadata/"
+  "--exclude=tsdproxy/data/"               # tailscale state, re-auths
+  "--exclude=reports/"                     # scan reports
   "--exclude=*.sock"
 )
 
